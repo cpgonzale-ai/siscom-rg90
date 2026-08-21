@@ -75,15 +75,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate, per
         >
           <img src={logoConsultora} alt="Consultora San Miguel" style={{ height: '48px', width: 'auto', display: 'block' }} />
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <ShieldCheck size={26} color="#f0a63d" />
           <h1 style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.02em', color: '#ffffff' }}>
             SISCOM <span style={{ color: '#f0a63d' }}>RG90</span>
           </h1>
         </div>
-        <p style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.7)', fontWeight: 400 }}>
-          Consultora San Miguel · CORVIS PY
-        </p>
       </div>
 
       {/* Navigation Links */}
@@ -155,12 +152,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate, per
       </nav>
 
       {/* Footer Info */}
-      <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,0.1)', fontSize: '11.5px', color: 'rgba(255,255,255,0.6)' }}>
-        <div>Empresa: <strong>ACDG S.A.</strong></div>
-        <div>Periodo: <strong>Mayo 2026</strong></div>
-        <div style={{ marginTop: '4px', fontSize: '10.5px', color: '#f0a63d' }}>
-          ● Motor Fiscal Activo v1.0
-        </div>
+      <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,0.1)', fontSize: '11px', color: 'rgba(255,255,255,0.5)', textAlign: 'center' }}>
+        desarrollado por CORVISPY v1.0
       </div>
     </aside>
   );
