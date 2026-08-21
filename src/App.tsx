@@ -1,0 +1,603 @@
+import { useState } from 'react';
+import { Sidebar } from './components/Sidebar';
+import { Header } from './components/Header';
+import { ConfirmModal } from './components/ConfirmModal';
+
+import { DashboardView } from './views/DashboardView';
+import { CargaView } from './views/CargaView';
+import { CorrelatividadView } from './views/CorrelatividadView';
+import { RG90View } from './views/RG90View';
+import { LoginView } from './views/LoginView';
+import { LibroCompletoView } from './views/LibroCompletoView';
+
+import {
+  LibroRow,
+  CorrelatividadRow,
+  RG90DiffRow,
+  CorteRow,
+  UploadedFileMeta,
+  ingestFilesApi,
+  reconcileApi,
+  getAuthToken,
+  setAuthToken,
+} from './services/api';
+
+// Un local/sistema "matchea" un filtro por inclusión, no por igualdad: el backend
+// devuelve el nombre completo del perfil (ej. "Aloha POS — Juan Valdez"), no la
+// etiqueta corta ("Aloha") que usan los botones de filtro de la UI.
+const matchesSistema = (valor: string, filtro: string) =>
+  filtro === 'Todos' || (valor || '').toLowerCase().includes(filtro.toLowerCase());
+
+const TITLES: Record<string, [string, string]> = {
+  dashboard: ['Panel general', 'Estado de la conciliación del libro de ventas'],
+  carga: ['Carga y libro de ventas', 'Reportes en bruto, conversión y libro unificado'],
+  correl: ['Control de correlatividad', 'Saltos de numeración detectados por local'],
+  rg90: ['Comparación contra RG90', 'Cruce del libro de ventas propio contra el organismo recaudador'],
+  libroCompleto: ['Libro de ventas completo', 'Todos los comprobantes cargados, sin recortar por paginado'],
+};
+
+type Screen = 'dashboard' | 'carga' | 'correl' | 'rg90' | 'libroCompleto';
+
+const SYSTEMS_META = [
+  { key: 'aloha', label: 'Aloha', desc: 'Sistema de punto de venta · Juan Valdez' },
+  { key: 'hiopos', label: 'Hiopos', desc: 'Sistema de punto de venta · La Cabrera, 100 M y otros' },
+];
+
+export function App() {
+  const [authed, setAuthed] = useState<boolean>(!!getAuthToken());
+  const [screen, setScreen] = useState<Screen>('dashboard');
+  const [selectedSystemKey, setSelectedSystemKey] = useState<string>('aloha');
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFileMeta[]>([]);
+  const [converted, setConverted] = useState<boolean>(false);
+  const [rg90Loaded, setRg90Loaded] = useState<boolean>(false);
+  const [rg90Attached, setRg90Attached] = useState<boolean>(false);
+  const [cargaUploaderOpen, setCargaUploaderOpen] = useState<boolean>(true);
+  const [, setShowLockedModal] = useState<boolean>(false);
+  const [confirmModal, setConfirmModal] = useState<{ message: string; confirmLabel: string; onConfirm: () => void } | null>(null);
+
+  const [filtro, setFiltro] = useState<string>('Todos');
+  const [estadoFilter] = useState<string>('');
+  const [correlFiltro, setCorrelFiltro] = useState<string>('Todos');
+  const [searchGeneral, setSearchGeneral] = useState<string>('');
+  const [page, setPage] = useState<number>(1);
+  const [libroCompletoSearch, setLibroCompletoSearch] = useState<string>('');
+  const pageSize = 20;
+
+  const [rg90Search, setRg90Search] = useState<string>('');
+  const [rg90CategoryFilter, setRg90CategoryFilter] = useState<string>('');
+
+  const [libroRows, setLibroRows] = useState<LibroRow[]>([]);
+  const [correlatividadRows, setCorrelatividadRows] = useState<CorrelatividadRow[]>([]);
+  const [cortesRows, setCortesRows] = useState<CorteRow[]>([]);
+  const [rg90DiffRows, setRg90DiffRows] = useState<RG90DiffRow[]>([]);
+  const [rg90Files, setRg90Files] = useState<File[]>([]);
+  const [rg90Analyzing, setRg90Analyzing] = useState<boolean>(false);
+  const [rg90Error, setRg90Error] = useState<string | null>(null);
+  const [rg90Summary, setRg90Summary] = useState<{ coinciden: number; no_en_rg90: number; no_en_libro: number; saltos: number } | null>(null);
+  const [loteId, setLoteId] = useState<number | undefined>(undefined);
+  const [converting, setConverting] = useState<boolean>(false);
+  const [convertError, setConvertError] = useState<string | null>(null);
+
+  const rg90CardsState = [
+    { key: '', label: 'Coinciden', value: `${rg90Summary?.coinciden ?? 0}`, color: '#128752' },
+    { key: 'No llegó a la interfaz', label: 'No en RG90', value: `${rg90Summary?.no_en_rg90 ?? 0}`, color: '#b3402f' },
+    { key: 'No en libro propio', label: 'No en libro propio', value: `${rg90Summary?.no_en_libro ?? 0}`, color: '#b3402f' },
+    { key: 'Salto de numeración', label: 'Saltos', value: `${rg90Summary?.saltos ?? 0}`, color: '#b0740f' },
+  ];
+
+  const alohaLoaded = uploadedFiles.some(f => f.sistemaKey === 'aloha');
+  const hioposLoaded = uploadedFiles.some(f => f.sistemaKey === 'hiopos');
+  const hasAnyUpload = uploadedFiles.length > 0;
+  const isFreshStart = !hasAnyUpload && !converted;
+
+  const handleFileUpload = (files: FileList) => {
+    const meta = SYSTEMS_META.find(s => s.key === selectedSystemKey) || SYSTEMS_META[0];
+    const newFiles: UploadedFileMeta[] = Array.from(files).map(f => ({
+      id: Date.now() + Math.random(),
+      sistemaKey: meta.key,
+      fileName: f.name,
+      uploadedAt: 'hace un momento',
+      rawFile: f,
+    }));
+    setUploadedFiles(prev => [...prev, ...newFiles]);
+  };
+
+  const simulateUpload = () => {
+    const meta = SYSTEMS_META.find(s => s.key === selectedSystemKey) || SYSTEMS_META[0];
+    const n = uploadedFiles.filter(f => f.sistemaKey === meta.key).length + 1;
+    setUploadedFiles(prev => [
+      ...prev,
+      {
+        id: Date.now() + Math.random(),
+        sistemaKey: meta.key,
+        fileName: `Reporte_${meta.label}_${n}.xlsx`,
+        uploadedAt: 'hace un momento',
+      },
+    ]);
+  };
+
+  const doConvert = async () => {
+    if (converted) {
+      setShowLockedModal(true);
+      return;
+    }
+
+    const realFiles = uploadedFiles.filter(f => f.rawFile).map(f => f.rawFile as File);
+    if (realFiles.length === 0) {
+      setConvertError('No hay archivos reales adjuntados para procesar. Adjuntá un archivo Aloha o Hiopos válido.');
+      return;
+    }
+
+    setConverting(true);
+    setConvertError(null);
+    try {
+      const res = await ingestFilesApi(realFiles, selectedSystemKey);
+      setLibroRows(res.rows || []);
+      setCorrelatividadRows(res.gaps || []);
+      setCortesRows(res.cortes || []);
+      setLoteId(res.lote_id);
+      if (!res.rows || res.rows.length === 0) {
+        setConvertError('El servidor procesó el/los archivo(s) pero no encontró ningún comprobante válido. Revisá que sea el reporte correcto (hoja "tal como se descarga del sistema", sin editar a mano).');
+      }
+      setConverted(true);
+      setCargaUploaderOpen(false);
+      setPage(1);
+    } catch (e) {
+      setConvertError(e instanceof Error ? e.message : 'Error al procesar los archivos en el servidor.');
+      // No avanzamos a "convertido": mejor mostrar el error y dejar reintentar que
+      // mostrar datos de ejemplo como si fueran el resultado real.
+    } finally {
+      setConverting(false);
+    }
+  };
+
+  const simulateRg90Upload = () => {
+    // Sin uso en producción: el input real de archivo ya llama a handleRg90FileUpload.
+  };
+
+  const handleRg90FileUpload = (files: FileList) => {
+    if (files.length > 0) {
+      setRg90Files(prev => [...prev, ...Array.from(files)]);
+      setRg90Attached(true);
+      setRg90Error(null);
+    }
+  };
+
+  const analyzeRg90 = async () => {
+    if (!rg90Attached || rg90Files.length === 0) return;
+
+    setRg90Analyzing(true);
+    setRg90Error(null);
+    try {
+      const res = await reconcileApi(rg90Files, libroRows, loteId);
+      setRg90DiffRows(res.diffs || []);
+      setRg90Summary({
+        coinciden: res.summary?.coinciden ?? 0,
+        no_en_rg90: res.summary?.no_en_rg90 ?? 0,
+        no_en_libro: res.summary?.no_en_libro ?? 0,
+        saltos: res.summary?.saltos ?? 0,
+      });
+      setRg90Loaded(true);
+    } catch (e) {
+      setRg90Error(e instanceof Error ? e.message : 'Error al ejecutar la comparación RG90.');
+    } finally {
+      setRg90Analyzing(false);
+    }
+  };
+
+  const resetRg90 = () => {
+    setConfirmModal({
+      message: '¿Quitar el archivo RG90 cargado? Se perderá el resultado de la comparación.',
+      confirmLabel: 'Quitar archivo',
+      onConfirm: () => {
+        setRg90Loaded(false);
+        setRg90Attached(false);
+        setRg90Files([]);
+        setRg90DiffRows([]);
+        setRg90Summary(null);
+        setRg90Error(null);
+      },
+    });
+  };
+
+  const deleteLibro = () => {
+    setConfirmModal({
+      message: '¿Borrar el libro de ventas? También se borrará el análisis y el archivo RG90 cargado.',
+      confirmLabel: 'Borrar libro',
+      onConfirm: () => {
+        setConverted(false);
+        setLibroRows([]);
+        setCorrelatividadRows([]);
+        setCortesRows([]);
+        setRg90Loaded(false);
+        setRg90Attached(false);
+        setRg90Files([]);
+        setRg90DiffRows([]);
+        setRg90Summary(null);
+        setRg90Error(null);
+        setCargaUploaderOpen(true);
+      },
+    });
+  };
+
+  // Formato de columnas y resumen tomados 1:1 de la hoja "LIBRO VENTAS GLOBAL-Fact-NC" del
+  // archivo de referencia del cliente (Libro Ventas Mes de Mayo 2026 ACDG v2.xlsx): fila
+  // TOTAL pegada al final de los datos, y m\u00E1s abajo un bloque RESUMEN con el total de
+  // Factura, el de Nota de Cr\u00E9dito, el NETO (suma de ambos) y un Check de redondeo.
+  const downloadLimpio = () => {
+    const headers = ['Proyecto', 'Factura', 'Tipo Doc.', 'Fecha', 'Ruc', 'Nombre', 'Gravadas 10%', 'IVA 10%', 'Gravadas 5%', 'IVA 5%', 'Exentas', 'Total Neto', 'Estado'];
+    const esc = (v: any) => `"${String(v).replace(/"/g, '""')}"`;
+    const dataRows = libroRows.map(r => [
+      r.local, r.doc, r.tipo_doc ?? 'Factura', r.fecha, r.ruc, r.nombre,
+      r.gravadas_num ?? 0, r.iva_num ?? 0, r.gravadas_5_num ?? 0, r.iva_5_num ?? 0, r.exentas_num ?? 0, r.total_num ?? 0, r.estado,
+    ].map(esc).join(';'));
+
+    const sumFields = (pred: (r: LibroRow) => boolean) => {
+      const subset = libroRows.filter(pred);
+      const sum = (f: (r: LibroRow) => number | undefined) => subset.reduce((acc, r) => acc + (f(r) ?? 0), 0);
+      return {
+        gravada10: sum(r => r.gravadas_num), iva10: sum(r => r.iva_num),
+        gravada5: sum(r => r.gravadas_5_num), iva5: sum(r => r.iva_5_num),
+        exentas: sum(r => r.exentas_num), total: sum(r => r.total_num),
+      };
+    };
+    const totalGeneral = sumFields(() => true);
+    const totalFactura = sumFields(r => (r.tipo_doc ?? 'Factura') === 'Factura');
+    const totalNC = sumFields(r => r.tipo_doc === 'Nota de Cr\u00E9dito');
+    const neto = {
+      gravada10: totalFactura.gravada10 + totalNC.gravada10,
+      iva10: totalFactura.iva10 + totalNC.iva10,
+      gravada5: totalFactura.gravada5 + totalNC.gravada5,
+      iva5: totalFactura.iva5 + totalNC.iva5,
+      exentas: totalFactura.exentas + totalNC.exentas,
+      total: totalFactura.total + totalNC.total,
+    };
+    const check = neto.total - totalGeneral.total;
+
+    // Los cortes/subtotales que el propio reporte de origen imprim\u00EDa quedaron guardados en
+    // memoria (cortesRows) para poder cotejarlos manualmente contra lo calculado ac\u00E1; se
+    // dejan en consola en vez de un chequeo autom\u00E1tico porque cada archivo repite el corte
+    // una vez por nivel (serie, resoluci\u00F3n, tipo), as\u00ED que no hay una \u00FAnica cifra 1:1 contra
+    // la cual comparar de forma confiable.
+    if (cortesRows.length > 0) {
+      console.info('[libro limpio] cortes/subtotales del reporte original disponibles para cotejar:', cortesRows);
+    }
+
+    const totalRow = ['', '', '', '', '', 'TOTAL', totalGeneral.gravada10, totalGeneral.iva10, totalGeneral.gravada5, totalGeneral.iva5, totalGeneral.exentas, totalGeneral.total, ''].map(esc).join(';');
+    const blank = ['', '', '', '', '', '', '', '', '', '', '', '', ''].map(esc).join(';');
+    const resumenHeader = ['', '', '', '', '', 'RESUMEN', '', '', '', '', '', '', ''].map(esc).join(';');
+    const facturaRow = ['', '', '', '', '', 'Factura', totalFactura.gravada10, totalFactura.iva10, totalFactura.gravada5, totalFactura.iva5, totalFactura.exentas, totalFactura.total, ''].map(esc).join(';');
+    const ncRow = ['', '', '', '', '', 'Nota de Cr\u00E9dito', totalNC.gravada10, totalNC.iva10, totalNC.gravada5, totalNC.iva5, totalNC.exentas, totalNC.total, ''].map(esc).join(';');
+    const netoRow = ['', '', '', '', '', 'NETO', neto.gravada10, neto.iva10, neto.gravada5, neto.iva5, neto.exentas, neto.total, ''].map(esc).join(';');
+    const checkRow = ['', '', '', '', '', 'Check', '', '', '', '', '', check, ''].map(esc).join(';');
+
+    const csv = '\uFEFF' + [
+      headers.map(esc).join(';'), ...dataRows, totalRow,
+      blank, blank, blank,
+      resumenHeader, blank, facturaRow, ncRow, netoRow, checkRow,
+    ].join('\r\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'Libro_Ventas_Global_formato_limpio.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Guidance texts and wizard steps
+  let nextCtaLabel = 'Ir a cargar reportes';
+  let nextCtaAction = () => setScreen('carga');
+  let guidanceText = 'Todavía no cargaste ningún reporte.';
+
+  if (hasAnyUpload && !converted) {
+    nextCtaLabel = 'Analizar y convertir';
+    nextCtaAction = () => setScreen('carga');
+    guidanceText = 'Ya cargaste reportes. Analizalos y convertilos para generar el libro de ventas.';
+  } else if (converted && !rg90Loaded) {
+    nextCtaLabel = 'Cargar y comparar RG90';
+    nextCtaAction = () => setScreen('rg90');
+    guidanceText = 'El libro de ventas ya está listo. Cargá el archivo RG90 para comparar.';
+  } else if (converted && rg90Loaded) {
+    nextCtaLabel = 'Ver comparación';
+    nextCtaAction = () => setScreen('rg90');
+    guidanceText = 'Todo listo — revisá el resultado de la comparación.';
+  }
+
+  const stepStatus = (done: boolean, unlocked: boolean) => (done ? 'done' : unlocked ? 'active' : 'locked');
+  const dashboardSteps = [
+    { n: 1, label: 'Cargar los reportes que desea analizar y consolidar', status: stepStatus(hasAnyUpload, true) },
+    { n: 2, label: 'Analizar y convertir al formato limpio', status: stepStatus(converted, hasAnyUpload) },
+    { n: 3, label: 'Cargar el archivo RG90 y comparar', status: stepStatus(rg90Loaded, converted) },
+  ].map(st => ({
+    ...st,
+    circleStyle: st.status === 'done' ? 'background:#128752;color:#fff' : st.status === 'active' ? 'background:#f0a63d;color:#1a1a1a' : 'background:#eceae4;color:#9aa1ab',
+    mark: st.status === 'done' ? '✓' : String(st.n),
+    statusText: st.status === 'done' ? 'Completado' : st.status === 'active' ? 'Siguiente paso' : 'Bloqueado',
+    statusTextStyle: st.status === 'done' ? 'color:#128752' : st.status === 'active' ? 'color:#b0740f' : 'color:#9aa1ab',
+  }));
+
+  const wizardSteps = [
+    { n: 1, label: 'Cargar reportes' },
+    { n: 2, label: 'Datos comparados' },
+    { n: 3, label: 'Comparación RG90' },
+  ].map(st => {
+    const current = !converted ? 1 : !rg90Loaded ? 2 : 3;
+    const active = st.n === current;
+    const done = st.n < current;
+    const reachable = st.n <= current;
+    return {
+      ...st,
+      circleStyle: (done ? 'background:#128752;color:#fff' : active ? 'background:#f0a63d;color:#1a1a1a' : 'background:#e5e2da;color:#9aa1ab') + (reachable && !active ? ';cursor:pointer' : ';cursor:default'),
+      labelStyle: (active ? 'color:#22262b;font-weight:700' : done ? 'color:#128752;font-weight:600' : 'color:#9aa1ab') + (reachable && !active ? ';cursor:pointer' : ''),
+      mark: done ? '✓' : String(st.n),
+      goTo: !reachable || active ? undefined : () => {
+        if (st.n === 1) setScreen('carga');
+        else if (st.n === 2) setScreen('carga');
+        else setScreen('rg90');
+      },
+    };
+  });
+
+  // Table filtering and pagination
+  let filteredLibro = libroRows.filter(r => matchesSistema(r.sistema, filtro));
+  if (estadoFilter) filteredLibro = filteredLibro.filter(r => r.estado === estadoFilter);
+  if (searchGeneral.trim()) {
+    const q = searchGeneral.trim().toLowerCase();
+    filteredLibro = filteredLibro.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
+  }
+
+  const totalPages = Math.max(1, Math.ceil(filteredLibro.length / pageSize));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const pagedLibro = filteredLibro.slice((currentPage - 1) * pageSize, currentPage * pageSize).map(r => ({
+    ...r,
+    estadoStyle: r.estado === 'Anulada' ? 'background:#fbe9e3;color:#b3402f;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px' : 'background:#e8f3ec;color:#128752;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px',
+  }));
+
+  const filteredCorrel = correlatividadRows.filter(r => matchesSistema(r.sistema, correlFiltro));
+
+  // Estado de ingesta por sistema origen: calculado de los datos reales del libro
+  // cargado, no valores fijos — refleja exactamente lo que se subió y proceso.
+  const importStatusComputed = SYSTEMS_META.map(sysMeta => {
+    const filasSistema = libroRows.filter(r => matchesSistema(r.sistema, sysMeta.label));
+    const localesSistema = new Set(filasSistema.map(r => r.local));
+    const saltosSistema = correlatividadRows.filter(r => matchesSistema(r.sistema, sysMeta.label));
+    const archivosSistema = uploadedFiles.filter(f => f.sistemaKey === sysMeta.key);
+    return {
+      sistema: sysMeta.label,
+      sistemaKey: sysMeta.key,
+      locales: localesSistema.size,
+      registros: filasSistema.length.toLocaleString('es-PY'),
+      estado: archivosSistema.length > 0 ? 'Cargado' : 'Pendiente',
+      ultimaCarga: archivosSistema.length > 0 ? archivosSistema[archivosSistema.length - 1].uploadedAt : '—',
+      saltos: saltosSistema.length,
+    };
+  });
+
+  const filteredRg90Diff = rg90DiffRows
+    .filter(r => !rg90Search || Object.values(r).some(v => String(v).toLowerCase().includes(rg90Search.toLowerCase())))
+    .filter(r => !rg90CategoryFilter || r.diferencia === rg90CategoryFilter)
+    .map(r => {
+      let diffStyle = 'background:#f0eee8;color:#5c6470;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px';
+      if (r.diferencia === 'No llegó a la interfaz' || r.diferencia === 'No en libro propio') {
+        diffStyle = 'background:#fbe9e3;color:#b3402f;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px';
+      } else if (r.diferencia === 'Rechazada' || r.diferencia === 'Salto de numeración') {
+        diffStyle = 'background:#fdf1de;color:#b0740f;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px';
+      } else if (r.diferencia === 'Anulada') {
+        diffStyle = 'background:#f1eef8;color:#5b3aa8;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px';
+      }
+      return { ...r, diffChipStyle: diffStyle };
+    });
+
+  // Cobertura por local: calculada de los datos reales del libro, la correlatividad y el
+  // resultado de la comparación RG90 — no un listado fijo de locales de muestra.
+  const rg90ByLocalComputed = Array.from(new Set(libroRows.map(r => r.local))).map(local => ({
+    local,
+    sistema: libroRows.find(r => r.local === local)?.sistema || '',
+    comprobantes: libroRows.filter(r => r.local === local).length,
+    diferencias: rg90DiffRows.filter(d => d.local === local && d.diferencia !== 'Anulada').length,
+    saltos: correlatividadRows.filter(r => r.local === local).length,
+  }));
+
+  const [title, subtitle] = TITLES[screen];
+
+  if (!authed) {
+    return <LoginView onLoginSuccess={() => setAuthed(true)} />;
+  }
+
+  const handleLogout = () => {
+    setAuthToken(null);
+    setAuthed(false);
+  };
+
+  return (
+    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#faf9f5' }}>
+      <Sidebar currentScreen={screen} onNavigate={(sc) => setScreen(sc)} />
+
+      <main style={{ marginLeft: '260px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <Header title={title} subtitle={subtitle} onLogout={handleLogout} />
+
+        <div style={{ padding: '32px', flex: 1 }}>
+          {screen === 'dashboard' && (
+            <DashboardView
+              steps={dashboardSteps}
+              isFreshStart={isFreshStart}
+              converted={converted}
+              rg90Loaded={rg90Loaded}
+              hasAnyUpload={hasAnyUpload}
+              guidanceText={guidanceText}
+              nextCtaLabel={nextCtaLabel}
+              nextCtaAction={nextCtaAction}
+              importStatus={importStatusComputed}
+              kpiLocales={converted ? `${new Set(libroRows.map(r => r.local)).size}` : '0'}
+              kpiComprobantes={converted ? `${libroRows.length}` : '0'}
+              kpiSaltos={converted ? `${correlatividadRows.length}` : '—'}
+              onNavigate={(sc) => setScreen(sc)}
+            />
+          )}
+
+          {screen === 'carga' && (
+            <CargaView
+              wizardSteps={wizardSteps}
+              systemOptions={SYSTEMS_META}
+              selectedSystemKey={selectedSystemKey}
+              onSelectSystem={(e) => setSelectedSystemKey(e.target.value)}
+              simulateUpload={simulateUpload}
+              onFileUpload={handleFileUpload}
+              uploadedFilesList={uploadedFiles.map(f => ({
+                ...f,
+                sistemaLabel: (SYSTEMS_META.find(s => s.key === f.sistemaKey) || {}).label || f.sistemaKey,
+                removeFile: () => setUploadedFiles(prev => prev.filter(x => x.id !== f.id)),
+                removeBtnStyle: 'background:#fff;border:1px solid #e2e0da;color:#b3402f;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer',
+              }))}
+              canConvert={alohaLoaded || hioposLoaded}
+              convertHelpText={
+                converted
+                  ? 'Ya existe un análisis generado para estos reportes.'
+                  : (alohaLoaded || hioposLoaded)
+                  ? 'Se aplicará el mapeo de campos definido para comparar y consolidar los reportes en un libro de ventas unificado.'
+                  : 'Cargá los reportes de Aloha o Hiopos para habilitar el análisis.'
+              }
+              convertBtnStyle={
+                (alohaLoaded || hioposLoaded) || converted
+                  ? 'background:#f0a63d;color:#1a1a1a;border:none;border-radius:7px;padding:12px 20px;font-size:13px;font-weight:700;cursor:pointer'
+                  : 'background:#e5e2da;color:#9aa1ab;border:none;border-radius:7px;padding:12px 20px;font-size:13px;font-weight:700;cursor:not-allowed'
+              }
+              doConvert={doConvert}
+              converting={converting}
+              convertError={convertError}
+              converted={converted}
+              showCargaCard={!converted || cargaUploaderOpen}
+              showStep2Content={converted && !cargaUploaderOpen}
+              openCargaUploader={() => setCargaUploaderOpen(true)}
+              deleteLibro={deleteLibro}
+              downloadLimpio={downloadLimpio}
+              pagedLibro={pagedLibro}
+              filterStyleTodos={filtro === 'Todos' ? 'background:#128752;border:1px solid #128752;color:#fff;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer' : 'background:#fff;border:1px solid #e2e0da;color:#5c6470;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer'}
+              filterStyleAloha={filtro === 'Aloha' ? 'background:#128752;border:1px solid #128752;color:#fff;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer' : 'background:#fff;border:1px solid #e2e0da;color:#5c6470;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer'}
+              filterStyleHiopos={filtro === 'Hiopos' ? 'background:#128752;border:1px solid #128752;color:#fff;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer' : 'background:#fff;border:1px solid #e2e0da;color:#5c6470;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer'}
+              setFilterTodos={() => { setFiltro('Todos'); setPage(1); }}
+              setFilterAloha={() => { setFiltro('Aloha'); setPage(1); }}
+              setFilterHiopos={() => { setFiltro('Hiopos'); setPage(1); }}
+              searchGeneral={searchGeneral}
+              onSearchGeneral={(e) => { setSearchGeneral(e.target.value); setPage(1); }}
+              clearSearch={() => { setSearchGeneral(''); setPage(1); }}
+              filteredCount={filteredLibro.length}
+              currentPage={currentPage}
+              totalPages={totalPages}
+              prevPage={() => setPage(p => Math.max(1, p - 1))}
+              nextPage={() => setPage(p => Math.min(totalPages, p + 1))}
+              pageRangeLabel={
+                filteredLibro.length === 0
+                  ? '0'
+                  : `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, filteredLibro.length)}`
+              }
+              prevBtnStyle={`background:#fff;border:1px solid #e2e0da;color:${currentPage <= 1 ? '#c7c3ba' : '#128752'};border-radius:7px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:${currentPage <= 1 ? 'default' : 'pointer'}`}
+              nextBtnStyle={`background:#fff;border:1px solid #e2e0da;color:${currentPage >= totalPages ? '#c7c3ba' : '#128752'};border-radius:7px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:${currentPage >= totalPages ? 'default' : 'pointer'}`}
+              onVerTodos={() => setScreen('libroCompleto')}
+              step2Cards={[
+                { label: 'Locales', value: `${new Set(libroRows.map(r => r.local)).size}` },
+                { label: 'Comprobantes', value: `${libroRows.length}` },
+                { label: 'Saltos', value: `${correlatividadRows.length}` },
+              ]}
+              alohaLoaded={alohaLoaded}
+              hioposLoaded={hioposLoaded}
+            />
+          )}
+
+          {screen === 'libroCompleto' && (
+            <LibroCompletoView
+              rows={
+                filteredLibro.filter(r =>
+                  !libroCompletoSearch.trim() ||
+                  Object.values(r).some(v => String(v).toLowerCase().includes(libroCompletoSearch.trim().toLowerCase()))
+                )
+              }
+              totalSinFiltrar={libroRows.length}
+              search={libroCompletoSearch}
+              onSearch={(e) => setLibroCompletoSearch(e.target.value)}
+              onVolver={() => { setLibroCompletoSearch(''); setScreen('carga'); }}
+              onDownload={downloadLimpio}
+            />
+          )}
+
+          {screen === 'correl' && (
+            <CorrelatividadView
+              correlatividad={filteredCorrel}
+              correlFiltro={correlFiltro}
+              correlFilterStyleTodos={correlFiltro === 'Todos' ? 'background:#128752;border:1px solid #128752;color:#fff;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer' : 'background:#fff;border:1px solid #e2e0da;color:#5c6470;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer'}
+              correlFilterStyleAloha={correlFiltro === 'Aloha' ? 'background:#128752;border:1px solid #128752;color:#fff;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer' : 'background:#fff;border:1px solid #e2e0da;color:#5c6470;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer'}
+              correlFilterStyleHiopos={correlFiltro === 'Hiopos' ? 'background:#128752;border:1px solid #128752;color:#fff;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer' : 'background:#fff;border:1px solid #e2e0da;color:#5c6470;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer'}
+              setCorrelTodos={() => setCorrelFiltro('Todos')}
+              setCorrelAloha={() => setCorrelFiltro('Aloha')}
+              setCorrelHiopos={() => setCorrelFiltro('Hiopos')}
+            />
+          )}
+
+          {screen === 'rg90' && (
+            <RG90View
+              wizardSteps={wizardSteps}
+              rg90Loaded={rg90Loaded}
+              rg90Attached={rg90Attached}
+              rg90StatusText={
+                rg90Analyzing
+                  ? 'Comparando contra la RG90 en el servidor…'
+                  : rg90Loaded
+                  ? `Archivo cargado y comparado — ${rg90Files.map(f => f.name).join(', ')}`
+                  : rg90Attached
+                  ? `Archivo adjuntado — ${rg90Files.map(f => f.name).join(', ')}. Presioná "Analizar y comparar" para generar el resultado.`
+                  : 'El libro de ventas ya está en formato limpio y unificado. Cargá el/los archivo(s) del organismo recaudador (venta y/o nota de crédito) para comparar.'
+              }
+              rg90FileLabel={rg90Attached ? rg90Files.map(f => f.name).join(', ') : 'Adjuntar archivo(s) RG90 (.xls / .xlsx)'}
+              rg90DropzoneStyle={
+                (rg90Attached ? 'background:#f4f2ed;color:#22262b;font-weight:600' : 'background:#fafbfa;color:#5c6470;border:1px dashed #cfd6d0') +
+                ';flex:1;min-width:220px;border-radius:7px;padding:9px 14px;font-size:12.5px;cursor:pointer'
+              }
+              rg90AnalyzeBtnStyle={
+                rg90Attached && !rg90Analyzing
+                  ? 'background:#f0a63d;color:#1a1a1a;border:none;border-radius:7px;padding:10px 16px;font-size:12.5px;font-weight:700;cursor:pointer'
+                  : 'background:#e5e2da;color:#9aa1ab;border:none;border-radius:7px;padding:10px 16px;font-size:12.5px;font-weight:700;cursor:not-allowed'
+              }
+              rg90Analyzing={rg90Analyzing}
+              rg90Error={rg90Error}
+              simulateRg90={simulateRg90Upload}
+              onRg90FileUpload={handleRg90FileUpload}
+              analyzeRg90={analyzeRg90}
+              resetRg90={resetRg90}
+              rg90Cards={rg90CardsState.map(c => ({
+                ...c,
+                isActive: rg90CategoryFilter === c.key && c.key !== '',
+                onClick: c.key === '' ? () => setRg90CategoryFilter('') : () => setRg90CategoryFilter(prev => (prev === c.key ? '' : c.key)),
+              }))}
+              rg90Diff={filteredRg90Diff}
+              rg90ByLocal={rg90ByLocalComputed}
+              rg90Search={rg90Search}
+              onRg90Search={(e) => setRg90Search(e.target.value)}
+              clearRg90Search={() => setRg90Search('')}
+              rg90CategoryFilter={rg90CategoryFilter}
+              clearRg90Category={() => setRg90CategoryFilter('')}
+            />
+          )}
+        </div>
+      </main>
+
+      {/* Confirmation Modal */}
+      {confirmModal && (
+        <ConfirmModal
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          onConfirm={() => {
+            confirmModal.onConfirm();
+            setConfirmModal(null);
+          }}
+          onClose={() => setConfirmModal(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+export default App;
