@@ -73,7 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate, per
             justifyContent: 'center',
           }}
         >
-          <img src={logoConsultora} alt="Consultora San Miguel" style={{ height: '32px', width: 'auto', display: 'block' }} />
+          <img src={logoConsultora} alt="Consultora San Miguel" style={{ height: '48px', width: 'auto', display: 'block' }} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
           <ShieldCheck size={26} color="#f0a63d" />
