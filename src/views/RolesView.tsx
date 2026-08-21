@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { Plus, Pencil, Trash2, ShieldCheck, Lock } from 'lucide-react';
+import { Plus, Pencil, Trash2, ShieldCheck, Lock, Eye } from 'lucide-react';
 import { Modal, fieldLabelStyle, fieldInputStyle, primaryBtnStyle, secondaryBtnStyle, dangerBtnStyle } from '../components/Modal';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { AuditoriaModal } from '../components/AuditoriaModal';
 import type { Rol, Permiso } from '../services/api';
 import { createRolApi, updateRolApi, deleteRolApi } from '../services/api';
 
@@ -36,6 +37,7 @@ export const RolesView: React.FC<RolesViewProps> = ({ roles, permisos, loading, 
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<Rol | null>(null);
+  const [showAuditoria, setShowAuditoria] = useState(false);
 
   const grupos = useMemo(() => {
     const porPantalla: Record<string, Permiso[]> = {};
@@ -125,12 +127,22 @@ export const RolesView: React.FC<RolesViewProps> = ({ roles, permisos, loading, 
           </div>
           <p style={{ fontSize: '12.5px', color: '#5c6470', marginTop: '2px' }}>Cada rol define qué pantallas y botones puede usar. "admin" y "operador" son roles de sistema — no se pueden borrar ni renombrar, pero sus permisos sí se pueden ajustar.</p>
         </div>
-        {canCrear && (
-          <button onClick={openCrear} style={{ ...primaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Plus size={16} />
-            <span>Nuevo rol</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button
+            onClick={() => setShowAuditoria(true)}
+            title="Ver auditoría de cambios"
+            style={{ ...secondaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Eye size={16} />
+            <span>Auditoría</span>
           </button>
-        )}
+          {canCrear && (
+            <button onClick={openCrear} style={{ ...primaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Plus size={16} />
+              <span>Nuevo rol</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -248,6 +260,14 @@ export const RolesView: React.FC<RolesViewProps> = ({ roles, permisos, loading, 
           confirmLabel="Eliminar rol"
           onConfirm={doDelete}
           onClose={() => setConfirmDelete(null)}
+        />
+      )}
+
+      {showAuditoria && (
+        <AuditoriaModal
+          titulo="Auditoría de Roles"
+          acciones={['alta_rol', 'edicion_rol', 'baja_rol']}
+          onClose={() => setShowAuditoria(false)}
         />
       )}
     </div>

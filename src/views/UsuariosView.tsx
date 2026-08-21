@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Plus, Pencil, UserX, Users as UsersIcon } from 'lucide-react';
+import { Plus, Pencil, UserX, Users as UsersIcon, Eye } from 'lucide-react';
 import { Modal, fieldLabelStyle, fieldInputStyle, primaryBtnStyle, secondaryBtnStyle, dangerBtnStyle } from '../components/Modal';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { AuditoriaModal } from '../components/AuditoriaModal';
 import type { Usuario, Rol } from '../services/api';
 import { createUsuarioApi, updateUsuarioApi, deleteUsuarioApi } from '../services/api';
 
@@ -33,6 +34,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmDeactivate, setConfirmDeactivate] = useState<Usuario | null>(null);
+  const [showAuditoria, setShowAuditoria] = useState(false);
 
   const openCrear = () => { setForm(EMPTY_FORM); setFormError(null); setModalOpen('crear'); };
   const openEditar = (u: Usuario) => {
@@ -99,12 +101,22 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
           </div>
           <p style={{ fontSize: '12.5px', color: '#5c6470', marginTop: '2px' }}>Alta, edición y baja de usuarios del sistema — el rol asignado determina qué pantallas y botones puede usar.</p>
         </div>
-        {canCrear && (
-          <button onClick={openCrear} style={{ ...primaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Plus size={16} />
-            <span>Nuevo usuario</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button
+            onClick={() => setShowAuditoria(true)}
+            title="Ver auditoría de cambios"
+            style={{ ...secondaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Eye size={16} />
+            <span>Auditoría</span>
           </button>
-        )}
+          {canCrear && (
+            <button onClick={openCrear} style={{ ...primaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Plus size={16} />
+              <span>Nuevo usuario</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -213,6 +225,14 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
           confirmLabel="Desactivar usuario"
           onConfirm={doDeactivate}
           onClose={() => setConfirmDeactivate(null)}
+        />
+      )}
+
+      {showAuditoria && (
+        <AuditoriaModal
+          titulo="Auditoría de Usuarios"
+          acciones={['alta_usuario', 'edicion_usuario', 'baja_usuario']}
+          onClose={() => setShowAuditoria(false)}
         />
       )}
     </div>

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Plus, Pencil, Trash2, MapPin } from 'lucide-react';
+import { Plus, Pencil, Trash2, MapPin, Eye } from 'lucide-react';
 import { Modal, fieldLabelStyle, fieldInputStyle, primaryBtnStyle, secondaryBtnStyle, dangerBtnStyle } from '../components/Modal';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { AuditoriaModal } from '../components/AuditoriaModal';
 import type { Local } from '../services/api';
 import { createLocalApi, updateLocalApi, deleteLocalApi } from '../services/api';
 
@@ -31,6 +32,7 @@ export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, erro
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<Local | null>(null);
+  const [showAuditoria, setShowAuditoria] = useState(false);
 
   const openCrear = () => { setForm(EMPTY_FORM); setFormError(null); setModalOpen('crear'); };
   const openEditar = (l: Local) => {
@@ -94,15 +96,25 @@ export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, erro
             El punto de expedición son los 3 primeros dígitos del número de documento — se usa para determinar automáticamente a qué local corresponde cada comprobante en el Paso 2.
           </p>
         </div>
-        {canCrear && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <button
-            onClick={openCrear}
-            style={{ ...primaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}
+            onClick={() => setShowAuditoria(true)}
+            title="Ver auditoría de cambios"
+            style={{ ...secondaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}
           >
-            <Plus size={16} />
-            <span>Nuevo local</span>
+            <Eye size={16} />
+            <span>Auditoría</span>
           </button>
-        )}
+          {canCrear && (
+            <button
+              onClick={openCrear}
+              style={{ ...primaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Plus size={16} />
+              <span>Nuevo local</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -212,6 +224,14 @@ export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, erro
           confirmLabel="Eliminar local"
           onConfirm={doDelete}
           onClose={() => setConfirmDelete(null)}
+        />
+      )}
+
+      {showAuditoria && (
+        <AuditoriaModal
+          titulo="Auditoría de Locales"
+          acciones={['alta_local', 'edicion_local', 'baja_local']}
+          onClose={() => setShowAuditoria(false)}
         />
       )}
     </div>

@@ -114,6 +114,14 @@ export interface MeInfo extends Usuario {
   permisos: string[];
 }
 
+export interface EventoAuditoria {
+  id: number;
+  fecha: string;
+  accion: string;
+  descripcion: string;
+  usuario: string;
+}
+
 const API_BASE =
   (import.meta.env.VITE_API_BASE as string | undefined) ||
   (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:8090/api' : '/api');
@@ -265,4 +273,10 @@ export function updateUsuarioApi(id: number, datos: { nombre?: string; rol_id?: 
 }
 export function deleteUsuarioApi(id: number): Promise<void> {
   return authedJson<void>(`/auth/usuarios/${id}`, { method: 'DELETE' }, 'Error al desactivar el usuario');
+}
+
+// ── Auditoría ─────────────────────────────────────────────────────────────
+export function listAuditoriaApi(acciones: string[], limit = 100): Promise<EventoAuditoria[]> {
+  const qs = new URLSearchParams({ acciones: acciones.join(','), limit: String(limit) });
+  return authedJson<EventoAuditoria[]>(`/auditoria?${qs.toString()}`, {}, 'Error al obtener la auditoría');
 }
