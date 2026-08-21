@@ -1,5 +1,6 @@
 import React from 'react';
 import { LayoutDashboard, FileSpreadsheet, ListTree, GitCompare, ShieldCheck, MapPin, Users, KeyRound } from 'lucide-react';
+import logoConsultora from '../assets/logo-consultora-san-miguel.png';
 
 type Screen = 'dashboard' | 'carga' | 'correl' | 'rg90' | 'libroCompleto' | 'locales' | 'usuarios' | 'roles';
 
@@ -62,6 +63,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate, per
     >
       {/* Brand Header */}
       <div style={{ padding: '24px 20px 20px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+        <div
+          style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '8px',
+            padding: '10px 14px',
+            marginBottom: '14px',
+            display: 'flex',
+            justifyContent: 'center',
+          }}
+        >
+          <img src={logoConsultora} alt="Consultora San Miguel" style={{ height: '32px', width: 'auto', display: 'block' }} />
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
           <ShieldCheck size={26} color="#f0a63d" />
           <h1 style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.02em', color: '#ffffff' }}>
