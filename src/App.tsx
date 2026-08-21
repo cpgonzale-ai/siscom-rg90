@@ -102,6 +102,15 @@ export function App() {
     setUploadedFiles(prev => [...prev, ...newFiles]);
   };
 
+  const removeAllFiles = () => {
+    if (uploadedFiles.length === 0) return;
+    setConfirmModal({
+      message: `¿Eliminar los ${uploadedFiles.length} archivos adjuntados? Vas a tener que volver a cargarlos.`,
+      confirmLabel: 'Eliminar todos',
+      onConfirm: () => setUploadedFiles([]),
+    });
+  };
+
   const simulateUpload = () => {
     const meta = SYSTEMS_META.find(s => s.key === selectedSystemKey) || SYSTEMS_META[0];
     const n = uploadedFiles.filter(f => f.sistemaKey === meta.key).length + 1;
@@ -453,6 +462,7 @@ export function App() {
                 removeFile: () => setUploadedFiles(prev => prev.filter(x => x.id !== f.id)),
                 removeBtnStyle: 'background:#fff;border:1px solid #e2e0da;color:#b3402f;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer',
               }))}
+              removeAllFiles={removeAllFiles}
               canConvert={alohaLoaded || hioposLoaded}
               convertHelpText={
                 converted

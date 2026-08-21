@@ -10,6 +10,7 @@ interface CargaViewProps {
   simulateUpload: () => void;
   onFileUpload: (files: FileList) => void;
   uploadedFilesList: any[];
+  removeAllFiles: () => void;
   canConvert: boolean;
   convertHelpText: string;
   convertBtnStyle: string;
@@ -53,6 +54,7 @@ export const CargaView: React.FC<CargaViewProps> = ({
   onSelectSystem,
   onFileUpload,
   uploadedFilesList,
+  removeAllFiles,
   convertHelpText,
   convertBtnStyle,
   doConvert,
@@ -188,8 +190,29 @@ export const CargaView: React.FC<CargaViewProps> = ({
           {/* Uploaded Files List */}
           {uploadedFilesList.length > 0 && (
             <div style={{ marginBottom: '20px' }}>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: '#5c6470', marginBottom: '8px' }}>
-                Archivos adjuntados ({uploadedFilesList.length}):
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: '#5c6470' }}>
+                  Archivos adjuntados ({uploadedFilesList.length}):
+                </div>
+                <button
+                  onClick={removeAllFiles}
+                  style={{
+                    background: '#fff',
+                    border: '1px solid #e2e0da',
+                    color: '#b3402f',
+                    borderRadius: '6px',
+                    padding: '5px 10px',
+                    fontSize: '11.5px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                  }}
+                >
+                  <Trash2 size={12} />
+                  <span>Eliminar todos</span>
+                </button>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
