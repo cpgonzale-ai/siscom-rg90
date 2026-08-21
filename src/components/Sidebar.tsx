@@ -1,12 +1,15 @@
 import React from 'react';
-import { LayoutDashboard, FileSpreadsheet, ListTree, GitCompare, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, FileSpreadsheet, ListTree, GitCompare, ShieldCheck, MapPin, Users, KeyRound } from 'lucide-react';
+
+type Screen = 'dashboard' | 'carga' | 'correl' | 'rg90' | 'libroCompleto' | 'locales' | 'usuarios' | 'roles';
 
 interface SidebarProps {
-  currentScreen: 'dashboard' | 'carga' | 'correl' | 'rg90' | 'libroCompleto';
-  onNavigate: (screen: 'dashboard' | 'carga' | 'correl' | 'rg90') => void;
+  currentScreen: Screen;
+  onNavigate: (screen: 'dashboard' | 'carga' | 'correl' | 'rg90' | 'locales' | 'usuarios' | 'roles') => void;
+  permisos: Set<string>;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate, permisos }) => {
   const navItemStyle = (screen: string) => {
     const isActive = currentScreen === screen;
     return {
@@ -37,6 +40,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate }) =
     flex: 'none',
   });
 
+  const puede = (clave: string) => permisos.has(clave);
+  const puedeAdmin = puede('pantalla:locales') || puede('pantalla:usuarios') || puede('pantalla:roles');
+
   return (
     <aside
       style={{
@@ -51,6 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate }) =
         top: 0,
         zIndex: 100,
         boxShadow: '2px 0 10px rgba(0,0,0,0.1)',
+        overflowY: 'auto',
       }}
     >
       {/* Brand Header */}
@@ -72,29 +79,66 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate }) =
           Módulos de Conciliación
         </div>
 
-        <button style={navItemStyle('dashboard')} onClick={() => onNavigate('dashboard')}>
-          <div style={dotStyle('dashboard')} />
-          <LayoutDashboard size={17} />
-          <span>Panel general</span>
-        </button>
+        {puede('pantalla:dashboard') && (
+          <button style={navItemStyle('dashboard')} onClick={() => onNavigate('dashboard')}>
+            <div style={dotStyle('dashboard')} />
+            <LayoutDashboard size={17} />
+            <span>Panel general</span>
+          </button>
+        )}
 
-        <button style={navItemStyle('carga')} onClick={() => onNavigate('carga')}>
-          <div style={dotStyle('carga')} />
-          <FileSpreadsheet size={17} />
-          <span>Carga y libro de ventas</span>
-        </button>
+        {puede('pantalla:carga') && (
+          <button style={navItemStyle('carga')} onClick={() => onNavigate('carga')}>
+            <div style={dotStyle('carga')} />
+            <FileSpreadsheet size={17} />
+            <span>Carga y libro de ventas</span>
+          </button>
+        )}
 
-        <button style={navItemStyle('correl')} onClick={() => onNavigate('correl')}>
-          <div style={dotStyle('correl')} />
-          <ListTree size={17} />
-          <span>Control de correlatividad</span>
-        </button>
+        {puede('pantalla:correlatividad') && (
+          <button style={navItemStyle('correl')} onClick={() => onNavigate('correl')}>
+            <div style={dotStyle('correl')} />
+            <ListTree size={17} />
+            <span>Control de correlatividad</span>
+          </button>
+        )}
 
-        <button style={navItemStyle('rg90')} onClick={() => onNavigate('rg90')}>
-          <div style={dotStyle('rg90')} />
-          <GitCompare size={17} />
-          <span>Comparación contra RG90</span>
-        </button>
+        {puede('pantalla:rg90') && (
+          <button style={navItemStyle('rg90')} onClick={() => onNavigate('rg90')}>
+            <div style={dotStyle('rg90')} />
+            <GitCompare size={17} />
+            <span>Comparación contra RG90</span>
+          </button>
+        )}
+
+        {puedeAdmin && (
+          <>
+            <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'rgba(255,255,255,0.5)', margin: '16px 8px 8px 8px', fontWeight: 600 }}>
+              Administración
+            </div>
+            {puede('pantalla:locales') && (
+              <button style={navItemStyle('locales')} onClick={() => onNavigate('locales')}>
+                <div style={dotStyle('locales')} />
+                <MapPin size={17} />
+                <span>Locales</span>
+              </button>
+            )}
+            {puede('pantalla:usuarios') && (
+              <button style={navItemStyle('usuarios')} onClick={() => onNavigate('usuarios')}>
+                <div style={dotStyle('usuarios')} />
+                <Users size={17} />
+                <span>Usuarios</span>
+              </button>
+            )}
+            {puede('pantalla:roles') && (
+              <button style={navItemStyle('roles')} onClick={() => onNavigate('roles')}>
+                <div style={dotStyle('roles')} />
+                <KeyRound size={17} />
+                <span>Roles y permisos</span>
+              </button>
+            )}
+          </>
+        )}
       </nav>
 
       {/* Footer Info */}

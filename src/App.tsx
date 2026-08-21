@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { ConfirmModal } from './components/ConfirmModal';
@@ -9,6 +9,9 @@ import { CorrelatividadView } from './views/CorrelatividadView';
 import { RG90View } from './views/RG90View';
 import { LoginView } from './views/LoginView';
 import { LibroCompletoView } from './views/LibroCompletoView';
+import { LocalesView } from './views/LocalesView';
+import { UsuariosView } from './views/UsuariosView';
+import { RolesView } from './views/RolesView';
 
 import {
   LibroRow,
@@ -16,10 +19,20 @@ import {
   RG90DiffRow,
   CorteRow,
   UploadedFileMeta,
+  Local,
+  Rol,
+  Permiso,
+  Usuario,
+  MeInfo,
   ingestFilesApi,
   reconcileApi,
   getAuthToken,
   setAuthToken,
+  getMeApi,
+  listLocalesApi,
+  listRolesApi,
+  listPermisosApi,
+  listUsuariosApi,
 } from './services/api';
 
 // Un local/sistema "matchea" un filtro por inclusión, no por igualdad: el backend
@@ -34,9 +47,12 @@ const TITLES: Record<string, [string, string]> = {
   correl: ['Control de correlatividad', 'Saltos de numeración detectados por local'],
   rg90: ['Comparación contra RG90', 'Cruce del libro de ventas propio contra el organismo recaudador'],
   libroCompleto: ['Libro de ventas completo', 'Todos los comprobantes cargados, sin recortar por paginado'],
+  locales: ['Locales', 'Alta, edición y baja de locales — se usan para determinar el local de cada comprobante'],
+  usuarios: ['Usuarios', 'Alta, edición y baja de usuarios del sistema'],
+  roles: ['Roles y permisos', 'Qué pantallas y botones puede usar cada rol'],
 };
 
-type Screen = 'dashboard' | 'carga' | 'correl' | 'rg90' | 'libroCompleto';
+type Screen = 'dashboard' | 'carga' | 'correl' | 'rg90' | 'libroCompleto' | 'locales' | 'usuarios' | 'roles';
 
 const SYSTEMS_META = [
   { key: 'aloha', label: 'Aloha', desc: 'Sistema de punto de venta · Juan Valdez' },
@@ -54,6 +70,60 @@ export function App() {
   const [cargaUploaderOpen, setCargaUploaderOpen] = useState<boolean>(true);
   const [, setShowLockedModal] = useState<boolean>(false);
   const [confirmModal, setConfirmModal] = useState<{ message: string; confirmLabel: string; onConfirm: () => void } | null>(null);
+
+  // Permisos dinámicos: qué pantallas y botones puede usar el usuario logueado, según su
+  // rol. Se cargan una vez autenticado (junto con locales/roles/usuarios, que alimentan
+  // tanto las pantallas de administración como la resolución de "local" del Paso 2).
+  const [meInfo, setMeInfo] = useState<MeInfo | null>(null);
+  const permisos = new Set(meInfo?.permisos || []);
+  const puede = (clave: string) => permisos.has(clave);
+
+  const [locales, setLocales] = useState<Local[]>([]);
+  const [localesLoading, setLocalesLoading] = useState(false);
+  const [localesError, setLocalesError] = useState<string | null>(null);
+  const refetchLocales = () => {
+    setLocalesLoading(true);
+    listLocalesApi().then(setLocales).catch(e => setLocalesError(e instanceof Error ? e.message : 'Error al cargar locales')).finally(() => setLocalesLoading(false));
+  };
+
+  const [rolesAdmin, setRolesAdmin] = useState<Rol[]>([]);
+  const [permisosCatalogo, setPermisosCatalogo] = useState<Permiso[]>([]);
+  const [rolesLoading, setRolesLoading] = useState(false);
+  const [rolesError, setRolesError] = useState<string | null>(null);
+  const refetchRoles = () => {
+    setRolesLoading(true);
+    Promise.all([listRolesApi(), listPermisosApi()])
+      .then(([r, p]) => { setRolesAdmin(r); setPermisosCatalogo(p); })
+      .catch(e => setRolesError(e instanceof Error ? e.message : 'Error al cargar roles'))
+      .finally(() => setRolesLoading(false));
+  };
+
+  const [usuariosAdmin, setUsuariosAdmin] = useState<Usuario[]>([]);
+  const [usuariosLoading, setUsuariosLoading] = useState(false);
+  const [usuariosError, setUsuariosError] = useState<string | null>(null);
+  const refetchUsuarios = () => {
+    setUsuariosLoading(true);
+    listUsuariosApi().then(setUsuariosAdmin).catch(e => setUsuariosError(e instanceof Error ? e.message : 'Error al cargar usuarios')).finally(() => setUsuariosLoading(false));
+  };
+
+  useEffect(() => {
+    if (!authed) return;
+    getMeApi().then(setMeInfo).catch(() => setMeInfo(null));
+    refetchLocales();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed]);
+
+  // Roles y usuarios son admin-only y más pesados (traen el catálogo completo de
+  // permisos) — se cargan recién al entrar a esas pantallas, no en cada login. La
+  // pantalla de Usuarios también necesita la lista de roles para el selector del form.
+  useEffect(() => {
+    if (screen === 'roles' && puede('pantalla:roles')) refetchRoles();
+    if (screen === 'usuarios' && puede('pantalla:usuarios')) {
+      refetchUsuarios();
+      if (rolesAdmin.length === 0) refetchRoles();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen]);
 
   const [filtro, setFiltro] = useState<string>('Todos');
   const [estadoFilter] = useState<string>('');
@@ -125,6 +195,16 @@ export function App() {
     ]);
   };
 
+  // El local de cada comprobante se determina comparando su punto de expedición (los
+  // primeros dígitos del número de documento, ej. "025" en 025-001-0065027) contra los
+  // locales registrados en la pantalla de administración — no por lo que se haya escrito
+  // al subir el archivo. Si ningún local activo matchea, la columna queda vacía en el
+  // Paso 2 (no se inventa un nombre).
+  const resolveLocal = (doc: string): string => {
+    const match = locales.find(l => l.estado === 'activo' && doc.startsWith(l.punto_expedicion));
+    return match ? match.nombre : '';
+  };
+
   const doConvert = async () => {
     if (converted) {
       setShowLockedModal(true);
@@ -141,8 +221,10 @@ export function App() {
     setConvertError(null);
     try {
       const res = await ingestFilesApi(realFiles, selectedSystemKey);
-      setLibroRows(res.rows || []);
-      setCorrelatividadRows(res.gaps || []);
+      const rowsConLocal = (res.rows || []).map(r => ({ ...r, local: resolveLocal(r.doc) }));
+      const gapsConLocal = (res.gaps || []).map(g => ({ ...g, local: resolveLocal(g.ultimo) }));
+      setLibroRows(rowsConLocal);
+      setCorrelatividadRows(gapsConLocal);
       setCortesRows(res.cortes || []);
       setLoteId(res.lote_id);
       if (!res.rows || res.rows.length === 0) {
@@ -424,7 +506,7 @@ export function App() {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#faf9f5' }}>
-      <Sidebar currentScreen={screen} onNavigate={(sc) => setScreen(sc)} />
+      <Sidebar currentScreen={screen} onNavigate={(sc) => setScreen(sc)} permisos={permisos} />
 
       <main style={{ marginLeft: '260px', flex: 1, display: 'flex', flexDirection: 'column' }}>
         <Header title={title} subtitle={subtitle} onLogout={handleLogout} />
@@ -463,6 +545,10 @@ export function App() {
                 removeBtnStyle: 'background:#fff;border:1px solid #e2e0da;color:#b3402f;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer',
               }))}
               removeAllFiles={removeAllFiles}
+              canEliminarTodos={puede('boton:carga.eliminar_todos')}
+              canConvertir={puede('boton:carga.convertir')}
+              canBorrarLibro={puede('boton:carga.borrar_libro')}
+              canDescargarCsv={puede('boton:carga.descargar_csv')}
               canConvert={alohaLoaded || hioposLoaded}
               convertHelpText={
                 converted
@@ -547,6 +633,45 @@ export function App() {
             />
           )}
 
+          {screen === 'locales' && (
+            <LocalesView
+              locales={locales}
+              loading={localesLoading}
+              error={localesError}
+              refetch={refetchLocales}
+              canCrear={puede('boton:locales.crear')}
+              canEditar={puede('boton:locales.editar')}
+              canEliminar={puede('boton:locales.eliminar')}
+            />
+          )}
+
+          {screen === 'usuarios' && (
+            <UsuariosView
+              usuarios={usuariosAdmin}
+              roles={rolesAdmin.length > 0 ? rolesAdmin : []}
+              loading={usuariosLoading}
+              error={usuariosError}
+              refetch={refetchUsuarios}
+              currentUserId={meInfo?.id ?? -1}
+              canCrear={puede('boton:usuarios.crear')}
+              canEditar={puede('boton:usuarios.editar')}
+              canEliminar={puede('boton:usuarios.eliminar')}
+            />
+          )}
+
+          {screen === 'roles' && (
+            <RolesView
+              roles={rolesAdmin}
+              permisos={permisosCatalogo}
+              loading={rolesLoading}
+              error={rolesError}
+              refetch={refetchRoles}
+              canCrear={puede('boton:roles.crear')}
+              canEditar={puede('boton:roles.editar')}
+              canEliminar={puede('boton:roles.eliminar')}
+            />
+          )}
+
           {screen === 'rg90' && (
             <RG90View
               wizardSteps={wizardSteps}
@@ -573,6 +698,8 @@ export function App() {
               }
               rg90Analyzing={rg90Analyzing}
               rg90Error={rg90Error}
+              canComparar={puede('boton:rg90.comparar')}
+              canQuitarArchivo={puede('boton:rg90.quitar_archivo')}
               simulateRg90={simulateRg90Upload}
               onRg90FileUpload={handleRg90FileUpload}
               analyzeRg90={analyzeRg90}

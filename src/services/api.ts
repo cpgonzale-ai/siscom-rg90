@@ -74,6 +74,46 @@ export interface UploadedFileMeta {
   rawFile?: File;
 }
 
+export interface Local {
+  id: number;
+  nombre: string;
+  punto_expedicion: string;
+  codigo: string | null;
+  estado: 'activo' | 'inactivo';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Permiso {
+  id: number;
+  clave: string;
+  nombre: string;
+  tipo: 'pantalla' | 'boton';
+  pantalla: string;
+}
+
+export interface Rol {
+  id: number;
+  nombre: string;
+  descripcion: string | null;
+  es_sistema: boolean;
+  permisos: string[];
+}
+
+export interface Usuario {
+  id: number;
+  nombre: string;
+  email: string;
+  rol: string;
+  rol_id: number | null;
+  activo: boolean;
+  created_at: string;
+}
+
+export interface MeInfo extends Usuario {
+  permisos: string[];
+}
+
 const API_BASE =
   (import.meta.env.VITE_API_BASE as string | undefined) ||
   (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:8090/api' : '/api');
@@ -94,6 +134,24 @@ export function getAuthToken(): string | null {
 
 function authHeaders(): HeadersInit {
   return authToken ? { Authorization: `Bearer ${authToken}` } : {};
+}
+
+async function throwApiError(res: Response, fallback: string): Promise<never> {
+  if (res.status === 401) throw new Error('Tu sesión expiró o no iniciaste sesión. Volvé a loguearte e intentá de nuevo.');
+  if (res.status === 403) throw new Error('No tenés permiso para hacer esto.');
+  let detail = '';
+  try { detail = (await res.json())?.detail || ''; } catch { /* respuesta sin JSON */ }
+  throw new Error(detail || `${fallback} (HTTP ${res.status}).`);
+}
+
+async function authedJson<T>(path: string, options: RequestInit = {}, fallback: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: { ...authHeaders(), 'Content-Type': 'application/json', ...(options.headers || {}) },
+  });
+  if (!res.ok) return throwApiError(res, fallback);
+  if (res.status === 204) return undefined as T;
+  return await res.json();
 }
 
 export async function checkBackendHealth(): Promise<boolean> {
@@ -157,4 +215,54 @@ export async function reconcileApi(rg90Files: File[], posRows: LibroRow[], loteI
 
   if (!res.ok) throw new Error('Error al ejecutar la comparación RG90.');
   return await res.json();
+}
+
+// ── /api/auth/me ──────────────────────────────────────────────────────────
+export function getMeApi(): Promise<MeInfo> {
+  return authedJson<MeInfo>('/auth/me', {}, 'Error al obtener el usuario actual');
+}
+
+// ── Locales ────────────────────────────────────────────────────────────────
+export function listLocalesApi(): Promise<Local[]> {
+  return authedJson<Local[]>('/locales', {}, 'Error al listar locales');
+}
+export function createLocalApi(datos: Omit<Local, 'id' | 'created_at' | 'updated_at'>): Promise<Local> {
+  return authedJson<Local>('/locales', { method: 'POST', body: JSON.stringify(datos) }, 'Error al crear el local');
+}
+export function updateLocalApi(id: number, datos: Partial<Omit<Local, 'id' | 'created_at' | 'updated_at'>>): Promise<Local> {
+  return authedJson<Local>(`/locales/${id}`, { method: 'PUT', body: JSON.stringify(datos) }, 'Error al editar el local');
+}
+export function deleteLocalApi(id: number): Promise<void> {
+  return authedJson<void>(`/locales/${id}`, { method: 'DELETE' }, 'Error al eliminar el local');
+}
+
+// ── Roles y permisos ─────────────────────────────────────────────────────
+export function listRolesApi(): Promise<Rol[]> {
+  return authedJson<Rol[]>('/roles', {}, 'Error al listar roles');
+}
+export function listPermisosApi(): Promise<Permiso[]> {
+  return authedJson<Permiso[]>('/roles/permisos', {}, 'Error al listar permisos');
+}
+export function createRolApi(datos: { nombre: string; descripcion?: string; permisos: string[] }): Promise<Rol> {
+  return authedJson<Rol>('/roles', { method: 'POST', body: JSON.stringify(datos) }, 'Error al crear el rol');
+}
+export function updateRolApi(id: number, datos: { nombre?: string; descripcion?: string; permisos?: string[] }): Promise<Rol> {
+  return authedJson<Rol>(`/roles/${id}`, { method: 'PUT', body: JSON.stringify(datos) }, 'Error al editar el rol');
+}
+export function deleteRolApi(id: number): Promise<void> {
+  return authedJson<void>(`/roles/${id}`, { method: 'DELETE' }, 'Error al eliminar el rol');
+}
+
+// ── Usuarios ──────────────────────────────────────────────────────────────
+export function listUsuariosApi(): Promise<Usuario[]> {
+  return authedJson<Usuario[]>('/auth/usuarios', {}, 'Error al listar usuarios');
+}
+export function createUsuarioApi(datos: { nombre: string; email: string; password: string; rol_id: number }): Promise<Usuario> {
+  return authedJson<Usuario>('/auth/usuarios', { method: 'POST', body: JSON.stringify(datos) }, 'Error al crear el usuario');
+}
+export function updateUsuarioApi(id: number, datos: { nombre?: string; rol_id?: number; activo?: boolean; password?: string }): Promise<Usuario> {
+  return authedJson<Usuario>(`/auth/usuarios/${id}`, { method: 'PUT', body: JSON.stringify(datos) }, 'Error al editar el usuario');
+}
+export function deleteUsuarioApi(id: number): Promise<void> {
+  return authedJson<void>(`/auth/usuarios/${id}`, { method: 'DELETE' }, 'Error al desactivar el usuario');
 }

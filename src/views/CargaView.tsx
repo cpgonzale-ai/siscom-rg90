@@ -11,6 +11,10 @@ interface CargaViewProps {
   onFileUpload: (files: FileList) => void;
   uploadedFilesList: any[];
   removeAllFiles: () => void;
+  canEliminarTodos: boolean;
+  canConvertir: boolean;
+  canBorrarLibro: boolean;
+  canDescargarCsv: boolean;
   canConvert: boolean;
   convertHelpText: string;
   convertBtnStyle: string;
@@ -55,6 +59,10 @@ export const CargaView: React.FC<CargaViewProps> = ({
   onFileUpload,
   uploadedFilesList,
   removeAllFiles,
+  canEliminarTodos,
+  canConvertir,
+  canBorrarLibro,
+  canDescargarCsv,
   convertHelpText,
   convertBtnStyle,
   doConvert,
@@ -194,25 +202,27 @@ export const CargaView: React.FC<CargaViewProps> = ({
                 <div style={{ fontSize: '12px', fontWeight: 600, color: '#5c6470' }}>
                   Archivos adjuntados ({uploadedFilesList.length}):
                 </div>
-                <button
-                  onClick={removeAllFiles}
-                  style={{
-                    background: '#fff',
-                    border: '1px solid #e2e0da',
-                    color: '#b3402f',
-                    borderRadius: '6px',
-                    padding: '5px 10px',
-                    fontSize: '11.5px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                  }}
-                >
-                  <Trash2 size={12} />
-                  <span>Eliminar todos</span>
-                </button>
+                {canEliminarTodos && (
+                  <button
+                    onClick={removeAllFiles}
+                    style={{
+                      background: '#fff',
+                      border: '1px solid #e2e0da',
+                      color: '#b3402f',
+                      borderRadius: '6px',
+                      padding: '5px 10px',
+                      fontSize: '11.5px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                    }}
+                  >
+                    <Trash2 size={12} />
+                    <span>Eliminar todos</span>
+                  </button>
+                )}
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -277,16 +287,18 @@ export const CargaView: React.FC<CargaViewProps> = ({
             }}
           >
             <div style={{ fontSize: '12px', color: '#5c6470', flex: 1 }}>
-              {converting ? 'Procesando archivos en el servidor…' : convertHelpText}
+              {!canConvertir ? 'No tenés permiso para convertir reportes.' : converting ? 'Procesando archivos en el servidor…' : convertHelpText}
             </div>
 
-            <button
-              onClick={doConvert}
-              disabled={converting}
-              style={{ ...parseInlineStyle(convertBtnStyle), opacity: converting ? 0.7 : 1, cursor: converting ? 'wait' : parseInlineStyle(convertBtnStyle).cursor }}
-            >
-              {converting ? 'Analizando…' : 'Analizar y convertir'}
-            </button>
+            {canConvertir && (
+              <button
+                onClick={doConvert}
+                disabled={converting}
+                style={{ ...parseInlineStyle(convertBtnStyle), opacity: converting ? 0.7 : 1, cursor: converting ? 'wait' : parseInlineStyle(convertBtnStyle).cursor }}
+              >
+                {converting ? 'Analizando…' : 'Analizar y convertir'}
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -339,45 +351,49 @@ export const CargaView: React.FC<CargaViewProps> = ({
                 <span>Cargar más reportes</span>
               </button>
 
-              <button
-                onClick={deleteLibro}
-                style={{
-                  backgroundColor: '#ffffff',
-                  border: '1px solid #e2e0da',
-                  color: '#b3402f',
-                  borderRadius: '7px',
-                  padding: '9px 14px',
-                  fontSize: '12.5px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                }}
-              >
-                <Trash2 size={14} />
-                <span>Borrar libro</span>
-              </button>
+              {canBorrarLibro && (
+                <button
+                  onClick={deleteLibro}
+                  style={{
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #e2e0da',
+                    color: '#b3402f',
+                    borderRadius: '7px',
+                    padding: '9px 14px',
+                    fontSize: '12.5px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <Trash2 size={14} />
+                  <span>Borrar libro</span>
+                </button>
+              )}
 
-              <button
-                onClick={downloadLimpio}
-                style={{
-                  backgroundColor: '#f0a63d',
-                  color: '#1a1a1a',
-                  border: 'none',
-                  borderRadius: '7px',
-                  padding: '9px 16px',
-                  fontSize: '12.5px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                }}
-              >
-                <Download size={14} />
-                <span>Descargar CSV</span>
-              </button>
+              {canDescargarCsv && (
+                <button
+                  onClick={downloadLimpio}
+                  style={{
+                    backgroundColor: '#f0a63d',
+                    color: '#1a1a1a',
+                    border: 'none',
+                    borderRadius: '7px',
+                    padding: '9px 16px',
+                    fontSize: '12.5px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <Download size={14} />
+                  <span>Descargar CSV</span>
+                </button>
+              )}
             </div>
           </div>
 

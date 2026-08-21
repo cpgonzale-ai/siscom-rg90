@@ -12,6 +12,8 @@ interface RG90ViewProps {
   rg90AnalyzeBtnStyle: string;
   rg90Analyzing: boolean;
   rg90Error: string | null;
+  canComparar: boolean;
+  canQuitarArchivo: boolean;
   simulateRg90: () => void;
   onRg90FileUpload: (files: FileList) => void;
   analyzeRg90: () => void;
@@ -35,6 +37,8 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   rg90AnalyzeBtnStyle,
   rg90Analyzing,
   rg90Error,
+  canComparar,
+  canQuitarArchivo,
   simulateRg90,
   onRg90FileUpload,
   analyzeRg90,
@@ -77,7 +81,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
             </p>
           </div>
 
-          {rg90Loaded && (
+          {rg90Loaded && canQuitarArchivo && (
             <button
               onClick={resetRg90}
               style={{
@@ -124,9 +128,11 @@ export const RG90View: React.FC<RG90ViewProps> = ({
             }}
           />
 
-          <button onClick={analyzeRg90} disabled={rg90Analyzing} style={parseInlineStyle(rg90AnalyzeBtnStyle)}>
-            {rg90Analyzing ? 'Comparando…' : 'Analizar y comparar'}
-          </button>
+          {canComparar && (
+            <button onClick={analyzeRg90} disabled={rg90Analyzing} style={parseInlineStyle(rg90AnalyzeBtnStyle)}>
+              {rg90Analyzing ? 'Comparando…' : 'Analizar y comparar'}
+            </button>
+          )}
         </div>
 
         {rg90Error && (
