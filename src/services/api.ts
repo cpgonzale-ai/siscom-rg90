@@ -104,6 +104,7 @@ export interface Rol {
 export interface Usuario {
   id: number;
   nombre: string;
+  nro_documento: string;
   email: string;
   rol: string;
   rol_id: number | null;
@@ -172,9 +173,9 @@ export async function checkBackendHealth(): Promise<boolean> {
   }
 }
 
-export async function loginApi(email: string, password: string): Promise<{ access_token: string; rol: string }> {
+export async function loginApi(nroDocumento: string, password: string): Promise<{ access_token: string; rol: string }> {
   const body = new URLSearchParams();
-  body.append('username', email);
+  body.append('username', nroDocumento);
   body.append('password', password);
 
   const res = await fetch(`${API_BASE}/auth/login`, {
@@ -266,10 +267,10 @@ export function deleteRolApi(id: number): Promise<void> {
 export function listUsuariosApi(): Promise<Usuario[]> {
   return authedJson<Usuario[]>('/auth/usuarios', {}, 'Error al listar usuarios');
 }
-export function createUsuarioApi(datos: { nombre: string; email: string; password: string; rol_id: number; activo?: boolean }): Promise<Usuario> {
+export function createUsuarioApi(datos: { nombre: string; nro_documento: string; email: string; password: string; rol_id: number; activo?: boolean }): Promise<Usuario> {
   return authedJson<Usuario>('/auth/usuarios', { method: 'POST', body: JSON.stringify(datos) }, 'Error al crear el usuario');
 }
-export function updateUsuarioApi(id: number, datos: { nombre?: string; rol_id?: number; activo?: boolean; password?: string }): Promise<Usuario> {
+export function updateUsuarioApi(id: number, datos: { nombre?: string; nro_documento?: string; rol_id?: number; activo?: boolean; password?: string }): Promise<Usuario> {
   return authedJson<Usuario>(`/auth/usuarios/${id}`, { method: 'PUT', body: JSON.stringify(datos) }, 'Error al editar el usuario');
 }
 export function deleteUsuarioApi(id: number): Promise<void> {

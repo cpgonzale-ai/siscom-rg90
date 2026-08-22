@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Mail, Lock, Eye, EyeOff, LogIn, AlertCircle } from 'lucide-react';
+import { ShieldCheck, IdCard, Lock, Eye, EyeOff, LogIn, AlertCircle } from 'lucide-react';
 import { loginApi, setAuthToken } from '../services/api';
 import logoConsultora from '../assets/logo-consultora-san-miguel.png';
 
@@ -8,7 +8,7 @@ interface LoginViewProps {
 }
 
 export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
-  const [email, setEmail] = useState('');
+  const [nroDocumento, setNroDocumento] = useState('');
   const [password, setPassword] = useState('');
   const [verPassword, setVerPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +19,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     setError(null);
     setLoading(true);
     try {
-      const { access_token } = await loginApi(email, password);
+      const { access_token } = await loginApi(nroDocumento, password);
       setAuthToken(access_token);
       onLoginSuccess();
     } catch (err) {
@@ -80,16 +80,16 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             Conciliación de Libros de Venta vs RG90
           </p>
 
-          <label style={{ fontSize: '12px', fontWeight: 600, color: '#5c6470', marginBottom: '6px', display: 'block' }}>Email</label>
+          <label style={{ fontSize: '12px', fontWeight: 600, color: '#5c6470', marginBottom: '6px', display: 'block' }}>N° de Documento</label>
           <div style={inputWrapStyle}>
-            <Mail size={16} style={iconLeftStyle} />
+            <IdCard size={16} style={iconLeftStyle} />
             <input
-              type="email"
+              type="text"
               required
               autoComplete="username"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="tu@email.com"
+              value={nroDocumento}
+              onChange={(e) => setNroDocumento(e.target.value)}
+              placeholder="Número de documento"
               style={inputStyle}
             />
           </div>

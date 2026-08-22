@@ -21,13 +21,14 @@ interface UsuariosViewProps {
 
 interface FormState {
   nombre: string;
+  nro_documento: string;
   email: string;
   password: string;
   rol_id: number | '';
   estado: 'activo' | 'inactivo';
 }
 
-const EMPTY_FORM: FormState = { nombre: '', email: '', password: '', rol_id: '', estado: 'activo' };
+const EMPTY_FORM: FormState = { nombre: '', nro_documento: '', email: '', password: '', rol_id: '', estado: 'activo' };
 
 export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loading, error, refetch, currentUserId, canCrear, canEditar, canEliminar }) => {
   const [modalOpen, setModalOpen] = useState<'crear' | 'editar' | null>(null);
@@ -42,7 +43,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
   const openCrear = () => { setForm(EMPTY_FORM); setFormError(null); setVerPassword(false); setModalOpen('crear'); };
   const openEditar = (u: Usuario) => {
     setEditingId(u.id);
-    setForm({ nombre: u.nombre, email: u.email, password: '', rol_id: u.rol_id ?? '', estado: u.activo ? 'activo' : 'inactivo' });
+    setForm({ nombre: u.nombre, nro_documento: u.nro_documento, email: u.email, password: '', rol_id: u.rol_id ?? '', estado: u.activo ? 'activo' : 'inactivo' });
     setFormError(null);
     setVerPassword(false);
     setModalOpen('editar');
@@ -50,8 +51,8 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
   const closeModal = () => { setModalOpen(null); setEditingId(null); };
 
   const submit = async () => {
-    if (!form.nombre.trim() || !form.email.trim() || form.rol_id === '') {
-      setFormError('Nombre, email y rol son obligatorios.');
+    if (!form.nombre.trim() || !form.nro_documento.trim() || !form.email.trim() || form.rol_id === '') {
+      setFormError('Nombre, N° de documento, email y rol son obligatorios.');
       return;
     }
     if (modalOpen === 'crear' && !form.password) {
@@ -67,9 +68,9 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
     try {
       const activo = form.estado === 'activo';
       if (modalOpen === 'crear') {
-        await createUsuarioApi({ nombre: form.nombre.trim(), email: form.email.trim(), password: form.password, rol_id: Number(form.rol_id), activo });
+        await createUsuarioApi({ nombre: form.nombre.trim(), nro_documento: form.nro_documento.trim(), email: form.email.trim(), password: form.password, rol_id: Number(form.rol_id), activo });
       } else if (editingId !== null) {
-        const datos: { nombre?: string; rol_id?: number; password?: string; activo?: boolean } = { nombre: form.nombre.trim(), rol_id: Number(form.rol_id), activo };
+        const datos: { nombre?: string; nro_documento?: string; rol_id?: number; password?: string; activo?: boolean } = { nombre: form.nombre.trim(), nro_documento: form.nro_documento.trim(), rol_id: Number(form.rol_id), activo };
         if (form.password) datos.password = form.password;
         await updateUsuarioApi(editingId, datos);
       }
@@ -129,6 +130,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
           <thead>
             <tr style={{ backgroundColor: '#fafbfa', borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>Nombre</th>
+              <th style={{ padding: '12px 16px', fontWeight: 600 }}>N° Documento</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>Email</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>Rol</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>Estado</th>
@@ -139,6 +141,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
             {usuarios.map(u => (
               <tr key={u.id} style={{ borderBottom: '1px solid #f0eee8' }}>
                 <td style={{ padding: '12px 16px', fontWeight: 600, color: '#22262b' }}>{u.nombre}</td>
+                <td style={{ padding: '12px 16px', color: '#5c6470' }}>{u.nro_documento}</td>
                 <td style={{ padding: '12px 16px', color: '#5c6470' }}>{u.email}</td>
                 <td style={{ padding: '12px 16px', color: '#5c6470' }}>{u.rol}</td>
                 <td style={{ padding: '12px 16px' }}>
@@ -174,7 +177,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
             ))}
             {!loading && usuarios.length === 0 && (
               <tr>
-                <td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: '#9aa1ab' }}>No hay usuarios cargados.</td>
+                <td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: '#9aa1ab' }}>No hay usuarios cargados.</td>
               </tr>
             )}
           </tbody>
@@ -190,6 +193,14 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
           )}
           <label style={fieldLabelStyle}>Nombre</label>
           <input style={fieldInputStyle} value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} />
+
+          <label style={fieldLabelStyle}>N° de Documento (usuario de acceso)</label>
+          <input
+            style={fieldInputStyle}
+            value={form.nro_documento}
+            onChange={e => setForm({ ...form, nro_documento: e.target.value.trim() })}
+            placeholder="Ej: 4567890"
+          />
 
           <label style={fieldLabelStyle}>Email</label>
           <input
