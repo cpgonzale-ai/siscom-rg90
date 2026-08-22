@@ -34,7 +34,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmDeactivate, setConfirmDeactivate] = useState<Usuario | null>(null);
-  const [showAuditoria, setShowAuditoria] = useState(false);
+  const [auditoriaDe, setAuditoriaDe] = useState<Usuario | null>(null);
 
   const openCrear = () => { setForm(EMPTY_FORM); setFormError(null); setModalOpen('crear'); };
   const openEditar = (u: Usuario) => {
@@ -101,22 +101,12 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
           </div>
           <p style={{ fontSize: '12.5px', color: '#5c6470', marginTop: '2px' }}>Alta, edición y baja de usuarios del sistema — el rol asignado determina qué pantallas y botones puede usar.</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <button
-            onClick={() => setShowAuditoria(true)}
-            title="Ver auditoría de cambios"
-            style={{ ...secondaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
-            <Eye size={16} />
-            <span>Auditoría</span>
+        {canCrear && (
+          <button onClick={openCrear} style={{ ...primaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Plus size={16} />
+            <span>Nuevo usuario</span>
           </button>
-          {canCrear && (
-            <button onClick={openCrear} style={{ ...primaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Plus size={16} />
-              <span>Nuevo usuario</span>
-            </button>
-          )}
-        </div>
+        )}
       </div>
 
       {error && (
@@ -133,7 +123,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>Email</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>Rol</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>Estado</th>
-              {canEditar && <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>Acción</th>}
+              <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>Acción</th>
             </tr>
           </thead>
           <tbody>
@@ -151,17 +141,26 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
                     {u.activo ? 'Activo' : 'Inactivo'}
                   </span>
                 </td>
-                {canEditar && (
-                  <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                  <div style={{ display: 'inline-flex', gap: '6px' }}>
                     <button
-                      onClick={() => openEditar(u)}
-                      style={{ ...secondaryBtnStyle, padding: '6px 12px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                      onClick={() => setAuditoriaDe(u)}
+                      title="Ver auditoría de este usuario"
+                      style={{ ...secondaryBtnStyle, padding: '6px 8px', fontSize: '12px', display: 'inline-flex', alignItems: 'center' }}
                     >
-                      <Pencil size={12} />
-                      <span>Editar</span>
+                      <Eye size={12} />
                     </button>
-                  </td>
-                )}
+                    {canEditar && (
+                      <button
+                        onClick={() => openEditar(u)}
+                        style={{ ...secondaryBtnStyle, padding: '6px 12px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                      >
+                        <Pencil size={12} />
+                        <span>Editar</span>
+                      </button>
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
             {!loading && usuarios.length === 0 && (
@@ -228,11 +227,12 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
         />
       )}
 
-      {showAuditoria && (
+      {auditoriaDe && (
         <AuditoriaModal
-          titulo="Auditoría de Usuarios"
+          titulo={`Auditoría — ${auditoriaDe.nombre}`}
           acciones={['alta_usuario', 'edicion_usuario', 'baja_usuario']}
-          onClose={() => setShowAuditoria(false)}
+          entidadId={auditoriaDe.id}
+          onClose={() => setAuditoriaDe(null)}
         />
       )}
     </div>

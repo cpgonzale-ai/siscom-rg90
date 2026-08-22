@@ -6,6 +6,7 @@ import { listAuditoriaApi } from '../services/api';
 interface AuditoriaModalProps {
   titulo: string;
   acciones: string[];
+  entidadId?: number;
   onClose: () => void;
 }
 
@@ -23,13 +24,13 @@ const ACCION_COLOR: Record<string, string> = {
 
 // Modal de solo lectura para el botón "ojito" — muestra fecha, acción, descripción y
 // usuario responsable de cada cambio (alta/edición/baja) del módulo desde el que se abre.
-export const AuditoriaModal: React.FC<AuditoriaModalProps> = ({ titulo, acciones, onClose }) => {
+export const AuditoriaModal: React.FC<AuditoriaModalProps> = ({ titulo, acciones, entidadId, onClose }) => {
   const [eventos, setEventos] = useState<EventoAuditoria[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    listAuditoriaApi(acciones)
+    listAuditoriaApi(acciones, entidadId)
       .then(setEventos)
       .catch(e => setError(e instanceof Error ? e.message : 'Error al cargar la auditoría'))
       .finally(() => setLoading(false));

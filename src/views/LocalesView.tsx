@@ -32,7 +32,7 @@ export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, erro
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<Local | null>(null);
-  const [showAuditoria, setShowAuditoria] = useState(false);
+  const [auditoriaDe, setAuditoriaDe] = useState<Local | null>(null);
 
   const openCrear = () => { setForm(EMPTY_FORM); setFormError(null); setModalOpen('crear'); };
   const openEditar = (l: Local) => {
@@ -96,25 +96,15 @@ export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, erro
             El punto de expedición son los 3 primeros dígitos del número de documento — se usa para determinar automáticamente a qué local corresponde cada comprobante en el Paso 2.
           </p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {canCrear && (
           <button
-            onClick={() => setShowAuditoria(true)}
-            title="Ver auditoría de cambios"
-            style={{ ...secondaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}
+            onClick={openCrear}
+            style={{ ...primaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}
           >
-            <Eye size={16} />
-            <span>Auditoría</span>
+            <Plus size={16} />
+            <span>Nuevo local</span>
           </button>
-          {canCrear && (
-            <button
-              onClick={openCrear}
-              style={{ ...primaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <Plus size={16} />
-              <span>Nuevo local</span>
-            </button>
-          )}
-        </div>
+        )}
       </div>
 
       {error && (
@@ -131,7 +121,7 @@ export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, erro
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>Punto de expedición</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>Código</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>Estado</th>
-              {canEditar && <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>Acción</th>}
+              <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>Acción</th>
             </tr>
           </thead>
           <tbody>
@@ -149,17 +139,26 @@ export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, erro
                     {l.estado === 'activo' ? 'Activo' : 'Inactivo'}
                   </span>
                 </td>
-                {canEditar && (
-                  <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                  <div style={{ display: 'inline-flex', gap: '6px' }}>
                     <button
-                      onClick={() => openEditar(l)}
-                      style={{ ...secondaryBtnStyle, padding: '6px 12px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                      onClick={() => setAuditoriaDe(l)}
+                      title="Ver auditoría de este local"
+                      style={{ ...secondaryBtnStyle, padding: '6px 8px', fontSize: '12px', display: 'inline-flex', alignItems: 'center' }}
                     >
-                      <Pencil size={12} />
-                      <span>Editar</span>
+                      <Eye size={12} />
                     </button>
-                  </td>
-                )}
+                    {canEditar && (
+                      <button
+                        onClick={() => openEditar(l)}
+                        style={{ ...secondaryBtnStyle, padding: '6px 12px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                      >
+                        <Pencil size={12} />
+                        <span>Editar</span>
+                      </button>
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
             {!loading && locales.length === 0 && (
@@ -227,11 +226,12 @@ export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, erro
         />
       )}
 
-      {showAuditoria && (
+      {auditoriaDe && (
         <AuditoriaModal
-          titulo="Auditoría de Locales"
+          titulo={`Auditoría — ${auditoriaDe.nombre}`}
           acciones={['alta_local', 'edicion_local', 'baja_local']}
-          onClose={() => setShowAuditoria(false)}
+          entidadId={auditoriaDe.id}
+          onClose={() => setAuditoriaDe(null)}
         />
       )}
     </div>

@@ -276,7 +276,8 @@ export function deleteUsuarioApi(id: number): Promise<void> {
 }
 
 // ── Auditoría ─────────────────────────────────────────────────────────────
-export function listAuditoriaApi(acciones: string[], limit = 100): Promise<EventoAuditoria[]> {
+export function listAuditoriaApi(acciones: string[], entidadId?: number, limit = 100): Promise<EventoAuditoria[]> {
   const qs = new URLSearchParams({ acciones: acciones.join(','), limit: String(limit) });
+  if (entidadId !== undefined) qs.set('entidad_id', String(entidadId));
   return authedJson<EventoAuditoria[]>(`/auditoria?${qs.toString()}`, {}, 'Error al obtener la auditoría');
 }

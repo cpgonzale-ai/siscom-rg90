@@ -37,7 +37,7 @@ export const RolesView: React.FC<RolesViewProps> = ({ roles, permisos, loading, 
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<Rol | null>(null);
-  const [showAuditoria, setShowAuditoria] = useState(false);
+  const [auditoriaDe, setAuditoriaDe] = useState<Rol | null>(null);
 
   const grupos = useMemo(() => {
     const porPantalla: Record<string, Permiso[]> = {};
@@ -127,22 +127,12 @@ export const RolesView: React.FC<RolesViewProps> = ({ roles, permisos, loading, 
           </div>
           <p style={{ fontSize: '12.5px', color: '#5c6470', marginTop: '2px' }}>Cada rol define qué pantallas y botones puede usar. "admin" y "operador" son roles de sistema — no se pueden borrar ni renombrar, pero sus permisos sí se pueden ajustar.</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <button
-            onClick={() => setShowAuditoria(true)}
-            title="Ver auditoría de cambios"
-            style={{ ...secondaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
-            <Eye size={16} />
-            <span>Auditoría</span>
+        {canCrear && (
+          <button onClick={openCrear} style={{ ...primaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Plus size={16} />
+            <span>Nuevo rol</span>
           </button>
-          {canCrear && (
-            <button onClick={openCrear} style={{ ...primaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Plus size={16} />
-              <span>Nuevo rol</span>
-            </button>
-          )}
-        </div>
+        )}
       </div>
 
       {error && (
@@ -158,7 +148,7 @@ export const RolesView: React.FC<RolesViewProps> = ({ roles, permisos, loading, 
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>Rol</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>Descripción</th>
               <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'center' }}>Permisos</th>
-              {canEditar && <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>Acción</th>}
+              <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>Acción</th>
             </tr>
           </thead>
           <tbody>
@@ -172,17 +162,26 @@ export const RolesView: React.FC<RolesViewProps> = ({ roles, permisos, loading, 
                 </td>
                 <td style={{ padding: '12px 16px', color: '#5c6470' }}>{r.descripcion || '—'}</td>
                 <td style={{ padding: '12px 16px', textAlign: 'center', color: '#5c6470' }}>{r.permisos.length} / {permisos.length}</td>
-                {canEditar && (
-                  <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                  <div style={{ display: 'inline-flex', gap: '6px' }}>
                     <button
-                      onClick={() => openEditar(r)}
-                      style={{ ...secondaryBtnStyle, padding: '6px 12px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                      onClick={() => setAuditoriaDe(r)}
+                      title="Ver auditoría de este rol"
+                      style={{ ...secondaryBtnStyle, padding: '6px 8px', fontSize: '12px', display: 'inline-flex', alignItems: 'center' }}
                     >
-                      <Pencil size={12} />
-                      <span>Editar</span>
+                      <Eye size={12} />
                     </button>
-                  </td>
-                )}
+                    {canEditar && (
+                      <button
+                        onClick={() => openEditar(r)}
+                        style={{ ...secondaryBtnStyle, padding: '6px 12px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                      >
+                        <Pencil size={12} />
+                        <span>Editar</span>
+                      </button>
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
             {!loading && roles.length === 0 && (
@@ -263,11 +262,12 @@ export const RolesView: React.FC<RolesViewProps> = ({ roles, permisos, loading, 
         />
       )}
 
-      {showAuditoria && (
+      {auditoriaDe && (
         <AuditoriaModal
-          titulo="Auditoría de Roles"
+          titulo={`Auditoría — ${auditoriaDe.nombre}`}
           acciones={['alta_rol', 'edicion_rol', 'baja_rol']}
-          onClose={() => setShowAuditoria(false)}
+          entidadId={auditoriaDe.id}
+          onClose={() => setAuditoriaDe(null)}
         />
       )}
     </div>
