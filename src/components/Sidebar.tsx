@@ -1,5 +1,5 @@
-import React from 'react';
-import { LayoutDashboard, FileSpreadsheet, ListTree, GitCompare, ShieldCheck, MapPin, Users, KeyRound } from 'lucide-react';
+import React, { useState } from 'react';
+import { LayoutDashboard, FileSpreadsheet, ListTree, GitCompare, ShieldCheck, MapPin, Users, KeyRound, ChevronDown, ChevronRight } from 'lucide-react';
 import logoConsultora from '../assets/logo-consultora-san-miguel.png';
 
 type Screen = 'dashboard' | 'carga' | 'correl' | 'rg90' | 'libroCompleto' | 'locales' | 'usuarios' | 'roles';
@@ -43,6 +43,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate, per
 
   const puede = (clave: string) => permisos.has(clave);
   const puedeAdmin = puede('pantalla:locales') || puede('pantalla:usuarios') || puede('pantalla:roles');
+  const estaEnAdmin = currentScreen === 'locales' || currentScreen === 'usuarios' || currentScreen === 'roles';
+  // Los submenús (hoy solo "Administración") arrancan colapsados por defecto — se abren al
+  // tocarlos, o automáticamente si ya estás parado en una de sus pantallas.
+  const [adminAbierto, setAdminAbierto] = useState(estaEnAdmin);
 
   return (
     <aside
@@ -123,29 +127,43 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate, per
 
         {puedeAdmin && (
           <>
-            <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'rgba(255,255,255,0.5)', margin: '16px 8px 8px 8px', fontWeight: 600 }}>
-              Administración
-            </div>
-            {puede('pantalla:locales') && (
-              <button style={navItemStyle('locales')} onClick={() => onNavigate('locales')}>
-                <div style={dotStyle('locales')} />
-                <MapPin size={17} />
-                <span>Locales</span>
-              </button>
-            )}
-            {puede('pantalla:usuarios') && (
-              <button style={navItemStyle('usuarios')} onClick={() => onNavigate('usuarios')}>
-                <div style={dotStyle('usuarios')} />
-                <Users size={17} />
-                <span>Usuarios</span>
-              </button>
-            )}
-            {puede('pantalla:roles') && (
-              <button style={navItemStyle('roles')} onClick={() => onNavigate('roles')}>
-                <div style={dotStyle('roles')} />
-                <KeyRound size={17} />
-                <span>Roles y permisos</span>
-              </button>
+            <button
+              onClick={() => setAdminAbierto(v => !v)}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                width: '100%', border: 'none', background: 'transparent', cursor: 'pointer',
+                fontFamily: 'inherit', padding: '0 8px', margin: '16px 0 8px 0',
+              }}
+            >
+              <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>
+                Administración
+              </span>
+              {adminAbierto ? <ChevronDown size={14} color="rgba(255,255,255,0.5)" /> : <ChevronRight size={14} color="rgba(255,255,255,0.5)" />}
+            </button>
+            {adminAbierto && (
+              <>
+                {puede('pantalla:locales') && (
+                  <button style={navItemStyle('locales')} onClick={() => onNavigate('locales')}>
+                    <div style={dotStyle('locales')} />
+                    <MapPin size={17} />
+                    <span>Locales</span>
+                  </button>
+                )}
+                {puede('pantalla:usuarios') && (
+                  <button style={navItemStyle('usuarios')} onClick={() => onNavigate('usuarios')}>
+                    <div style={dotStyle('usuarios')} />
+                    <Users size={17} />
+                    <span>Usuarios</span>
+                  </button>
+                )}
+                {puede('pantalla:roles') && (
+                  <button style={navItemStyle('roles')} onClick={() => onNavigate('roles')}>
+                    <div style={dotStyle('roles')} />
+                    <KeyRound size={17} />
+                    <span>Roles y permisos</span>
+                  </button>
+                )}
+              </>
             )}
           </>
         )}

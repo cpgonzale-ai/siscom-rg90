@@ -97,6 +97,7 @@ export interface Rol {
   nombre: string;
   descripcion: string | null;
   es_sistema: boolean;
+  estado: 'activo' | 'inactivo';
   permisos: string[];
 }
 
@@ -251,10 +252,10 @@ export function listRolesApi(): Promise<Rol[]> {
 export function listPermisosApi(): Promise<Permiso[]> {
   return authedJson<Permiso[]>('/roles/permisos', {}, 'Error al listar permisos');
 }
-export function createRolApi(datos: { nombre: string; descripcion?: string; permisos: string[] }): Promise<Rol> {
+export function createRolApi(datos: { nombre: string; descripcion?: string; estado?: 'activo' | 'inactivo'; permisos: string[] }): Promise<Rol> {
   return authedJson<Rol>('/roles', { method: 'POST', body: JSON.stringify(datos) }, 'Error al crear el rol');
 }
-export function updateRolApi(id: number, datos: { nombre?: string; descripcion?: string; permisos?: string[] }): Promise<Rol> {
+export function updateRolApi(id: number, datos: { nombre?: string; descripcion?: string; estado?: 'activo' | 'inactivo'; permisos?: string[] }): Promise<Rol> {
   return authedJson<Rol>(`/roles/${id}`, { method: 'PUT', body: JSON.stringify(datos) }, 'Error al editar el rol');
 }
 export function deleteRolApi(id: number): Promise<void> {
@@ -265,7 +266,7 @@ export function deleteRolApi(id: number): Promise<void> {
 export function listUsuariosApi(): Promise<Usuario[]> {
   return authedJson<Usuario[]>('/auth/usuarios', {}, 'Error al listar usuarios');
 }
-export function createUsuarioApi(datos: { nombre: string; email: string; password: string; rol_id: number }): Promise<Usuario> {
+export function createUsuarioApi(datos: { nombre: string; email: string; password: string; rol_id: number; activo?: boolean }): Promise<Usuario> {
   return authedJson<Usuario>('/auth/usuarios', { method: 'POST', body: JSON.stringify(datos) }, 'Error al crear el usuario');
 }
 export function updateUsuarioApi(id: number, datos: { nombre?: string; rol_id?: number; activo?: boolean; password?: string }): Promise<Usuario> {

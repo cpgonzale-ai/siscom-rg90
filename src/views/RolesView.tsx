@@ -32,6 +32,7 @@ export const RolesView: React.FC<RolesViewProps> = ({ roles, permisos, loading, 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [nombre, setNombre] = useState('');
   const [descripcion, setDescripcion] = useState('');
+  const [estado, setEstado] = useState<'activo' | 'inactivo'>('activo');
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [esSistema, setEsSistema] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -52,11 +53,11 @@ export const RolesView: React.FC<RolesViewProps> = ({ roles, permisos, loading, 
   }, [permisos]);
 
   const openCrear = () => {
-    setNombre(''); setDescripcion(''); setSeleccionados(new Set()); setEsSistema(false); setFormError(null);
+    setNombre(''); setDescripcion(''); setEstado('activo'); setSeleccionados(new Set()); setEsSistema(false); setFormError(null);
     setModalOpen('crear');
   };
   const openEditar = (r: Rol) => {
-    setEditingId(r.id); setNombre(r.nombre); setDescripcion(r.descripcion || '');
+    setEditingId(r.id); setNombre(r.nombre); setDescripcion(r.descripcion || ''); setEstado(r.estado);
     setSeleccionados(new Set(r.permisos)); setEsSistema(r.es_sistema); setFormError(null);
     setModalOpen('editar');
   };
@@ -86,9 +87,9 @@ export const RolesView: React.FC<RolesViewProps> = ({ roles, permisos, loading, 
     try {
       const permisosArr = Array.from(seleccionados);
       if (modalOpen === 'crear') {
-        await createRolApi({ nombre: nombre.trim(), descripcion: descripcion.trim() || undefined, permisos: permisosArr });
+        await createRolApi({ nombre: nombre.trim(), descripcion: descripcion.trim() || undefined, estado, permisos: permisosArr });
       } else if (editingId !== null) {
-        await updateRolApi(editingId, { nombre: esSistema ? undefined : nombre.trim(), descripcion: descripcion.trim() || undefined, permisos: permisosArr });
+        await updateRolApi(editingId, { nombre: esSistema ? undefined : nombre.trim(), descripcion: descripcion.trim() || undefined, estado, permisos: permisosArr });
       }
       closeModal();
       refetch();
@@ -147,6 +148,7 @@ export const RolesView: React.FC<RolesViewProps> = ({ roles, permisos, loading, 
             <tr style={{ backgroundColor: '#fafbfa', borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>Rol</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>Descripción</th>
+              <th style={{ padding: '12px 16px', fontWeight: 600 }}>Estado</th>
               <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'center' }}>Permisos</th>
               <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>Acción</th>
             </tr>
@@ -161,6 +163,15 @@ export const RolesView: React.FC<RolesViewProps> = ({ roles, permisos, loading, 
                   </div>
                 </td>
                 <td style={{ padding: '12px 16px', color: '#5c6470' }}>{r.descripcion || '—'}</td>
+                <td style={{ padding: '12px 16px' }}>
+                  <span style={{
+                    background: r.estado === 'activo' ? '#e8f3ec' : '#f0eee8',
+                    color: r.estado === 'activo' ? '#128752' : '#9aa1ab',
+                    fontSize: '11px', fontWeight: 600, padding: '4px 10px', borderRadius: '20px',
+                  }}>
+                    {r.estado === 'activo' ? 'Activo' : 'Inactivo'}
+                  </span>
+                </td>
                 <td style={{ padding: '12px 16px', textAlign: 'center', color: '#5c6470' }}>{r.permisos.length} / {permisos.length}</td>
                 <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                   <div style={{ display: 'inline-flex', gap: '6px' }}>
@@ -186,7 +197,7 @@ export const RolesView: React.FC<RolesViewProps> = ({ roles, permisos, loading, 
             ))}
             {!loading && roles.length === 0 && (
               <tr>
-                <td colSpan={4} style={{ padding: '32px', textAlign: 'center', color: '#9aa1ab' }}>No hay roles cargados.</td>
+                <td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: '#9aa1ab' }}>No hay roles cargados.</td>
               </tr>
             )}
           </tbody>
@@ -210,6 +221,18 @@ export const RolesView: React.FC<RolesViewProps> = ({ roles, permisos, loading, 
 
           <label style={fieldLabelStyle}>Descripción (opcional)</label>
           <input style={fieldInputStyle} value={descripcion} onChange={e => setDescripcion(e.target.value)} />
+
+          <label style={fieldLabelStyle}>Estado</label>
+          <select
+            style={fieldInputStyle}
+            value={estado}
+            onChange={e => setEstado(e.target.value as 'activo' | 'inactivo')}
+            disabled={esSistema}
+            title={esSistema ? 'Los roles de sistema (admin/operador) no se pueden desactivar' : undefined}
+          >
+            <option value="activo">Activo</option>
+            <option value="inactivo">Inactivo</option>
+          </select>
 
           <label style={fieldLabelStyle}>Permisos</label>
           <div style={{ border: '1px solid #e2e0da', borderRadius: '8px', padding: '4px 0', marginBottom: '14px' }}>

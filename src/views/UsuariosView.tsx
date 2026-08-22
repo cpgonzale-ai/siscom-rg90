@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Plus, Pencil, UserX, Users as UsersIcon, Eye } from 'lucide-react';
+import { Plus, Pencil, UserX, Users as UsersIcon, Eye, EyeOff } from 'lucide-react';
 import { Modal, fieldLabelStyle, fieldInputStyle, primaryBtnStyle, secondaryBtnStyle, dangerBtnStyle } from '../components/Modal';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { AuditoriaModal } from '../components/AuditoriaModal';
 import type { Usuario, Rol } from '../services/api';
 import { createUsuarioApi, updateUsuarioApi, deleteUsuarioApi } from '../services/api';
+import { PASSWORD_HINT, validarPassword } from '../utils/password';
 
 interface UsuariosViewProps {
   usuarios: Usuario[];
@@ -23,9 +24,10 @@ interface FormState {
   email: string;
   password: string;
   rol_id: number | '';
+  estado: 'activo' | 'inactivo';
 }
 
-const EMPTY_FORM: FormState = { nombre: '', email: '', password: '', rol_id: '' };
+const EMPTY_FORM: FormState = { nombre: '', email: '', password: '', rol_id: '', estado: 'activo' };
 
 export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loading, error, refetch, currentUserId, canCrear, canEditar, canEliminar }) => {
   const [modalOpen, setModalOpen] = useState<'crear' | 'editar' | null>(null);
@@ -35,12 +37,14 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
   const [saving, setSaving] = useState(false);
   const [confirmDeactivate, setConfirmDeactivate] = useState<Usuario | null>(null);
   const [auditoriaDe, setAuditoriaDe] = useState<Usuario | null>(null);
+  const [verPassword, setVerPassword] = useState(false);
 
-  const openCrear = () => { setForm(EMPTY_FORM); setFormError(null); setModalOpen('crear'); };
+  const openCrear = () => { setForm(EMPTY_FORM); setFormError(null); setVerPassword(false); setModalOpen('crear'); };
   const openEditar = (u: Usuario) => {
     setEditingId(u.id);
-    setForm({ nombre: u.nombre, email: u.email, password: '', rol_id: u.rol_id ?? '' });
+    setForm({ nombre: u.nombre, email: u.email, password: '', rol_id: u.rol_id ?? '', estado: u.activo ? 'activo' : 'inactivo' });
     setFormError(null);
+    setVerPassword(false);
     setModalOpen('editar');
   };
   const closeModal = () => { setModalOpen(null); setEditingId(null); };
@@ -50,17 +54,22 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
       setFormError('Nombre, email y rol son obligatorios.');
       return;
     }
-    if (modalOpen === 'crear' && form.password.length < 8) {
-      setFormError('La contraseña debe tener al menos 8 caracteres.');
+    if (modalOpen === 'crear' && !form.password) {
+      setFormError('La contraseña es obligatoria.');
       return;
+    }
+    if (form.password) {
+      const err = validarPassword(form.password);
+      if (err) { setFormError(err); return; }
     }
     setSaving(true);
     setFormError(null);
     try {
+      const activo = form.estado === 'activo';
       if (modalOpen === 'crear') {
-        await createUsuarioApi({ nombre: form.nombre.trim(), email: form.email.trim(), password: form.password, rol_id: Number(form.rol_id) });
+        await createUsuarioApi({ nombre: form.nombre.trim(), email: form.email.trim(), password: form.password, rol_id: Number(form.rol_id), activo });
       } else if (editingId !== null) {
-        const datos: { nombre?: string; rol_id?: number; password?: string } = { nombre: form.nombre.trim(), rol_id: Number(form.rol_id) };
+        const datos: { nombre?: string; rol_id?: number; password?: string; activo?: boolean } = { nombre: form.nombre.trim(), rol_id: Number(form.rol_id), activo };
         if (form.password) datos.password = form.password;
         await updateUsuarioApi(editingId, datos);
       }
@@ -191,12 +200,41 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
           />
 
           <label style={fieldLabelStyle}>{modalOpen === 'editar' ? 'Nueva contraseña (opcional)' : 'Contraseña'}</label>
-          <input style={fieldInputStyle} type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder={modalOpen === 'editar' ? 'Dejar en blanco para no cambiarla' : 'mínimo 8 caracteres'} />
+          <div style={{ position: 'relative', marginBottom: '4px' }}>
+            <input
+              style={{ ...fieldInputStyle, marginBottom: 0, paddingRight: '38px' }}
+              type={verPassword ? 'text' : 'password'}
+              value={form.password}
+              onChange={e => setForm({ ...form, password: e.target.value })}
+              placeholder={modalOpen === 'editar' ? 'Dejar en blanco para no cambiarla' : PASSWORD_HINT}
+              autoComplete="new-password"
+            />
+            <button
+              type="button"
+              onClick={() => setVerPassword(v => !v)}
+              tabIndex={-1}
+              style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#9aa1ab', cursor: 'pointer', display: 'flex' }}
+            >
+              {verPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+          <div style={{ fontSize: '11px', color: '#9aa1ab', marginBottom: '14px' }}>{PASSWORD_HINT}</div>
 
           <label style={fieldLabelStyle}>Rol</label>
           <select style={fieldInputStyle} value={form.rol_id} onChange={e => setForm({ ...form, rol_id: e.target.value ? Number(e.target.value) : '' })}>
             <option value="">Seleccioná un rol…</option>
-            {roles.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+            {roles.map(r => <option key={r.id} value={r.id}>{r.nombre}{r.estado === 'inactivo' ? ' (inactivo)' : ''}</option>)}
+          </select>
+
+          <label style={fieldLabelStyle}>Estado</label>
+          <select
+            style={fieldInputStyle}
+            value={form.estado}
+            onChange={e => setForm({ ...form, estado: e.target.value as 'activo' | 'inactivo' })}
+            disabled={modalOpen === 'editar' && editingId === currentUserId}
+          >
+            <option value="activo">Activo</option>
+            <option value="inactivo">Inactivo</option>
           </select>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
