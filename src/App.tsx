@@ -211,8 +211,19 @@ export function App() {
       return;
     }
 
-    const realFiles = uploadedFiles.filter(f => f.rawFile).map(f => f.rawFile as File);
-    if (realFiles.length === 0) {
+    // Cada archivo se agrupa por el sistema con el que se adjuntó (f.sistemaKey), no por
+    // el que esté seleccionado en el dropdown al momento de analizar — así se puede cargar
+    // Aloha e Hiopos juntos en un mismo lote sin que los archivos de un sistema se validen
+    // (y rechacen) contra la firma del otro.
+    const filesPorSistema = new Map<string, File[]>();
+    uploadedFiles.forEach(f => {
+      if (!f.rawFile) return;
+      const lista = filesPorSistema.get(f.sistemaKey) || [];
+      lista.push(f.rawFile);
+      filesPorSistema.set(f.sistemaKey, lista);
+    });
+
+    if (filesPorSistema.size === 0) {
       setConvertError('No hay archivos reales adjuntados para procesar. Adjuntá un archivo Aloha o Hiopos válido.');
       return;
     }
@@ -220,14 +231,19 @@ export function App() {
     setConverting(true);
     setConvertError(null);
     try {
-      const res = await ingestFilesApi(realFiles, selectedSystemKey);
-      const rowsConLocal = (res.rows || []).map(r => ({ ...r, local: resolveLocal(r.doc) }));
-      const gapsConLocal = (res.gaps || []).map(g => ({ ...g, local: resolveLocal(g.ultimo) }));
+      const resultados = await Promise.all(
+        Array.from(filesPorSistema.entries()).map(([sistemaKey, archivos]) => ingestFilesApi(archivos, sistemaKey))
+      );
+      const rows = resultados.flatMap(r => r.rows || []);
+      const gaps = resultados.flatMap(r => r.gaps || []);
+      const cortes = resultados.flatMap(r => r.cortes || []);
+      const rowsConLocal = rows.map(r => ({ ...r, local: resolveLocal(r.doc) }));
+      const gapsConLocal = gaps.map(g => ({ ...g, local: resolveLocal(g.ultimo) }));
       setLibroRows(rowsConLocal);
       setCorrelatividadRows(gapsConLocal);
-      setCortesRows(res.cortes || []);
-      setLoteId(res.lote_id);
-      if (!res.rows || res.rows.length === 0) {
+      setCortesRows(cortes);
+      setLoteId(resultados[0]?.lote_id);
+      if (rows.length === 0) {
         setConvertError('El servidor procesó el/los archivo(s) pero no encontró ningún comprobante válido. Revisá que sea el reporte correcto (hoja "tal como se descarga del sistema", sin editar a mano).');
       }
       setConverted(true);
