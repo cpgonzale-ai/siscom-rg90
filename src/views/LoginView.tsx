@@ -50,7 +50,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'linear-gradient(160deg, #0e6b41 0%, #0a4d30 55%, #08381f 100%)',
+        backgroundColor: '#eef0f2',
         padding: '24px',
       }}
     >
@@ -153,7 +153,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           </button>
         </form>
 
-        <p style={{ textAlign: 'center', fontSize: '11.5px', color: 'rgba(255,255,255,0.55)', marginTop: '20px' }}>
+        <p style={{ textAlign: 'center', fontSize: '11.5px', color: '#9aa1ab', marginTop: '20px' }}>
           desarrollado por CORVISPY v1.0
         </p>
       </div>
