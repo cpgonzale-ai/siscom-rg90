@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
-  ShoppingCart, UploadCloud, Trash2, FileSpreadsheet, X, GitCompare, RefreshCw, Download,
+  UploadCloud, Trash2, FileSpreadsheet, X, GitCompare, RefreshCw, Download,
   ArrowLeft, ArrowRight,
 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -243,16 +243,6 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <WizardSteps steps={wizardSteps} />
-
-      <div style={cardStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <ShoppingCart size={20} color="#128752" />
-          <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#22262b' }}>Libro de Compras</h3>
-        </div>
-        <p style={{ fontSize: '12.5px', color: '#5c6470', marginTop: '2px' }}>
-          Cargá el export del libro de compras del sistema, revisá el detalle y comparalo contra la RG (Minuta 5).
-        </p>
-      </div>
 
       {/* Paso 1: carga del libro y grilla */}
       {pasoMostrado === 1 && (
