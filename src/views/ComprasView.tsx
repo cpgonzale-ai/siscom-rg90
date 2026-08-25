@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   ShoppingCart, UploadCloud, Trash2, FileSpreadsheet, X, GitCompare, RefreshCw, Download,
+  ArrowLeft, ArrowRight,
 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { WizardSteps } from '../components/WizardSteps';
@@ -111,9 +112,9 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
       setPage(1);
       if (!res.rows || res.rows.length === 0) {
         setConvertError('El servidor procesó el/los archivo(s) pero no encontró ningún comprobante válido. Revisá que sea el reporte de compras del sistema, sin editar a mano.');
-      } else {
-        setPasoMostrado(2);
       }
+      // Se queda en el paso 1 mostrando la grilla — el usuario avanza al paso 2 con el
+      // botón "Siguiente" cuando ya revisó el libro, no de forma automática.
     } catch (e) {
       setConvertError(e instanceof Error ? e.message : 'Error al procesar los archivos en el servidor.');
     } finally {
@@ -160,7 +161,8 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
       const res = await reconcileComprasApi(rgFiles, rows, loteId);
       setDiffs(res.diffs || []);
       setSummary(res.summary);
-      setPasoMostrado(3);
+      // Se queda en el paso 2 — el usuario avanza al paso 3 con "Siguiente" cuando quiera
+      // ver el resultado, igual que en el paso 1.
     } catch (e) {
       setCompareError(e instanceof Error ? e.message : 'Error al comparar contra la RG.');
     } finally {
@@ -357,6 +359,15 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
           )}
         </div>
       )}
+
+      {rows.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button onClick={() => setPasoMostrado(2)} style={{ ...primaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span>Siguiente: Adjuntar RG90</span>
+            <ArrowRight size={16} />
+          </button>
+        </div>
+      )}
       </>
       )}
 
@@ -413,6 +424,29 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
           )}
 
           {compareError && <div style={errorBoxStyle}>{compareError}</div>}
+
+          {summary && (
+            <div style={{ marginTop: '14px', backgroundColor: '#e8f3ec', border: '1px solid #b7dcc4', color: '#0e6b41', borderRadius: '8px', padding: '12px 14px', fontSize: '12.5px' }}>
+              Comparación realizada — presioná "Siguiente" para ver el resultado.
+            </div>
+          )}
+        </div>
+      )}
+
+      {pasoMostrado === 2 && rows.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <button onClick={() => setPasoMostrado(1)} style={{ ...secondaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <ArrowLeft size={16} />
+            <span>Anterior</span>
+          </button>
+          <button
+            onClick={() => setPasoMostrado(3)}
+            disabled={!summary}
+            style={{ ...primaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px', opacity: summary ? 1 : 0.5, cursor: summary ? 'pointer' : 'not-allowed' }}
+          >
+            <span>Siguiente: Ver resultado</span>
+            <ArrowRight size={16} />
+          </button>
         </div>
       )}
 
@@ -481,6 +515,13 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                 ))}
               </tbody>
             </table>
+          </div>
+
+          <div>
+            <button onClick={() => setPasoMostrado(2)} style={{ ...secondaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <ArrowLeft size={16} />
+              <span>Anterior</span>
+            </button>
           </div>
         </div>
       )}
