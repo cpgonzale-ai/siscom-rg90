@@ -122,6 +122,7 @@ export interface CompraReconcileResult {
   success: boolean;
   lote_id: number;
   rg_total_rows: number;
+  rg_rows: CompraRow[];
   diffs: CompraDiffRow[];
   summary: { coinciden: number; no_en_rg: number; no_en_libro: number; diferencia_monto: number };
 }

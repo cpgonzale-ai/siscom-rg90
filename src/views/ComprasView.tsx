@@ -31,16 +31,21 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const [convertError, setConvertError] = useState<string | null>(null);
   const [confirmEliminarTodos, setConfirmEliminarTodos] = useState(false);
 
-  // ── Paso 2: libro procesado ──────────────────────────────────────────────
+  // ── Paso 1: libro procesado ──────────────────────────────────────────────
   const [rows, setRows] = useState<CompraRow[]>([]);
   const [loteId, setLoteId] = useState<number | undefined>(undefined);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
 
-  // ── Paso 3: comparación contra la RG ────────────────────────────────────
+  // ── Paso 2: adjuntar RG y su propia grilla ──────────────────────────────
   const [rgFiles, setRgFiles] = useState<File[]>([]);
   const [comparing, setComparing] = useState(false);
   const [compareError, setCompareError] = useState<string | null>(null);
+  const [rgRows, setRgRows] = useState<CompraRow[]>([]);
+  const [rgGridSearch, setRgGridSearch] = useState('');
+  const [rgGridPage, setRgGridPage] = useState(1);
+
+  // ── Paso 3: resultado de la comparación ─────────────────────────────────
   const [diffs, setDiffs] = useState<CompraDiffRow[]>([]);
   const [summary, setSummary] = useState<{ coinciden: number; no_en_rg: number; no_en_libro: number; diferencia_monto: number } | null>(null);
   const [diffSearch, setDiffSearch] = useState('');
@@ -125,9 +130,11 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const borrarLibro = () => {
     setRows([]);
     setLoteId(undefined);
+    setArchivos([]);
+    setRgFiles([]);
+    setRgRows([]);
     setDiffs([]);
     setSummary(null);
-    setArchivos([]);
     setPasoMostrado(1);
   };
 
@@ -145,6 +152,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
 
   const quitarRg = () => {
     setRgFiles([]);
+    setRgRows([]);
     setDiffs([]);
     setSummary(null);
     setPasoMostrado(2);
@@ -159,10 +167,13 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
     setCompareError(null);
     try {
       const res = await reconcileComprasApi(rgFiles, rows, loteId);
+      setRgRows(res.rg_rows || []);
+      setRgGridPage(1);
       setDiffs(res.diffs || []);
       setSummary(res.summary);
-      // Se queda en el paso 2 — el usuario avanza al paso 3 con "Siguiente" cuando quiera
-      // ver el resultado, igual que en el paso 1.
+      // Se queda en el paso 2, listando los datos de la RG — el usuario avanza al paso 3
+      // con "Siguiente" cuando quiera ver el resultado de la comparación, igual que en el
+      // paso 1 (analiza y lista ahí mismo, sin avanzar solo).
     } catch (e) {
       setCompareError(e instanceof Error ? e.message : 'Error al comparar contra la RG.');
     } finally {
@@ -199,6 +210,15 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const currentPage = Math.min(Math.max(1, page), totalPages);
   const pagedRows = filteredRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
+  const filteredRgRows = useMemo(() => {
+    if (!rgGridSearch.trim()) return rgRows;
+    const q = rgGridSearch.trim().toLowerCase();
+    return rgRows.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
+  }, [rgRows, rgGridSearch]);
+  const totalRgPages = Math.max(1, Math.ceil(filteredRgRows.length / PAGE_SIZE));
+  const currentRgPage = Math.min(Math.max(1, rgGridPage), totalRgPages);
+  const pagedRgRows = filteredRgRows.slice((currentRgPage - 1) * PAGE_SIZE, currentRgPage * PAGE_SIZE);
+
   const filteredDiffs = useMemo(() => {
     if (!diffSearch.trim()) return diffs;
     const q = diffSearch.trim().toLowerCase();
@@ -217,6 +237,8 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
     marginTop: '14px', backgroundColor: '#fbe9e3', border: '1px solid #eec3b5', color: '#8a3a26',
     borderRadius: '8px', padding: '12px 14px', fontSize: '12.5px',
   };
+  const navRowStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
+  const disabledBtnStyle: React.CSSProperties = { opacity: 0.5, cursor: 'not-allowed' };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -235,6 +257,18 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
       {/* Paso 1: carga del libro y grilla */}
       {pasoMostrado === 1 && (
       <>
+      <div style={navRowStyle}>
+        <span />
+        <button
+          onClick={() => rows.length > 0 && setPasoMostrado(2)}
+          disabled={rows.length === 0}
+          style={{ ...primaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px', ...(rows.length === 0 ? disabledBtnStyle : {}) }}
+        >
+          <span>Siguiente: Adjuntar RG90</span>
+          <ArrowRight size={16} />
+        </button>
+      </div>
+
       <div style={cardStyle}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
           <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>1. Adjuntar el libro de compras del sistema</h4>
@@ -359,100 +393,145 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
           )}
         </div>
       )}
+      </>
+      )}
 
-      {rows.length > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <button onClick={() => setPasoMostrado(2)} style={{ ...primaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span>Siguiente: Adjuntar RG90</span>
-            <ArrowRight size={16} />
-          </button>
+      {/* Paso 2: adjuntar la RG y listar sus datos */}
+      {pasoMostrado === 2 && rows.length > 0 && (
+      <>
+      <div style={navRowStyle}>
+        <button onClick={() => setPasoMostrado(1)} style={{ ...secondaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <ArrowLeft size={16} />
+          <span>Volver</span>
+        </button>
+        <button
+          onClick={() => summary && setPasoMostrado(3)}
+          disabled={!summary}
+          style={{ ...primaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px', ...(!summary ? disabledBtnStyle : {}) }}
+        >
+          <span>Siguiente: Ver resultado</span>
+          <ArrowRight size={16} />
+        </button>
+      </div>
+
+      <div style={cardStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <GitCompare size={20} color="#128752" />
+              <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>2. Adjuntar la RG (SET) — Compras</h4>
+            </div>
+            <p style={{ fontSize: '12.5px', color: '#5c6470', marginTop: '2px' }}>
+              Clave de comparación: documento + RUC del proveedor (sin dígito verificador) — un mismo número de documento puede repetirse entre proveedores distintos.
+            </p>
+          </div>
+          {rgFiles.length > 0 && puede('boton:compras.quitar_archivo') && (
+            <button onClick={quitarRg} style={{ ...secondaryBtnStyle, color: '#b3402f', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <RefreshCw size={14} />
+              <span>Quitar archivo RG</span>
+            </button>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <label style={dropzoneStyle}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+              <UploadCloud size={18} color="#128752" />
+              <span>{rgFiles.length > 0 ? `${rgFiles.length} archivo(s) RG adjuntado(s)` : 'Click para adjuntar el archivo de la RG (compras)'}</span>
+            </div>
+            <input
+              type="file"
+              multiple
+              style={{ display: 'none' }}
+              onChange={(e) => { if (e.target.files && e.target.files.length > 0) handleRgFileInput(e.target.files); e.target.value = ''; }}
+            />
+          </label>
+          {puede('boton:compras.comparar') && (
+            <button onClick={doComparar} disabled={comparing} style={{ ...primaryBtnStyle, opacity: comparing ? 0.7 : 1, whiteSpace: 'nowrap' }}>
+              {comparing ? 'Comparando…' : 'Analizar y comparar'}
+            </button>
+          )}
+        </div>
+
+        {rgFiles.length > 0 && (
+          <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {rgFiles.map((f, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#fafbfa', border: '1px solid #f0eee8', borderRadius: '7px', fontSize: '12.5px', color: '#22262b' }}>
+                <FileSpreadsheet size={14} color="#5c6470" />
+                <span>{f.name}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {compareError && <div style={errorBoxStyle}>{compareError}</div>}
+      </div>
+
+      {/* Grilla de la RG cargada — igual que la del libro propio en el paso 1, para poder
+          consultar ambos lados por separado antes de ver el resultado en el paso 3 */}
+      {rgRows.length > 0 && (
+        <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e0da', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fafbfa', flexWrap: 'wrap', gap: '10px' }}>
+            <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>RG (SET) — Compras ({rgRows.length.toLocaleString('es-PY')} comprobantes)</h4>
+            <input
+              type="text" placeholder="Buscar..." value={rgGridSearch}
+              onChange={e => { setRgGridSearch(e.target.value); setRgGridPage(1); }}
+              style={{ padding: '7px 12px', border: '1px solid #e2e0da', borderRadius: '6px', fontSize: '12px', width: '200px' }}
+            />
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
+                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>Documento</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>Fecha</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>RUC / Proveedor</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>Tipo</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 10%</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 5%</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pagedRgRows.map((r, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid #f0eee8' }}>
+                    <td style={{ padding: '10px 14px', fontWeight: 600, color: '#22262b' }}>{r.doc}</td>
+                    <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.fecha}</td>
+                    <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.ruc_proveedor}{r.dv_proveedor ? `-${r.dv_proveedor}` : ''} — {r.proveedor}</td>
+                    <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.tipo_doc}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.iva}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.iva_5}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: '#22262b' }}>{r.total}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {totalRgPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '14px', borderTop: '1px solid #f0eee8' }}>
+              <button disabled={currentRgPage <= 1} onClick={() => setRgGridPage(p => p - 1)} style={{ ...secondaryBtnStyle, opacity: currentRgPage <= 1 ? 0.5 : 1 }}>Anterior</button>
+              <span style={{ fontSize: '12.5px', color: '#5c6470' }}>Página {currentRgPage} de {totalRgPages}</span>
+              <button disabled={currentRgPage >= totalRgPages} onClick={() => setRgGridPage(p => p + 1)} style={{ ...secondaryBtnStyle, opacity: currentRgPage >= totalRgPages ? 0.5 : 1 }}>Siguiente</button>
+            </div>
+          )}
         </div>
       )}
       </>
       )}
 
-      {/* Paso 2: adjuntar la RG */}
-      {pasoMostrado === 2 && rows.length > 0 && (
-        <div style={cardStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <GitCompare size={20} color="#128752" />
-                <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>2. Adjuntar la RG (SET) — Compras</h4>
-              </div>
-              <p style={{ fontSize: '12.5px', color: '#5c6470', marginTop: '2px' }}>
-                Clave de comparación: documento + RUC del proveedor (sin dígito verificador) — un mismo número de documento puede repetirse entre proveedores distintos.
-              </p>
-            </div>
-            {rgFiles.length > 0 && puede('boton:compras.quitar_archivo') && (
-              <button onClick={quitarRg} style={{ ...secondaryBtnStyle, color: '#b3402f', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <RefreshCw size={14} />
-                <span>Quitar archivo RG</span>
-              </button>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <label style={dropzoneStyle}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
-                <UploadCloud size={18} color="#128752" />
-                <span>{rgFiles.length > 0 ? `${rgFiles.length} archivo(s) RG adjuntado(s)` : 'Click para adjuntar el archivo de la RG (compras)'}</span>
-              </div>
-              <input
-                type="file"
-                multiple
-                style={{ display: 'none' }}
-                onChange={(e) => { if (e.target.files && e.target.files.length > 0) handleRgFileInput(e.target.files); e.target.value = ''; }}
-              />
-            </label>
-            {puede('boton:compras.comparar') && (
-              <button onClick={doComparar} disabled={comparing} style={{ ...primaryBtnStyle, opacity: comparing ? 0.7 : 1, whiteSpace: 'nowrap' }}>
-                {comparing ? 'Comparando…' : 'Analizar y comparar'}
-              </button>
-            )}
-          </div>
-
-          {rgFiles.length > 0 && (
-            <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {rgFiles.map((f, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#fafbfa', border: '1px solid #f0eee8', borderRadius: '7px', fontSize: '12.5px', color: '#22262b' }}>
-                  <FileSpreadsheet size={14} color="#5c6470" />
-                  <span>{f.name}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {compareError && <div style={errorBoxStyle}>{compareError}</div>}
-
-          {summary && (
-            <div style={{ marginTop: '14px', backgroundColor: '#e8f3ec', border: '1px solid #b7dcc4', color: '#0e6b41', borderRadius: '8px', padding: '12px 14px', fontSize: '12.5px' }}>
-              Comparación realizada — presioná "Siguiente" para ver el resultado.
-            </div>
-          )}
-        </div>
-      )}
-
-      {pasoMostrado === 2 && rows.length > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <button onClick={() => setPasoMostrado(1)} style={{ ...secondaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <ArrowLeft size={16} />
-            <span>Anterior</span>
-          </button>
-          <button
-            onClick={() => setPasoMostrado(3)}
-            disabled={!summary}
-            style={{ ...primaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px', opacity: summary ? 1 : 0.5, cursor: summary ? 'pointer' : 'not-allowed' }}
-          >
-            <span>Siguiente: Ver resultado</span>
-            <ArrowRight size={16} />
-          </button>
-        </div>
-      )}
-
       {/* Paso 3: resultado de la comparación */}
       {pasoMostrado === 3 && summary && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={navRowStyle}>
+            <button onClick={() => setPasoMostrado(2)} style={{ ...secondaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <ArrowLeft size={16} />
+              <span>Volver</span>
+            </button>
+            <span />
+          </div>
+
           <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>3. Resultado de la comparación</h4>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
             <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', padding: '16px 20px' }}>
@@ -515,13 +594,6 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                 ))}
               </tbody>
             </table>
-          </div>
-
-          <div>
-            <button onClick={() => setPasoMostrado(2)} style={{ ...secondaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <ArrowLeft size={16} />
-              <span>Anterior</span>
-            </button>
           </div>
         </div>
       )}
