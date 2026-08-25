@@ -580,7 +580,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                   <th rowSpan={2} style={{ padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom' }}>Documento</th>
                   <th rowSpan={2} style={{ padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom' }}>Proveedor</th>
                   <th rowSpan={2} style={{ padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom' }}>Local</th>
-                  <th colSpan={5} style={{ padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>Libro de Compras</th>
+                  <th colSpan={6} style={{ padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>Libro de Compras</th>
                   <th colSpan={6} style={{ padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>RG (SET)</th>
                   <th rowSpan={2} style={{ padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom', borderLeft: '2px solid #e2e0da' }}>Motivo de la diferencia</th>
                 </tr>
@@ -589,6 +589,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                   <th style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right' }}>Gravada 5%</th>
                   <th style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 10%</th>
                   <th style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 5%</th>
+                  <th style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right' }}>Exenta</th>
                   <th style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right' }}>Total</th>
                   <th style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right', borderLeft: '2px solid #e2e0da' }}>Gravada 10%</th>
                   <th style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right' }}>Gravada 5%</th>
@@ -599,22 +600,36 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                 </tr>
               </thead>
               <tbody>
-                {filteredDiffs.map((d, i) => (
+                {filteredDiffs.map((d, i) => {
+                  // Para no ensuciar la tabla con columnas iguales de los dos lados: si la
+                  // fila es "Diferencia de monto", el campo que no está en
+                  // diferencias_detalle (no difiere) se muestra en 0 — solo quedan visibles
+                  // los importes que realmente causan la diferencia. Gravada 10%/5% nunca se
+                  // valida como diferencia (igual que en ventas), así que siempre va en 0 en
+                  // este caso. Las filas "No llegó a la interfaz"/"No en libro propio" se
+                  // muestran completas tal cual, porque ahí el punto es mostrar qué hay del
+                  // lado que sí tiene el comprobante.
+                  const v = (campo: string, valor: string) => {
+                    if (d.diferencia !== 'Diferencia de monto' || valor === '—') return valor;
+                    return d.diferencias_detalle && campo in d.diferencias_detalle ? valor : '0,00';
+                  };
+                  return (
                   <tr key={i} style={{ borderBottom: '1px solid #f0eee8' }}>
                     <td style={{ padding: '10px 14px', fontWeight: 600, color: '#22262b' }}>{d.doc}</td>
                     <td style={{ padding: '10px 14px', color: '#5c6470' }}>{d.proveedor}</td>
                     <td style={{ padding: '10px 14px', color: '#5c6470' }}>{d.local}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470', borderLeft: '2px solid #f0eee8' }}>{d.libro.gravada_10}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{d.libro.gravada_5}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{d.libro.iva_10}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{d.libro.iva_5}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: '#22262b' }}>{d.libro.total}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470', borderLeft: '2px solid #f0eee8' }}>{d.rg.gravada_10}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{d.rg.gravada_5}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{d.rg.iva_10}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{d.rg.iva_5}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{d.rg.exenta}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: '#22262b' }}>{d.rg.total}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470', borderLeft: '2px solid #f0eee8' }}>{v('gravada_10', d.libro.gravada_10)}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{v('gravada_5', d.libro.gravada_5)}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{v('iva_10', d.libro.iva_10)}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{v('iva_5', d.libro.iva_5)}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{v('exenta', d.libro.exenta)}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: '#22262b' }}>{v('total', d.libro.total)}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470', borderLeft: '2px solid #f0eee8' }}>{v('gravada_10', d.rg.gravada_10)}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{v('gravada_5', d.rg.gravada_5)}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{v('iva_10', d.rg.iva_10)}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{v('iva_5', d.rg.iva_5)}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{v('exenta', d.rg.exenta)}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: '#22262b' }}>{v('total', d.rg.total)}</td>
                     <td style={{ padding: '10px 14px', borderLeft: '2px solid #f0eee8' }}>
                       <span style={{
                         background: d.diferencia === 'Diferencia de monto' ? '#fdf1de' : '#fbe9e3',
@@ -626,7 +641,8 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                       </span>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
             </div>
