@@ -49,14 +49,14 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const paso3Ref = useRef<HTMLDivElement>(null);
 
   // Misma barra de progreso que usa el libro de ventas (WizardSteps), para que el flujo de
-  // compras se guíe igual de claro: paso 1 (cargar), paso 2 (revisar el libro) y paso 3
-  // (comparar contra la RG) — este último recién se marca "alcanzable" una vez que hay
-  // filas cargadas, igual que en ventas.
+  // compras se guíe igual de claro: paso 1 (cargar el libro), paso 2 (adjuntar la RG) y
+  // paso 3 (ver el resultado de la comparación) — este último recién se marca "alcanzable"
+  // una vez que hay filas cargadas, igual que en ventas.
   const pasoActual = rows.length === 0 ? 1 : !summary ? 2 : 3;
   const wizardSteps = [
     { n: 1, label: 'Cargar el libro de compras', ref: paso1Ref },
-    { n: 2, label: 'Revisar el libro', ref: paso2Ref },
-    { n: 3, label: 'Comparar contra la RG', ref: paso3Ref },
+    { n: 2, label: 'Adjuntar RG90', ref: paso2Ref },
+    { n: 3, label: 'Ver resultado', ref: paso3Ref },
   ].map(st => {
     const active = st.n === pasoActual;
     const done = st.n < pasoActual;
@@ -276,9 +276,9 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
 
       {/* Paso 2: libro procesado */}
       {rows.length > 0 && (
-        <div ref={paso2Ref} style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', overflow: 'hidden' }}>
+        <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', overflow: 'hidden' }}>
           <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e0da', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fafbfa', flexWrap: 'wrap', gap: '10px' }}>
-            <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>2. Libro de Compras ({rows.length.toLocaleString('es-PY')} comprobantes)</h4>
+            <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>Libro de Compras ({rows.length.toLocaleString('es-PY')} comprobantes)</h4>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <input
                 type="text" placeholder="Buscar..." value={search}
@@ -351,14 +351,14 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
         </div>
       )}
 
-      {/* Paso 3: comparación contra la RG */}
+      {/* Paso 2: adjuntar la RG */}
       {rows.length > 0 && (
-        <div ref={paso3Ref} style={cardStyle}>
+        <div ref={paso2Ref} style={cardStyle}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <GitCompare size={20} color="#128752" />
-                <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>3. Comparación contra la RG (SET) — Compras</h4>
+                <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>2. Adjuntar la RG (SET) — Compras</h4>
               </div>
               <p style={{ fontSize: '12.5px', color: '#5c6470', marginTop: '2px' }}>
                 Clave de comparación: documento + RUC del proveedor (sin dígito verificador) — un mismo número de documento puede repetirse entre proveedores distintos.
@@ -407,8 +407,10 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
         </div>
       )}
 
+      {/* Paso 3: resultado de la comparación */}
       {summary && (
-        <>
+        <div ref={paso3Ref} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>3. Resultado de la comparación</h4>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
             <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', padding: '16px 20px' }}>
               <div style={{ fontSize: '12px', fontWeight: 600, color: '#5c6470' }}>Coinciden</div>
@@ -471,7 +473,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
               </tbody>
             </table>
           </div>
-        </>
+        </div>
       )}
 
       {confirmEliminarTodos && (
