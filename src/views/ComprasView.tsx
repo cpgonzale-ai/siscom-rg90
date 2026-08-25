@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   ShoppingCart, UploadCloud, Trash2, FileSpreadsheet, X, GitCompare, RefreshCw, Download,
 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { WizardSteps } from '../components/WizardSteps';
 import { secondaryBtnStyle, primaryBtnStyle, dangerBtnStyle } from '../components/Modal';
 import type { Local, CompraRow, CompraDiffRow } from '../services/api';
 import { ingestComprasApi, reconcileComprasApi } from '../services/api';
@@ -42,6 +43,33 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const [diffs, setDiffs] = useState<CompraDiffRow[]>([]);
   const [summary, setSummary] = useState<{ coinciden: number; no_en_rg: number; no_en_libro: number; diferencia_monto: number } | null>(null);
   const [diffSearch, setDiffSearch] = useState('');
+
+  const paso1Ref = useRef<HTMLDivElement>(null);
+  const paso2Ref = useRef<HTMLDivElement>(null);
+  const paso3Ref = useRef<HTMLDivElement>(null);
+
+  // Misma barra de progreso que usa el libro de ventas (WizardSteps), para que el flujo de
+  // compras se guíe igual de claro: paso 1 (cargar), paso 2 (revisar el libro) y paso 3
+  // (comparar contra la RG) — este último recién se marca "alcanzable" una vez que hay
+  // filas cargadas, igual que en ventas.
+  const pasoActual = rows.length === 0 ? 1 : !summary ? 2 : 3;
+  const wizardSteps = [
+    { n: 1, label: 'Cargar el libro de compras', ref: paso1Ref },
+    { n: 2, label: 'Revisar el libro', ref: paso2Ref },
+    { n: 3, label: 'Comparar contra la RG', ref: paso3Ref },
+  ].map(st => {
+    const active = st.n === pasoActual;
+    const done = st.n < pasoActual;
+    const reachable = st.n <= pasoActual;
+    return {
+      n: st.n,
+      label: st.label,
+      circleStyle: (done ? 'background:#128752;color:#fff' : active ? 'background:#f0a63d;color:#1a1a1a' : 'background:#e5e2da;color:#9aa1ab') + (reachable && !active ? ';cursor:pointer' : ';cursor:default'),
+      labelStyle: (active ? 'color:#22262b;font-weight:700' : done ? 'color:#128752;font-weight:600' : 'color:#9aa1ab') + (reachable && !active ? ';cursor:pointer' : ''),
+      mark: done ? '✓' : String(st.n),
+      goTo: !reachable || active ? undefined : () => st.ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+    };
+  });
 
   // El código de sucursal (dónde se recibió la factura) no tiene relación con el punto de
   // expedición del proveedor — reutiliza la misma tabla de locales, pero por su campo
@@ -185,6 +213,8 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <WizardSteps steps={wizardSteps} />
+
       <div style={cardStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <ShoppingCart size={20} color="#128752" />
@@ -196,7 +226,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
       </div>
 
       {/* Paso 1: carga */}
-      <div style={cardStyle}>
+      <div ref={paso1Ref} style={cardStyle}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
           <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>1. Adjuntar el libro de compras del sistema</h4>
           {archivos.length > 0 && puede('boton:compras.eliminar_todos') && (
@@ -246,7 +276,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
 
       {/* Paso 2: libro procesado */}
       {rows.length > 0 && (
-        <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', overflow: 'hidden' }}>
+        <div ref={paso2Ref} style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', overflow: 'hidden' }}>
           <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e0da', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fafbfa', flexWrap: 'wrap', gap: '10px' }}>
             <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>2. Libro de Compras ({rows.length.toLocaleString('es-PY')} comprobantes)</h4>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -323,7 +353,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
 
       {/* Paso 3: comparación contra la RG */}
       {rows.length > 0 && (
-        <div style={cardStyle}>
+        <div ref={paso3Ref} style={cardStyle}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
