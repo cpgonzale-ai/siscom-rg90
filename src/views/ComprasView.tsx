@@ -100,7 +100,14 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   };
 
   const handleRgFileInput = (files: FileList) => {
-    setRgFiles(prev => [...prev, ...Array.from(files)]);
+    // Ojo: convertir el FileList a array acá afuera, ANTES de llamar a setRgFiles, no adentro
+    // del updater — el input resetea su value (e.target.value = '') apenas termina este
+    // handler para poder re-seleccionar el mismo archivo, y ese reset vacía también el
+    // FileList en vivo. Si Array.from(files) se evalúa recién cuando React llega a ejecutar
+    // el updater (no necesariamente antes de ese reset), termina leyendo un FileList ya
+    // vacío y la selección se pierde en silencio.
+    const nuevos = Array.from(files);
+    setRgFiles(prev => [...prev, ...nuevos]);
     setCompareError(null);
   };
 

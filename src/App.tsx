@@ -270,7 +270,11 @@ export function App() {
 
   const handleRg90FileUpload = (files: FileList) => {
     if (files.length > 0) {
-      setRg90Files(prev => [...prev, ...Array.from(files)]);
+      // Convertir a array acá afuera, antes del updater — ver el mismo comentario en
+      // ComprasView.handleRgFileInput. Hoy no rompe porque este input no resetea su value,
+      // pero es frágil dejarlo así.
+      const nuevos = Array.from(files);
+      setRg90Files(prev => [...prev, ...nuevos]);
       setRg90Attached(true);
       setRg90Error(null);
     }
