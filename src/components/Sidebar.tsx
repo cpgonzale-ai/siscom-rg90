@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, FileSpreadsheet, ListTree, GitCompare, ShieldCheck, MapPin, Users, KeyRound, ChevronDown, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, FileSpreadsheet, ListTree, GitCompare, ShieldCheck, MapPin, Users, KeyRound, ChevronDown, ChevronRight, ShoppingCart } from 'lucide-react';
 import logoConsultora from '../assets/logo-consultora-san-miguel.png';
 
-type Screen = 'dashboard' | 'carga' | 'correl' | 'rg90' | 'libroCompleto' | 'locales' | 'usuarios' | 'roles';
+type Screen = 'dashboard' | 'carga' | 'correl' | 'rg90' | 'libroCompleto' | 'compras' | 'locales' | 'usuarios' | 'roles';
 
 interface SidebarProps {
   currentScreen: Screen;
-  onNavigate: (screen: 'dashboard' | 'carga' | 'correl' | 'rg90' | 'locales' | 'usuarios' | 'roles') => void;
+  onNavigate: (screen: 'dashboard' | 'carga' | 'correl' | 'rg90' | 'compras' | 'locales' | 'usuarios' | 'roles') => void;
   permisos: Set<string>;
 }
 
@@ -122,6 +122,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate, per
             <div style={dotStyle('rg90')} />
             <GitCompare size={17} />
             <span>Comparación contra RG90</span>
+          </button>
+        )}
+
+        {puede('pantalla:compras') && (
+          <button style={navItemStyle('compras')} onClick={() => onNavigate('compras')}>
+            <div style={dotStyle('compras')} />
+            <ShoppingCart size={17} />
+            <span>Libro de Compras</span>
           </button>
         )}
 

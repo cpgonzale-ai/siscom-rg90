@@ -66,6 +66,66 @@ export interface RG90DiffRow {
   diferencia: string;
 }
 
+// Libro de Compras (Minuta 5) — a diferencia de LibroRow (ventas), acá "clave" es la que se
+// usa para comparar contra la RG (documento + RUC del proveedor sin dígito verificador,
+// concatenados) porque el documento solo no alcanza: distintos proveedores repiten
+// numeración.
+export interface CompraRow {
+  doc: string;
+  clave: string;
+  sistema: string;
+  local: string;
+  codigo_sucursal: string;
+  fecha: string;
+  ruc_proveedor: string;
+  dv_proveedor: string;
+  proveedor: string;
+  tipo_comprobante: string;
+  tipo_doc: string;
+  condicion: string;
+  timbrado: string;
+  control: string;
+  gravadas: string;
+  iva: string;
+  gravadas_5: string;
+  iva_5: string;
+  exentas: string;
+  total: string;
+  gravadas_num?: number;
+  iva_num?: number;
+  gravadas_5_num?: number;
+  iva_5_num?: number;
+  exentas_num?: number;
+  total_num?: number;
+  estado: string;
+}
+
+export interface CompraIngestResult {
+  success: boolean;
+  lote_id: number;
+  total_rows: number;
+  rows: CompraRow[];
+}
+
+export interface CompraDiffRow {
+  doc: string;
+  proveedor: string;
+  sistema: string;
+  local: string;
+  libro: string;
+  rg: string;
+  diferencia: string;
+  diferencias_detalle?: Record<string, number>;
+}
+
+export interface CompraReconcileResult {
+  success: boolean;
+  lote_id: number;
+  rg_total_rows: number;
+  diffs: CompraDiffRow[];
+  summary: { coinciden: number; no_en_rg: number; no_en_libro: number; diferencia_monto: number };
+}
+
 export interface UploadedFileMeta {
   id: number;
   sistemaKey: string;
@@ -275,6 +335,48 @@ export function updateUsuarioApi(id: number, datos: { nombre?: string; nro_docum
 }
 export function deleteUsuarioApi(id: number): Promise<void> {
   return authedJson<void>(`/auth/usuarios/${id}`, { method: 'DELETE' }, 'Error al desactivar el usuario');
+}
+
+// ── Libro de Compras (Minuta 5) ─────────────────────────────────────────────
+export async function ingestComprasApi(files: File[], localName: string = 'Local General'): Promise<CompraIngestResult> {
+  const formData = new FormData();
+  files.forEach(f => formData.append('files', f));
+  formData.append('local_name', localName);
+
+  const res = await fetch(`${API_BASE}/compras/ingest`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: formData,
+  });
+
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Tu sesión expiró o no iniciaste sesión. Volvé a loguearte e intentá de nuevo.');
+    let detail = '';
+    try { detail = (await res.json())?.detail || ''; } catch { /* respuesta sin JSON */ }
+    throw new Error(detail || `Error al procesar los archivos en el servidor (HTTP ${res.status}).`);
+  }
+  return await res.json();
+}
+
+export async function reconcileComprasApi(rgFiles: File[], comprasRows: CompraRow[], loteId?: number): Promise<CompraReconcileResult> {
+  const formData = new FormData();
+  rgFiles.forEach(f => formData.append('rg_files', f));
+  formData.append('pos_data_json', JSON.stringify(comprasRows));
+  if (loteId !== undefined) formData.append('lote_id', String(loteId));
+
+  const res = await fetch(`${API_BASE}/compras/reconcile`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: formData,
+  });
+
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Tu sesión expiró o no iniciaste sesión. Volvé a loguearte e intentá de nuevo.');
+    let detail = '';
+    try { detail = (await res.json())?.detail || ''; } catch { /* respuesta sin JSON */ }
+    throw new Error(detail || `Error al comparar contra la RG (HTTP ${res.status}).`);
+  }
+  return await res.json();
 }
 
 // ── Auditoría ─────────────────────────────────────────────────────────────

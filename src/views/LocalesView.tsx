@@ -185,8 +185,8 @@ export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, erro
           <label style={fieldLabelStyle}>Punto de expedición (3 dígitos)</label>
           <input style={fieldInputStyle} value={form.punto_expedicion} onChange={e => setForm({ ...form, punto_expedicion: e.target.value })} placeholder="ej. 025" maxLength={10} />
 
-          <label style={fieldLabelStyle}>Código (opcional)</label>
-          <input style={fieldInputStyle} value={form.codigo} onChange={e => setForm({ ...form, codigo: e.target.value })} placeholder="código interno de referencia" />
+          <label style={fieldLabelStyle}>Código de sucursal (opcional — usado en Libro de Compras)</label>
+          <input style={fieldInputStyle} value={form.codigo} onChange={e => setForm({ ...form, codigo: e.target.value })} placeholder="ej. 1 — dónde se recibe la factura de compra" />
 
           <label style={fieldLabelStyle}>Estado</label>
           <select

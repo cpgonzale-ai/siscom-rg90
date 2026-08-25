@@ -9,6 +9,7 @@ import { CorrelatividadView } from './views/CorrelatividadView';
 import { RG90View } from './views/RG90View';
 import { LoginView } from './views/LoginView';
 import { LibroCompletoView } from './views/LibroCompletoView';
+import { ComprasView } from './views/ComprasView';
 import { LocalesView } from './views/LocalesView';
 import { UsuariosView } from './views/UsuariosView';
 import { RolesView } from './views/RolesView';
@@ -52,7 +53,7 @@ const TITLES: Record<string, [string, string]> = {
   roles: ['Roles y permisos', 'Qué pantallas y botones puede usar cada rol'],
 };
 
-type Screen = 'dashboard' | 'carga' | 'correl' | 'rg90' | 'libroCompleto' | 'locales' | 'usuarios' | 'roles';
+type Screen = 'dashboard' | 'carga' | 'correl' | 'rg90' | 'libroCompleto' | 'compras' | 'locales' | 'usuarios' | 'roles';
 
 const SYSTEMS_META = [
   { key: 'aloha', label: 'Aloha', desc: 'Sistema de punto de venta · Juan Valdez' },
@@ -647,6 +648,10 @@ export function App() {
               setCorrelAloha={() => setCorrelFiltro('Aloha')}
               setCorrelHiopos={() => setCorrelFiltro('Hiopos')}
             />
+          )}
+
+          {screen === 'compras' && (
+            <ComprasView locales={locales} permisos={permisos} />
           )}
 
           {screen === 'locales' && (
