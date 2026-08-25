@@ -208,7 +208,6 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
             </div>
             <input
               type="file"
-              accept=".xls,.xlsx"
               multiple
               style={{ display: 'none' }}
               onChange={(e) => { if (e.target.files && e.target.files.length > 0) handleFileInput(e.target.files); e.target.value = ''; }}
@@ -344,7 +343,6 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
               </div>
               <input
                 type="file"
-                accept=".xls,.xlsx"
                 multiple
                 style={{ display: 'none' }}
                 onChange={(e) => { if (e.target.files && e.target.files.length > 0) handleRgFileInput(e.target.files); e.target.value = ''; }}
@@ -356,6 +354,17 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
               </button>
             )}
           </div>
+
+          {rgFiles.length > 0 && (
+            <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {rgFiles.map((f, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#fafbfa', border: '1px solid #f0eee8', borderRadius: '7px', fontSize: '12.5px', color: '#22262b' }}>
+                  <FileSpreadsheet size={14} color="#5c6470" />
+                  <span>{f.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           {compareError && <div style={errorBoxStyle}>{compareError}</div>}
         </div>
