@@ -49,6 +49,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const [diffs, setDiffs] = useState<CompraDiffRow[]>([]);
   const [summary, setSummary] = useState<{ coinciden: number; no_en_rg: number; no_en_libro: number; diferencia_monto: number } | null>(null);
   const [diffSearch, setDiffSearch] = useState('');
+  const [diffCategoryFilter, setDiffCategoryFilter] = useState<string>('');
 
   // Cuál de los 3 pasos se muestra en pantalla (a diferencia de ventas, que separa Carga y
   // RG90 en pantallas distintas del sidebar, acá es una sola pantalla — así que se
@@ -135,6 +136,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
     setRgRows([]);
     setDiffs([]);
     setSummary(null);
+    setDiffCategoryFilter('');
     setPasoMostrado(1);
   };
 
@@ -155,6 +157,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
     setRgRows([]);
     setDiffs([]);
     setSummary(null);
+    setDiffCategoryFilter('');
     setPasoMostrado(2);
   };
 
@@ -171,6 +174,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
       setRgGridPage(1);
       setDiffs(res.diffs || []);
       setSummary(res.summary);
+      setDiffCategoryFilter('');
       // Se queda en el paso 2, listando los datos de la RG — el usuario avanza al paso 3
       // con "Siguiente" cuando quiera ver el resultado de la comparación, igual que en el
       // paso 1 (analiza y lista ahí mismo, sin avanzar solo).
@@ -220,10 +224,12 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const pagedRgRows = filteredRgRows.slice((currentRgPage - 1) * PAGE_SIZE, currentRgPage * PAGE_SIZE);
 
   const filteredDiffs = useMemo(() => {
-    if (!diffSearch.trim()) return diffs;
+    let list = diffs;
+    if (diffCategoryFilter) list = list.filter(d => d.diferencia === diffCategoryFilter);
+    if (!diffSearch.trim()) return list;
     const q = diffSearch.trim().toLowerCase();
-    return diffs.filter(d => Object.values(d).some(v => String(v).toLowerCase().includes(q)));
-  }, [diffs, diffSearch]);
+    return list.filter(d => Object.values(d).some(v => typeof v !== 'object' && String(v).toLowerCase().includes(q)));
+  }, [diffs, diffSearch, diffCategoryFilter]);
 
   const cardStyle: React.CSSProperties = {
     backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '12px',
@@ -546,23 +552,43 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
 
           <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>3. Resultado de la comparación</h4>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
-            <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', padding: '16px 20px' }}>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: '#5c6470' }}>Coinciden</div>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: '#128752', marginTop: '4px' }}>{summary.coinciden}</div>
-            </div>
-            <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', padding: '16px 20px' }}>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: '#5c6470' }}>No en RG</div>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: '#b3402f', marginTop: '4px' }}>{summary.no_en_rg}</div>
-            </div>
-            <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', padding: '16px 20px' }}>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: '#5c6470' }}>No en libro propio</div>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: '#b3402f', marginTop: '4px' }}>{summary.no_en_libro}</div>
-            </div>
-            <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', padding: '16px 20px' }}>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: '#5c6470' }}>Diferencia de monto</div>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: '#b0740f', marginTop: '4px' }}>{summary.diferencia_monto}</div>
-            </div>
+            {[
+              { key: '', label: 'Coinciden', value: summary.coinciden, color: '#128752' },
+              { key: 'No llegó a la interfaz', label: 'No en RG', value: summary.no_en_rg, color: '#b3402f' },
+              { key: 'No en libro propio', label: 'No en libro propio', value: summary.no_en_libro, color: '#b3402f' },
+              { key: 'Diferencia de monto', label: 'Diferencia de monto', value: summary.diferencia_monto, color: '#b0740f' },
+            ].map(c => {
+              const activa = diffCategoryFilter === c.key && c.key !== '';
+              return (
+                <div
+                  key={c.label}
+                  onClick={() => setDiffCategoryFilter(prev => (prev === c.key ? '' : c.key))}
+                  style={{
+                    backgroundColor: activa ? '#e8f3ec' : '#ffffff',
+                    border: `1px solid ${activa ? '#128752' : '#e2e0da'}`,
+                    borderRadius: '10px', padding: '16px 20px', cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    boxShadow: activa ? '0 2px 8px rgba(18, 135, 82, 0.15)' : 'none',
+                  }}
+                >
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#5c6470' }}>{c.label}</div>
+                  <div style={{ fontSize: '24px', fontWeight: 700, color: c.color, marginTop: '4px' }}>{c.value}</div>
+                </div>
+              );
+            })}
           </div>
+
+          {diffCategoryFilter && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{
+                backgroundColor: '#e8f3ec', color: '#128752', fontSize: '11px', fontWeight: 600,
+                padding: '4px 10px', borderRadius: '20px', display: 'inline-flex', alignItems: 'center', gap: '6px',
+              }}>
+                Filtro: {diffCategoryFilter}
+                <X size={12} style={{ cursor: 'pointer' }} onClick={() => setDiffCategoryFilter('')} />
+              </span>
+            </div>
+          )}
 
           <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', overflow: 'hidden' }}>
             <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e0da', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fafbfa' }}>
