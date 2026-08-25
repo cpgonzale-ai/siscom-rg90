@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ShoppingCart, UploadCloud, Trash2, FileSpreadsheet, X, GitCompare, RefreshCw, Download,
 } from 'lucide-react';
@@ -28,7 +28,6 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const [converting, setConverting] = useState(false);
   const [convertError, setConvertError] = useState<string | null>(null);
   const [confirmEliminarTodos, setConfirmEliminarTodos] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Paso 2: libro procesado ──────────────────────────────────────────────
   const [rows, setRows] = useState<CompraRow[]>([]);
@@ -43,7 +42,6 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const [diffs, setDiffs] = useState<CompraDiffRow[]>([]);
   const [summary, setSummary] = useState<{ coinciden: number; no_en_rg: number; no_en_libro: number; diferencia_monto: number } | null>(null);
   const [diffSearch, setDiffSearch] = useState('');
-  const rgInputRef = useRef<HTMLInputElement>(null);
 
   // El código de sucursal (dónde se recibió la factura) no tiene relación con el punto de
   // expedición del proveedor — reutiliza la misma tabla de locales, pero por su campo
@@ -203,20 +201,19 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
         </div>
 
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <div onClick={() => fileInputRef.current?.click()} style={dropzoneStyle}>
+          <label style={dropzoneStyle}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
               <UploadCloud size={18} color="#128752" />
               <span>{archivos.length > 0 ? `${archivos.length} archivo(s) adjuntado(s) — click para agregar más` : 'Click para adjuntar el archivo (.xls, .xlsx)'}</span>
             </div>
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xls,.xlsx"
-            multiple
-            style={{ display: 'none' }}
-            onChange={(e) => { if (e.target.files && e.target.files.length > 0) handleFileInput(e.target.files); e.target.value = ''; }}
-          />
+            <input
+              type="file"
+              accept=".xls,.xlsx"
+              multiple
+              style={{ display: 'none' }}
+              onChange={(e) => { if (e.target.files && e.target.files.length > 0) handleFileInput(e.target.files); e.target.value = ''; }}
+            />
+          </label>
           {puede('boton:compras.convertir') && (
             <button onClick={doConvertir} disabled={converting} style={{ ...primaryBtnStyle, opacity: converting ? 0.7 : 1, whiteSpace: 'nowrap' }}>
               {converting ? 'Analizando…' : 'Analizar y convertir'}
@@ -340,20 +337,19 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
           </div>
 
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <div onClick={() => rgInputRef.current?.click()} style={dropzoneStyle}>
+            <label style={dropzoneStyle}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
                 <UploadCloud size={18} color="#128752" />
                 <span>{rgFiles.length > 0 ? `${rgFiles.length} archivo(s) RG adjuntado(s)` : 'Click para adjuntar el archivo de la RG (compras)'}</span>
               </div>
-            </div>
-            <input
-              ref={rgInputRef}
-              type="file"
-              accept=".xls,.xlsx"
-              multiple
-              style={{ display: 'none' }}
-              onChange={(e) => { if (e.target.files && e.target.files.length > 0) handleRgFileInput(e.target.files); e.target.value = ''; }}
-            />
+              <input
+                type="file"
+                accept=".xls,.xlsx"
+                multiple
+                style={{ display: 'none' }}
+                onChange={(e) => { if (e.target.files && e.target.files.length > 0) handleRgFileInput(e.target.files); e.target.value = ''; }}
+              />
+            </label>
             {puede('boton:compras.comparar') && (
               <button onClick={doComparar} disabled={comparing} style={{ ...primaryBtnStyle, opacity: comparing ? 0.7 : 1, whiteSpace: 'nowrap' }}>
                 {comparing ? 'Comparando…' : 'Analizar y comparar'}
