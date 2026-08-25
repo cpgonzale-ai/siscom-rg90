@@ -342,8 +342,13 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                   <th style={{ padding: '10px 14px', fontWeight: 600 }}>Fecha</th>
                   <th style={{ padding: '10px 14px', fontWeight: 600 }}>RUC / Proveedor</th>
                   <th style={{ padding: '10px 14px', fontWeight: 600 }}>Tipo</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>Forma de pago</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>Timbrado</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>Gravada 10%</th>
                   <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 10%</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>Gravada 5%</th>
                   <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 5%</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>Exenta</th>
                   <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>Total</th>
                   <th style={{ padding: '10px 14px', fontWeight: 600 }}>Estado</th>
                 </tr>
@@ -356,8 +361,13 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                     <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.fecha}</td>
                     <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.ruc_proveedor}-{r.dv_proveedor} — {r.proveedor}</td>
                     <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.tipo_doc}</td>
+                    <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.condicion || '—'}</td>
+                    <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.timbrado || '—'}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.gravadas}</td>
                     <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.iva}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.gravadas_5}</td>
                     <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.iva_5}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.exentas}</td>
                     <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: '#22262b' }}>{r.total}</td>
                     <td style={{ padding: '10px 14px' }}>
                       <span style={{
@@ -475,11 +485,17 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
               <thead>
                 <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
                   <th style={{ padding: '10px 14px', fontWeight: 600 }}>Documento</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>Local</th>
                   <th style={{ padding: '10px 14px', fontWeight: 600 }}>Fecha</th>
                   <th style={{ padding: '10px 14px', fontWeight: 600 }}>RUC / Proveedor</th>
                   <th style={{ padding: '10px 14px', fontWeight: 600 }}>Tipo</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>Forma de pago</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>Timbrado</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>Gravada 10%</th>
                   <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 10%</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>Gravada 5%</th>
                   <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 5%</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>Exenta</th>
                   <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>Total</th>
                 </tr>
               </thead>
@@ -487,11 +503,17 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                 {pagedRgRows.map((r, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid #f0eee8' }}>
                     <td style={{ padding: '10px 14px', fontWeight: 600, color: '#22262b' }}>{r.doc}</td>
+                    <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.local || '—'}</td>
                     <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.fecha}</td>
                     <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.ruc_proveedor}{r.dv_proveedor ? `-${r.dv_proveedor}` : ''} — {r.proveedor}</td>
                     <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.tipo_doc}</td>
+                    <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.condicion || '—'}</td>
+                    <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.timbrado || '—'}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.gravadas}</td>
                     <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.iva}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.gravadas_5}</td>
                     <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.iva_5}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.exentas}</td>
                     <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: '#22262b' }}>{r.total}</td>
                   </tr>
                 ))}
