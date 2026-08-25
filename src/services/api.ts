@@ -107,13 +107,22 @@ export interface CompraIngestResult {
   rows: CompraRow[];
 }
 
+export interface CompraDiffLado {
+  gravada_10: string;
+  iva_10: string;
+  gravada_5: string;
+  iva_5: string;
+  exenta: string;
+  total: string;
+}
+
 export interface CompraDiffRow {
   doc: string;
   proveedor: string;
   sistema: string;
   local: string;
-  libro: string;
-  rg: string;
+  libro: CompraDiffLado;
+  rg: CompraDiffLado;
   diferencia: string;
   diferencias_detalle?: Record<string, number>;
 }
