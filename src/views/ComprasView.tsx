@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ShoppingCart, UploadCloud, Trash2, FileSpreadsheet, X, GitCompare, RefreshCw, Download,
 } from 'lucide-react';
@@ -44,21 +44,21 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const [summary, setSummary] = useState<{ coinciden: number; no_en_rg: number; no_en_libro: number; diferencia_monto: number } | null>(null);
   const [diffSearch, setDiffSearch] = useState('');
 
-  const paso1Ref = useRef<HTMLDivElement>(null);
-  const paso2Ref = useRef<HTMLDivElement>(null);
-  const paso3Ref = useRef<HTMLDivElement>(null);
+  // Cuál de los 3 pasos se muestra en pantalla (a diferencia de ventas, que separa Carga y
+  // RG90 en pantallas distintas del sidebar, acá es una sola pantalla — así que se
+  // muestra un paso a la vez, como un wizard real: paso 2 solo el adjuntar RG90, paso 3
+  // solo el resultado, sin que se acumule todo hacia abajo).
+  const [pasoMostrado, setPasoMostrado] = useState<1 | 2 | 3>(1);
 
-  // Misma barra de progreso que usa el libro de ventas (WizardSteps), para que el flujo de
-  // compras se guíe igual de claro: paso 1 (cargar el libro), paso 2 (adjuntar la RG) y
-  // paso 3 (ver el resultado de la comparación) — este último recién se marca "alcanzable"
-  // una vez que hay filas cargadas, igual que en ventas.
+  // pasoActual = el progreso real alcanzado (para los "✓" de completado en la barra),
+  // independiente de qué paso se esté mostrando en pantalla en este momento.
   const pasoActual = rows.length === 0 ? 1 : !summary ? 2 : 3;
   const wizardSteps = [
-    { n: 1, label: 'Cargar el libro de compras', ref: paso1Ref },
-    { n: 2, label: 'Adjuntar RG90', ref: paso2Ref },
-    { n: 3, label: 'Ver resultado', ref: paso3Ref },
+    { n: 1 as const, label: 'Cargar el libro de compras' },
+    { n: 2 as const, label: 'Adjuntar RG90' },
+    { n: 3 as const, label: 'Ver resultado' },
   ].map(st => {
-    const active = st.n === pasoActual;
+    const active = st.n === pasoMostrado;
     const done = st.n < pasoActual;
     const reachable = st.n <= pasoActual;
     return {
@@ -67,7 +67,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
       circleStyle: (done ? 'background:#128752;color:#fff' : active ? 'background:#f0a63d;color:#1a1a1a' : 'background:#e5e2da;color:#9aa1ab') + (reachable && !active ? ';cursor:pointer' : ';cursor:default'),
       labelStyle: (active ? 'color:#22262b;font-weight:700' : done ? 'color:#128752;font-weight:600' : 'color:#9aa1ab') + (reachable && !active ? ';cursor:pointer' : ''),
       mark: done ? '✓' : String(st.n),
-      goTo: !reachable || active ? undefined : () => st.ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      goTo: !reachable || active ? undefined : () => setPasoMostrado(st.n),
     };
   });
 
@@ -111,6 +111,8 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
       setPage(1);
       if (!res.rows || res.rows.length === 0) {
         setConvertError('El servidor procesó el/los archivo(s) pero no encontró ningún comprobante válido. Revisá que sea el reporte de compras del sistema, sin editar a mano.');
+      } else {
+        setPasoMostrado(2);
       }
     } catch (e) {
       setConvertError(e instanceof Error ? e.message : 'Error al procesar los archivos en el servidor.');
@@ -125,6 +127,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
     setDiffs([]);
     setSummary(null);
     setArchivos([]);
+    setPasoMostrado(1);
   };
 
   const handleRgFileInput = (files: FileList) => {
@@ -143,6 +146,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
     setRgFiles([]);
     setDiffs([]);
     setSummary(null);
+    setPasoMostrado(2);
   };
 
   const doComparar = async () => {
@@ -156,6 +160,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
       const res = await reconcileComprasApi(rgFiles, rows, loteId);
       setDiffs(res.diffs || []);
       setSummary(res.summary);
+      setPasoMostrado(3);
     } catch (e) {
       setCompareError(e instanceof Error ? e.message : 'Error al comparar contra la RG.');
     } finally {
@@ -225,8 +230,10 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
         </p>
       </div>
 
-      {/* Paso 1: carga */}
-      <div ref={paso1Ref} style={cardStyle}>
+      {/* Paso 1: carga del libro y grilla */}
+      {pasoMostrado === 1 && (
+      <>
+      <div style={cardStyle}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
           <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>1. Adjuntar el libro de compras del sistema</h4>
           {archivos.length > 0 && puede('boton:compras.eliminar_todos') && (
@@ -274,7 +281,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
         {convertError && <div style={errorBoxStyle}>{convertError}</div>}
       </div>
 
-      {/* Paso 2: libro procesado */}
+      {/* Grilla del libro cargado — se queda en el paso 1, no es un paso aparte */}
       {rows.length > 0 && (
         <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', overflow: 'hidden' }}>
           <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e0da', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fafbfa', flexWrap: 'wrap', gap: '10px' }}>
@@ -350,10 +357,12 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
           )}
         </div>
       )}
+      </>
+      )}
 
       {/* Paso 2: adjuntar la RG */}
-      {rows.length > 0 && (
-        <div ref={paso2Ref} style={cardStyle}>
+      {pasoMostrado === 2 && rows.length > 0 && (
+        <div style={cardStyle}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -408,8 +417,8 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
       )}
 
       {/* Paso 3: resultado de la comparación */}
-      {summary && (
-        <div ref={paso3Ref} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {pasoMostrado === 3 && summary && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>3. Resultado de la comparación</h4>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
             <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', padding: '16px 20px' }}>
