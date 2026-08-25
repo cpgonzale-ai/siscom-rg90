@@ -42,18 +42,23 @@ import {
 const matchesSistema = (valor: string, filtro: string) =>
   filtro === 'Todos' || (valor || '').toLowerCase().includes(filtro.toLowerCase());
 
-const TITLES: Record<string, [string, string]> = {
+type Screen = 'dashboard' | 'carga' | 'correl' | 'rg90' | 'libroCompleto' | 'compras' | 'locales' | 'usuarios' | 'roles';
+
+// Tipado por Screen (no Record<string, ...>) a propósito: si se agrega una pantalla nueva y
+// se olvida su entrada acá, TITLES[screen] da undefined y el destructuring de abajo revienta
+// en runtime sin ningún error de compilación — ya pasó una vez con 'compras'. Con este tipo,
+// TypeScript obliga a completar las 9 claves.
+const TITLES: Record<Screen, [string, string]> = {
   dashboard: ['Panel general', 'Estado de la conciliación del libro de ventas'],
   carga: ['Carga y libro de ventas', 'Reportes en bruto, conversión y libro unificado'],
   correl: ['Control de correlatividad', 'Saltos de numeración detectados por local'],
   rg90: ['Comparación contra RG90', 'Cruce del libro de ventas propio contra el organismo recaudador'],
   libroCompleto: ['Libro de ventas completo', 'Todos los comprobantes cargados, sin recortar por paginado'],
+  compras: ['Libro de Compras', 'Carga, revisión y comparación del libro de compras contra la RG'],
   locales: ['Locales', 'Alta, edición y baja de locales — se usan para determinar el local de cada comprobante'],
   usuarios: ['Usuarios', 'Alta, edición y baja de usuarios del sistema'],
   roles: ['Roles y permisos', 'Qué pantallas y botones puede usar cada rol'],
 };
-
-type Screen = 'dashboard' | 'carga' | 'correl' | 'rg90' | 'libroCompleto' | 'compras' | 'locales' | 'usuarios' | 'roles';
 
 const SYSTEMS_META = [
   { key: 'aloha', label: 'Aloha', desc: 'Sistema de punto de venta · Juan Valdez' },
