@@ -1,8 +1,62 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { GitCompare, UploadCloud, RefreshCw, X, ArrowLeft, ArrowRight, FileSpreadsheet } from 'lucide-react';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
-import { primaryBtnStyle, secondaryBtnStyle } from '../components/Modal';
+import { Modal, primaryBtnStyle, secondaryBtnStyle } from '../components/Modal';
+
+// Misma tabla de saltos que el modal del Paso 2 (CargaView) — acá se reutiliza para el
+// Paso 3 (saltos dentro de la RG90) y el Paso 4 (total combinado libro + RG90), agregando
+// una columna "Origen" cuando hace falta distinguir de cuál de los dos viene cada salto.
+const TablaSaltos: React.FC<{ rows: any[]; conOrigen?: boolean }> = ({ rows, conOrigen }) => (
+  <div style={{ overflowX: 'auto' }}>
+    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
+      <thead>
+        <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
+          {conOrigen && <th style={{ padding: '10px 12px', fontWeight: 600 }}>Origen</th>}
+          <th style={{ padding: '10px 12px', fontWeight: 600 }}>Local / Establecimiento</th>
+          <th style={{ padding: '10px 12px', fontWeight: 600 }}>Sistema</th>
+          <th style={{ padding: '10px 12px', fontWeight: 600 }}>Tipo</th>
+          <th style={{ padding: '10px 12px', fontWeight: 600 }}>Último N° Procesado</th>
+          <th style={{ padding: '10px 12px', fontWeight: 600 }}>Salto Detectado</th>
+          <th style={{ padding: '10px 12px', fontWeight: 600, textAlign: 'center' }}>Faltantes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r: any, i: number) => (
+          <tr key={i} style={{ borderBottom: '1px solid #f0eee8' }}>
+            {conOrigen && (
+              <td style={{ padding: '10px 12px' }}>
+                <span style={{
+                  background: r.__origen === 'RG90' ? '#eef2fb' : '#e8f3ec',
+                  color: r.__origen === 'RG90' ? '#2f5fa8' : '#128752',
+                  fontSize: '11px', fontWeight: 600, padding: '3px 9px', borderRadius: '20px',
+                }}>
+                  {r.__origen}
+                </span>
+              </td>
+            )}
+            <td style={{ padding: '10px 12px', fontWeight: 600, color: '#22262b' }}>{r.local}</td>
+            <td style={{ padding: '10px 12px', color: '#5c6470' }}>{r.sistema}</td>
+            <td style={{ padding: '10px 12px' }}>
+              <span
+                style={{
+                  background: r.tipo_doc === 'Nota de Crédito' ? '#f1eef8' : '#eef2fb',
+                  color: r.tipo_doc === 'Nota de Crédito' ? '#5b3aa8' : '#2f5fa8',
+                  fontSize: '11px', fontWeight: 600, padding: '3px 9px', borderRadius: '20px',
+                }}
+              >
+                {r.tipo_doc || 'Factura'}
+              </span>
+            </td>
+            <td style={{ padding: '10px 12px', color: '#5c6470', fontFamily: 'monospace' }}>{r.ultimo}</td>
+            <td style={{ padding: '10px 12px', color: '#b3402f', fontWeight: 600, fontFamily: 'monospace' }}>{r.salto}</td>
+            <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: '#b0740f' }}>{r.cantidad}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
 
 // Misma fila de navegación (Volver / Siguiente) que usa Libro de Compras arriba de cada
 // paso, en vez de abajo.
@@ -59,6 +113,10 @@ interface RG90ViewProps {
   rg90GridTotalPages: number;
   rg90GridPrevPage: () => void;
   rg90GridNextPage: () => void;
+  // Saltos de numeración: los del libro propio (Paso 2, misma fuente que el modal de ahí)
+  // y los detectados dentro de la RG90 misma (Paso 3, nuevo).
+  saltosLibroRows: any[];
+  saltosRgRows: any[];
 }
 
 export const RG90View: React.FC<RG90ViewProps> = ({
@@ -101,9 +159,17 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   rg90GridTotalPages,
   rg90GridPrevPage,
   rg90GridNextPage,
+  saltosLibroRows,
+  saltosRgRows,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const colFilter = (key: string) => rg90GridColumnFilters.find(c => c.key === key);
+  const [saltosRgModalOpen, setSaltosRgModalOpen] = useState(false);
+  const [saltosTotalModalOpen, setSaltosTotalModalOpen] = useState(false);
+  const saltosTotales = [
+    ...saltosLibroRows.map(r => ({ ...r, __origen: 'Libro propio' })),
+    ...saltosRgRows.map(r => ({ ...r, __origen: 'RG90' })),
+  ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -255,6 +321,19 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                     Limpiar filtros
                   </button>
                 )}
+                {/* Solo se muestra si se detectaron saltos DENTRO de la RG90 misma — a
+                    diferencia del botón del Paso 2, que siempre está visible. */}
+                {saltosRgRows.length > 0 && (
+                  <button
+                    onClick={() => setSaltosRgModalOpen(true)}
+                    style={{
+                      background: '#ffffff', border: '1px solid #e2e0da', color: '#5c6470',
+                      borderRadius: '7px', padding: '7px 12px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                    }}
+                  >
+                    Saltos ({saltosRgRows.length})
+                  </button>
+                )}
                 <input
                   type="text" placeholder="Buscar..." value={rg90GridSearch}
                   onChange={onRg90GridSearch}
@@ -365,10 +444,23 @@ export const RG90View: React.FC<RG90ViewProps> = ({
           <span />
         </div>
 
-        <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#22262b', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <GitCompare size={20} color="#128752" />
-          4. Resultado de la comparación
-        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#22262b', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <GitCompare size={20} color="#128752" />
+            4. Resultado de la comparación
+          </h3>
+          {/* Total combinado: saltos del libro propio (Paso 2) + saltos dentro de la RG90
+              (Paso 3) — el modal distingue el origen de cada uno con una columna aparte. */}
+          <button
+            onClick={() => setSaltosTotalModalOpen(true)}
+            style={{
+              background: '#ffffff', border: '1px solid #e2e0da', color: '#5c6470',
+              borderRadius: '7px', padding: '8px 14px', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            Saltos ({saltosTotales.length})
+          </button>
+        </div>
 
         {/* RG90 Summary Filter Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
@@ -509,6 +601,22 @@ export const RG90View: React.FC<RG90ViewProps> = ({
           </table>
         </div>
         </>
+      )}
+
+      {saltosRgModalOpen && (
+        <Modal title={`Saltos de numeración dentro de la RG90 (${saltosRgRows.length})`} onClose={() => setSaltosRgModalOpen(false)} width="900px">
+          <TablaSaltos rows={saltosRgRows} />
+        </Modal>
+      )}
+
+      {saltosTotalModalOpen && (
+        <Modal title={`Saltos de numeración — total (${saltosTotales.length})`} onClose={() => setSaltosTotalModalOpen(false)} width="960px">
+          {saltosTotales.length === 0 ? (
+            <p style={{ fontSize: '13px', color: '#5c6470' }}>No se detectaron saltos de numeración, ni en el libro propio ni en la RG90.</p>
+          ) : (
+            <TablaSaltos rows={saltosTotales} conOrigen />
+          )}
+        </Modal>
       )}
     </div>
   );

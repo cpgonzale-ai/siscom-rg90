@@ -165,6 +165,10 @@ export function App() {
   const [rg90GridSearch, setRg90GridSearch] = useState<string>('');
   const [rg90GridPage, setRg90GridPage] = useState<number>(1);
   const [rg90GridColFiltros, setRg90GridColFiltros] = useState<Record<string, Set<string> | null>>({});
+  // Saltos de numeración detectados DENTRO de la RG90 (no contra el libro propio) — mismo
+  // detector que ya corre sobre el libro propio en /api/ingest, ahora también sobre
+  // rg90_rows en /api/reconcile (ver Paso 3).
+  const [rg90GapsRows, setRg90GapsRows] = useState<CorrelatividadRow[]>([]);
 
   const [libroRows, setLibroRows] = useState<LibroRow[]>([]);
   const [correlatividadRows, setCorrelatividadRows] = useState<CorrelatividadRow[]>([]);
@@ -317,6 +321,7 @@ export function App() {
       const res = await reconcileApi(rg90Files, libroRows, loteId);
       setRg90DiffRows(res.diffs || []);
       setRg90Rows(res.rg90_rows || []);
+      setRg90GapsRows(res.rg90_gaps || []);
       setRg90GridPage(1);
       setRg90Summary({
         coinciden: res.summary?.coinciden ?? 0,
@@ -346,6 +351,7 @@ export function App() {
         setRg90Summary(null);
         setRg90Error(null);
         setRg90Rows([]);
+        setRg90GapsRows([]);
         setRg90GridColFiltros({});
         setRg90PasoMostrado(3);
       },
@@ -369,6 +375,7 @@ export function App() {
         setRg90Summary(null);
         setRg90Error(null);
         setRg90Rows([]);
+        setRg90GapsRows([]);
         setRg90GridColFiltros({});
         setRg90PasoMostrado(3);
         setCargaUploaderOpen(true);
@@ -818,6 +825,8 @@ export function App() {
               onVolverCarga={() => setScreen('carga')}
               onSiguienteResultado={() => rg90Loaded && setRg90PasoMostrado(4)}
               onVolverPaso3={() => setRg90PasoMostrado(3)}
+              saltosLibroRows={correlatividadRows}
+              saltosRgRows={rg90GapsRows}
               rg90Loaded={rg90Loaded}
               rg90Attached={rg90Attached}
               rg90StatusText={
