@@ -147,7 +147,8 @@ export interface UploadedFileMeta {
 export interface Local {
   id: number;
   nombre: string;
-  punto_expedicion: string;
+  establecimiento: string | null;
+  punto_expedicion: string | null;
   codigo: string | null;
   abreviatura: string | null;
   estado: 'activo' | 'inactivo';

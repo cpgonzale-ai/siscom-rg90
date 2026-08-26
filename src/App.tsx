@@ -201,13 +201,16 @@ export function App() {
     ]);
   };
 
-  // El local de cada comprobante se determina comparando su punto de expedición (los
-  // primeros dígitos del número de documento, ej. "025" en 025-001-0065027) contra los
-  // locales registrados en la pantalla de administración — no por lo que se haya escrito
-  // al subir el archivo. Si ningún local activo matchea, la columna queda vacía en el
-  // Paso 2 (no se inventa un nombre).
+  // El local de cada comprobante se determina comparando el PAR establecimiento+punto de
+  // expedición (los primeros 6 dígitos del número de documento, ej. "025-001" en
+  // 025-001-0065027) contra los locales registrados en la pantalla de administración — no
+  // por lo que se haya escrito al subir el archivo. Hace falta el par completo, no solo el
+  // establecimiento: un mismo establecimiento puede repartirse entre locales distintos
+  // según el punto de expedición (ej. "024-001"/"024-002" = Juan Valdez Hotel, pero
+  // "024-003" = Juan Valdez Caja Móvil). Si ningún local activo matchea, la columna queda
+  // vacía en el Paso 2 (no se inventa un nombre).
   const resolveLocal = (doc: string): string => {
-    const match = locales.find(l => l.estado === 'activo' && doc.startsWith(l.punto_expedicion));
+    const match = locales.find(l => l.estado === 'activo' && l.establecimiento && l.punto_expedicion && doc.startsWith(`${l.establecimiento}-${l.punto_expedicion}`));
     return match ? match.nombre : '';
   };
 

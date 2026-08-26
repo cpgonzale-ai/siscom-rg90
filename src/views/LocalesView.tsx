@@ -18,13 +18,14 @@ interface LocalesViewProps {
 
 interface FormState {
   nombre: string;
+  establecimiento: string;
   punto_expedicion: string;
   codigo: string;
   abreviatura: string;
   estado: 'activo' | 'inactivo';
 }
 
-const EMPTY_FORM: FormState = { nombre: '', punto_expedicion: '', codigo: '', abreviatura: '', estado: 'activo' };
+const EMPTY_FORM: FormState = { nombre: '', establecimiento: '', punto_expedicion: '', codigo: '', abreviatura: '', estado: 'activo' };
 
 export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, error, refetch, canCrear, canEditar, canEliminar }) => {
   const [modalOpen, setModalOpen] = useState<'crear' | 'editar' | null>(null);
@@ -38,21 +39,46 @@ export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, erro
   const openCrear = () => { setForm(EMPTY_FORM); setFormError(null); setModalOpen('crear'); };
   const openEditar = (l: Local) => {
     setEditingId(l.id);
-    setForm({ nombre: l.nombre, punto_expedicion: l.punto_expedicion, codigo: l.codigo || '', abreviatura: l.abreviatura || '', estado: l.estado });
+    setForm({
+      nombre: l.nombre,
+      establecimiento: l.establecimiento || '',
+      punto_expedicion: l.punto_expedicion || '',
+      codigo: l.codigo || '',
+      abreviatura: l.abreviatura || '',
+      estado: l.estado,
+    });
     setFormError(null);
     setModalOpen('editar');
   };
   const closeModal = () => { setModalOpen(null); setEditingId(null); };
 
   const submit = async () => {
-    if (!form.nombre.trim() || !form.punto_expedicion.trim()) {
-      setFormError('Nombre y punto de expedición son obligatorios.');
+    if (!form.nombre.trim()) {
+      setFormError('El nombre es obligatorio.');
+      return;
+    }
+    // Establecimiento y punto de expedición van de a par — no tiene sentido cargar uno sin
+    // el otro (no alcanzaría para matchear ningún comprobante en el Paso 2). Las filas de
+    // marca que usa Compras (ver campo Código) legítimamente no tienen ninguno de los dos.
+    if (form.establecimiento.trim() && !form.punto_expedicion.trim()) {
+      setFormError('Si cargás el establecimiento, también necesitás el punto de expedición.');
+      return;
+    }
+    if (form.punto_expedicion.trim() && !form.establecimiento.trim()) {
+      setFormError('Si cargás el punto de expedición, también necesitás el establecimiento.');
       return;
     }
     setSaving(true);
     setFormError(null);
     try {
-      const datos = { nombre: form.nombre.trim(), punto_expedicion: form.punto_expedicion.trim(), codigo: form.codigo.trim() || null, abreviatura: form.abreviatura.trim() || null, estado: form.estado };
+      const datos = {
+        nombre: form.nombre.trim(),
+        establecimiento: form.establecimiento.trim() || null,
+        punto_expedicion: form.punto_expedicion.trim() || null,
+        codigo: form.codigo.trim() || null,
+        abreviatura: form.abreviatura.trim() || null,
+        estado: form.estado,
+      };
       if (modalOpen === 'crear') {
         await createLocalApi(datos);
       } else if (editingId !== null) {
@@ -94,7 +120,7 @@ export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, erro
             <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#22262b' }}>Locales</h3>
           </div>
           <p style={{ fontSize: '12.5px', color: '#5c6470', marginTop: '2px' }}>
-            El punto de expedición son los 3 primeros dígitos del número de documento — se usa para determinar automáticamente a qué local corresponde cada comprobante en el Paso 2.
+            El establecimiento y el punto de expedición son las dos primeras partes del número de documento (ej. "025" y "001" en 025-001-0065027) — juntos determinan automáticamente a qué local corresponde cada comprobante en el Paso 2.
           </p>
         </div>
         {canCrear && (
@@ -115,10 +141,12 @@ export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, erro
       )}
 
       <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', overflow: 'hidden' }}>
+        <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
           <thead>
             <tr style={{ backgroundColor: '#fafbfa', borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>Nombre</th>
+              <th style={{ padding: '12px 16px', fontWeight: 600 }}>Establecimiento</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>Punto de expedición</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>Código</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>Abreviatura</th>
@@ -130,7 +158,8 @@ export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, erro
             {locales.map(l => (
               <tr key={l.id} style={{ borderBottom: '1px solid #f0eee8' }}>
                 <td style={{ padding: '12px 16px', fontWeight: 600, color: '#22262b' }}>{l.nombre}</td>
-                <td style={{ padding: '12px 16px', color: '#5c6470', fontFamily: 'monospace' }}>{l.punto_expedicion}</td>
+                <td style={{ padding: '12px 16px', color: '#5c6470', fontFamily: 'monospace' }}>{l.establecimiento || '—'}</td>
+                <td style={{ padding: '12px 16px', color: '#5c6470', fontFamily: 'monospace' }}>{l.punto_expedicion || '—'}</td>
                 <td style={{ padding: '12px 16px', color: '#5c6470' }}>{l.codigo || '—'}</td>
                 <td style={{ padding: '12px 16px', color: '#5c6470' }}>{l.abreviatura || '—'}</td>
                 <td style={{ padding: '12px 16px' }}>
@@ -166,13 +195,14 @@ export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, erro
             ))}
             {!loading && locales.length === 0 && (
               <tr>
-                <td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: '#9aa1ab' }}>
+                <td colSpan={7} style={{ padding: '32px', textAlign: 'center', color: '#9aa1ab' }}>
                   No hay locales cargados todavía.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {modalOpen && (
@@ -185,8 +215,16 @@ export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, erro
           <label style={fieldLabelStyle}>Nombre</label>
           <input style={fieldInputStyle} value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="ej. Juan Valdez - Shopping del Sol" />
 
-          <label style={fieldLabelStyle}>Punto de expedición (3 dígitos)</label>
-          <input style={fieldInputStyle} value={form.punto_expedicion} onChange={e => setForm({ ...form, punto_expedicion: e.target.value })} placeholder="ej. 025" maxLength={10} />
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <div style={{ flex: 1 }}>
+              <label style={fieldLabelStyle}>Establecimiento (3 dígitos)</label>
+              <input style={fieldInputStyle} value={form.establecimiento} onChange={e => setForm({ ...form, establecimiento: e.target.value })} placeholder="ej. 025" maxLength={10} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={fieldLabelStyle}>Punto de expedición (3 dígitos)</label>
+              <input style={fieldInputStyle} value={form.punto_expedicion} onChange={e => setForm({ ...form, punto_expedicion: e.target.value })} placeholder="ej. 001" maxLength={10} />
+            </div>
+          </div>
 
           <label style={fieldLabelStyle}>Código de sucursal (opcional — usado en Libro de Compras)</label>
           <input style={fieldInputStyle} value={form.codigo} onChange={e => setForm({ ...form, codigo: e.target.value })} placeholder="ej. 1 — dónde se recibe la factura de compra" />
@@ -225,7 +263,7 @@ export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, erro
 
       {confirmDelete && (
         <ConfirmModal
-          message={`¿Eliminar el local "${confirmDelete.nombre}"? Los comprobantes que ya matcheaban con su punto de expedición van a dejar de mostrar el local en el Paso 2.`}
+          message={`¿Eliminar el local "${confirmDelete.nombre}"? Los comprobantes que ya matcheaban con su establecimiento y punto de expedición van a dejar de mostrar el local en el Paso 2.`}
           confirmLabel="Eliminar local"
           onConfirm={doDelete}
           onClose={() => setConfirmDelete(null)}
