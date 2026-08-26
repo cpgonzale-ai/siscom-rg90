@@ -7,7 +7,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
 import { secondaryBtnStyle, primaryBtnStyle, dangerBtnStyle } from '../components/Modal';
-import type { Local, CompraRow, CompraDiffRow } from '../services/api';
+import type { Local, CompraRow, CompraDiffRow, CompraDiffLado } from '../services/api';
 import { ingestComprasApi, reconcileComprasApi } from '../services/api';
 
 interface ComprasViewProps {
@@ -48,6 +48,24 @@ const RG_COLUMNAS: { key: string; label: string; getValue: (r: CompraRow) => str
   { key: 'timbrado', label: 'Timbrado', getValue: r => r.timbrado || '' },
 ];
 
+// Columnas de texto de la grilla de resultado (paso 3) — los importes de cada lado
+// (Libro/RG) quedan afuera del filtro de checkboxes por la misma razón que en las demás
+// grillas: son casi todos distintos entre sí.
+const DIFF_COLUMNAS: { key: string; label: string; getValue: (d: CompraDiffRow) => string }[] = [
+  { key: 'doc', label: 'Documento', getValue: d => d.doc },
+  { key: 'proveedor', label: 'Proveedor', getValue: d => d.proveedor },
+  { key: 'local', label: 'Local', getValue: d => d.local },
+  { key: 'diferencia', label: 'Motivo de la diferencia', getValue: d => d.diferencia },
+];
+
+// Suma de importes formateados como los devuelve el backend ("18.891.429,00") — se
+// necesita volver a número para poder sumar entre filas antes de re-formatear el total.
+const parseGs = (s: string): number => {
+  const n = parseFloat(String(s ?? '').replace(/\./g, '').replace(',', '.'));
+  return isNaN(n) ? 0 : n;
+};
+const formatGs = (n: number): string => n.toLocaleString('es-PY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) => {
   const puede = (clave: string) => permisos.has(clave);
 
@@ -78,6 +96,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const [summary, setSummary] = useState<{ coinciden: number; no_en_rg: number; no_en_libro: number; diferencia_monto: number } | null>(null);
   const [diffSearch, setDiffSearch] = useState('');
   const [diffCategoryFilter, setDiffCategoryFilter] = useState<string>('');
+  const [diffColFiltros, setDiffColFiltros] = useState<Record<string, Set<string> | null>>({});
 
   // Cuál de los 3 pasos se muestra en pantalla (a diferencia de ventas, que separa Carga y
   // RG90 en pantallas distintas del sidebar, acá es una sola pantalla — así que se
@@ -167,6 +186,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
     setDiffs([]);
     setSummary(null);
     setDiffCategoryFilter('');
+    setDiffColFiltros({});
     setPasoMostrado(1);
   };
 
@@ -189,6 +209,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
     setDiffs([]);
     setSummary(null);
     setDiffCategoryFilter('');
+    setDiffColFiltros({});
     setPasoMostrado(2);
   };
 
@@ -206,6 +227,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
       setDiffs(res.diffs || []);
       setSummary(res.summary);
       setDiffCategoryFilter('');
+      setDiffColFiltros({});
       // Se queda en el paso 2, listando los datos de la RG — el usuario avanza al paso 3
       // con "Siguiente" cuando quiera ver el resultado de la comparación, igual que en el
       // paso 1 (analiza y lista ahí mismo, sin avanzar solo).
@@ -252,6 +274,16 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const currentPage = Math.min(Math.max(1, page), totalPages);
   const pagedRows = filteredRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const hayColFiltrosActivos = Object.values(colFiltros).some(v => v !== null && v !== undefined);
+  // Totalizador sobre TODO lo filtrado (no solo la página visible) — para que el total
+  // acompañe al filtro/búsqueda, no solo a la paginación.
+  const rowsTotales = useMemo(() => ({
+    gravadas: filteredRows.reduce((s, r) => s + (r.gravadas_num || 0), 0),
+    iva: filteredRows.reduce((s, r) => s + (r.iva_num || 0), 0),
+    gravadas_5: filteredRows.reduce((s, r) => s + (r.gravadas_5_num || 0), 0),
+    iva_5: filteredRows.reduce((s, r) => s + (r.iva_5_num || 0), 0),
+    exentas: filteredRows.reduce((s, r) => s + (r.exentas_num || 0), 0),
+    total: filteredRows.reduce((s, r) => s + (r.total_num || 0), 0),
+  }), [filteredRows]);
 
   const filteredRgRows = useMemo(() => {
     let lista = rgRows;
@@ -269,14 +301,48 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const currentRgPage = Math.min(Math.max(1, rgGridPage), totalRgPages);
   const pagedRgRows = filteredRgRows.slice((currentRgPage - 1) * PAGE_SIZE, currentRgPage * PAGE_SIZE);
   const hayRgColFiltrosActivos = Object.values(rgColFiltros).some(v => v !== null && v !== undefined);
+  const rgRowsTotales = useMemo(() => ({
+    gravadas: filteredRgRows.reduce((s, r) => s + (r.gravadas_num || 0), 0),
+    iva: filteredRgRows.reduce((s, r) => s + (r.iva_num || 0), 0),
+    gravadas_5: filteredRgRows.reduce((s, r) => s + (r.gravadas_5_num || 0), 0),
+    iva_5: filteredRgRows.reduce((s, r) => s + (r.iva_5_num || 0), 0),
+    exentas: filteredRgRows.reduce((s, r) => s + (r.exentas_num || 0), 0),
+    total: filteredRgRows.reduce((s, r) => s + (r.total_num || 0), 0),
+  }), [filteredRgRows]);
 
   const filteredDiffs = useMemo(() => {
     let list = diffs;
+    for (const col of DIFF_COLUMNAS) {
+      const activo = diffColFiltros[col.key];
+      if (activo) list = list.filter(d => activo.has(col.getValue(d)));
+    }
     if (diffCategoryFilter) list = list.filter(d => d.diferencia === diffCategoryFilter);
-    if (!diffSearch.trim()) return list;
-    const q = diffSearch.trim().toLowerCase();
-    return list.filter(d => Object.values(d).some(v => typeof v !== 'object' && String(v).toLowerCase().includes(q)));
-  }, [diffs, diffSearch, diffCategoryFilter]);
+    if (diffSearch.trim()) {
+      const q = diffSearch.trim().toLowerCase();
+      list = list.filter(d => Object.values(d).some(v => typeof v !== 'object' && String(v).toLowerCase().includes(q)));
+    }
+    return list;
+  }, [diffs, diffSearch, diffCategoryFilter, diffColFiltros]);
+  const hayDiffColFiltrosActivos = Object.values(diffColFiltros).some(v => v !== null && v !== undefined);
+
+  // Mismo criterio de "en cero si no es la causa de la diferencia" que se usa al renderizar
+  // cada celda (ver v() más abajo, en el render) — se repite acá afuera para poder sumar
+  // los importes REALMENTE visibles en la grilla, no los crudos que trae el backend.
+  const valorCeldaDiff = (d: CompraDiffRow, lado: 'libro' | 'rg', campo: keyof CompraDiffLado): string => {
+    const valor = d[lado][campo];
+    if (d.diferencia !== 'Diferencia de monto' || valor === '—') return valor;
+    return d.diferencias_detalle && campo in d.diferencias_detalle ? valor : '0,00';
+  };
+  const CAMPOS_DIFF: (keyof CompraDiffLado)[] = ['gravada_10', 'gravada_5', 'iva_10', 'iva_5', 'exenta', 'total'];
+  const diffTotales = useMemo(() => {
+    const acc = { libro: {} as Record<string, number>, rg: {} as Record<string, number> };
+    for (const campo of CAMPOS_DIFF) {
+      acc.libro[campo] = filteredDiffs.reduce((s, d) => s + parseGs(valorCeldaDiff(d, 'libro', campo)), 0);
+      acc.rg[campo] = filteredDiffs.reduce((s, d) => s + parseGs(valorCeldaDiff(d, 'rg', campo)), 0);
+    }
+    return acc;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredDiffs]);
 
   const cardStyle: React.CSSProperties = {
     backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '12px',
@@ -449,6 +515,18 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr style={{ borderTop: '2px solid #e2e0da', backgroundColor: '#fafbfa', fontWeight: 700, color: '#22262b' }}>
+                  <td colSpan={7} style={{ padding: '10px 14px' }}>Total ({filteredRows.length.toLocaleString('es-PY')} filas)</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rowsTotales.gravadas)}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rowsTotales.iva)}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rowsTotales.gravadas_5)}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rowsTotales.iva_5)}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rowsTotales.exentas)}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rowsTotales.total)}</td>
+                  <td />
+                </tr>
+              </tfoot>
             </table>
           </div>
 
@@ -596,6 +674,17 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr style={{ borderTop: '2px solid #e2e0da', backgroundColor: '#fafbfa', fontWeight: 700, color: '#22262b' }}>
+                  <td colSpan={7} style={{ padding: '10px 14px' }}>Total ({filteredRgRows.length.toLocaleString('es-PY')} filas)</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rgRowsTotales.gravadas)}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rgRowsTotales.iva)}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rgRowsTotales.gravadas_5)}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rgRowsTotales.iva_5)}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rgRowsTotales.exentas)}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rgRowsTotales.total)}</td>
+                </tr>
+              </tfoot>
             </table>
           </div>
 
@@ -664,23 +753,49 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
 
           <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', overflow: 'hidden' }}>
             <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e0da', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fafbfa' }}>
-              <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>Detalle de Discrepancias</h4>
-              <input
-                type="text" placeholder="Buscar por doc, proveedor..." value={diffSearch}
-                onChange={e => setDiffSearch(e.target.value)}
-                style={{ padding: '7px 12px', border: '1px solid #e2e0da', borderRadius: '6px', fontSize: '12px', width: '220px' }}
-              />
+              <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>Detalle de Discrepancias ({filteredDiffs.length.toLocaleString('es-PY')} de {diffs.length.toLocaleString('es-PY')})</h4>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {hayDiffColFiltrosActivos && (
+                  <button onClick={() => setDiffColFiltros({})} style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px' }}>
+                    Limpiar filtros
+                  </button>
+                )}
+                <input
+                  type="text" placeholder="Buscar por doc, proveedor..." value={diffSearch}
+                  onChange={e => setDiffSearch(e.target.value)}
+                  style={{ padding: '7px 12px', border: '1px solid #e2e0da', borderRadius: '6px', fontSize: '12px', width: '220px' }}
+                />
+              </div>
             </div>
             <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-                  <th rowSpan={2} style={{ padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom' }}>Documento</th>
-                  <th rowSpan={2} style={{ padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom' }}>Proveedor</th>
-                  <th rowSpan={2} style={{ padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom' }}>Local</th>
+                  {DIFF_COLUMNAS.filter(c => c.key !== 'diferencia').map(col => (
+                    <th key={col.key} rowSpan={2} style={{ padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom' }}>
+                      <ExcelFilterHeader
+                        label={col.label}
+                        allValues={diffs.map(col.getValue)}
+                        active={diffColFiltros[col.key] ?? null}
+                        onChange={(next) => setDiffColFiltros(prev => ({ ...prev, [col.key]: next }))}
+                      />
+                    </th>
+                  ))}
                   <th colSpan={6} style={{ padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>Libro de Compras</th>
                   <th colSpan={6} style={{ padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>RG (SET)</th>
-                  <th rowSpan={2} style={{ padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom', borderLeft: '2px solid #e2e0da' }}>Motivo de la diferencia</th>
+                  <th rowSpan={2} style={{ padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom', borderLeft: '2px solid #e2e0da' }}>
+                    {(() => {
+                      const col = DIFF_COLUMNAS.find(c => c.key === 'diferencia')!;
+                      return (
+                        <ExcelFilterHeader
+                          label={col.label}
+                          allValues={diffs.map(col.getValue)}
+                          active={diffColFiltros[col.key] ?? null}
+                          onChange={(next) => setDiffColFiltros(prev => ({ ...prev, [col.key]: next }))}
+                        />
+                      );
+                    })()}
+                  </th>
                 </tr>
                 <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
                   <th style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right', borderLeft: '2px solid #e2e0da' }}>Gravada 10%</th>
@@ -742,6 +857,24 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                   );
                 })}
               </tbody>
+              <tfoot>
+                <tr style={{ borderTop: '2px solid #e2e0da', backgroundColor: '#fafbfa', fontWeight: 700, color: '#22262b' }}>
+                  <td colSpan={3} style={{ padding: '10px 14px' }}>Total ({filteredDiffs.length.toLocaleString('es-PY')} filas)</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right', borderLeft: '2px solid #e2e0da' }}>{formatGs(diffTotales.libro.gravada_10)}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(diffTotales.libro.gravada_5)}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(diffTotales.libro.iva_10)}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(diffTotales.libro.iva_5)}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(diffTotales.libro.exenta)}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(diffTotales.libro.total)}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right', borderLeft: '2px solid #e2e0da' }}>{formatGs(diffTotales.rg.gravada_10)}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(diffTotales.rg.gravada_5)}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(diffTotales.rg.iva_10)}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(diffTotales.rg.iva_5)}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(diffTotales.rg.exenta)}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(diffTotales.rg.total)}</td>
+                  <td style={{ padding: '10px 14px', borderLeft: '2px solid #e2e0da' }} />
+                </tr>
+              </tfoot>
             </table>
             </div>
           </div>

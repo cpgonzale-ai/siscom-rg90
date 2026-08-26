@@ -4,6 +4,10 @@ import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
 import { secondaryBtnStyle } from '../components/Modal';
 
+// Mismo formato que usa el backend para los importes ("18.891.429,00") — para el
+// totalizador del pie de tabla, que se calcula acá con los campos _num del libro.
+const formatGs = (n: number): string => n.toLocaleString('es-PY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 interface CargaViewProps {
   wizardSteps: any[];
   systemOptions: any[];
@@ -56,6 +60,7 @@ interface CargaViewProps {
   libroColumnFilters: { key: string; label: string; allValues: string[]; active: Set<string> | null; onChange: (next: Set<string> | null) => void }[];
   hayLibroColFiltrosActivos: boolean;
   limpiarLibroColFiltros: () => void;
+  libroTotales: { gravadas: number; iva: number; gravadas_5: number; iva_5: number; exentas: number; total: number };
 }
 
 export const CargaView: React.FC<CargaViewProps> = ({
@@ -104,6 +109,7 @@ export const CargaView: React.FC<CargaViewProps> = ({
   libroColumnFilters,
   hayLibroColFiltrosActivos,
   limpiarLibroColFiltros,
+  libroTotales,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -543,6 +549,18 @@ export const CargaView: React.FC<CargaViewProps> = ({
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr style={{ borderTop: '2px solid #e2e0da', backgroundColor: '#fafbfa', fontWeight: 700, color: '#22262b' }}>
+                  <td colSpan={7} style={{ padding: '12px 14px' }}>Total ({filteredCount.toLocaleString('es-PY')} filas)</td>
+                  <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(libroTotales.gravadas)}</td>
+                  <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(libroTotales.iva)}</td>
+                  <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(libroTotales.gravadas_5)}</td>
+                  <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(libroTotales.iva_5)}</td>
+                  <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(libroTotales.exentas)}</td>
+                  <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(libroTotales.total)}</td>
+                  <td />
+                </tr>
+              </tfoot>
             </table>
             </div>
 

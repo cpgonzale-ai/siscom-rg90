@@ -501,6 +501,17 @@ export function App() {
   const hayLibroColFiltrosActivos = Object.values(libroColFiltros).some(v => v !== null && v !== undefined);
   const limpiarLibroColFiltros = () => { setLibroColFiltros({}); setPage(1); };
 
+  // Totalizador sobre TODO lo filtrado (tabs de sistema + filtros de columna + buscador),
+  // no solo la página visible — para que el total acompañe al filtro, no a la paginación.
+  const libroTotales = {
+    gravadas: filteredLibro.reduce((s, r) => s + (r.gravadas_num || 0), 0),
+    iva: filteredLibro.reduce((s, r) => s + (r.iva_num || 0), 0),
+    gravadas_5: filteredLibro.reduce((s, r) => s + (r.gravadas_5_num || 0), 0),
+    iva_5: filteredLibro.reduce((s, r) => s + (r.iva_5_num || 0), 0),
+    exentas: filteredLibro.reduce((s, r) => s + (r.exentas_num || 0), 0),
+    total: filteredLibro.reduce((s, r) => s + (r.total_num || 0), 0),
+  };
+
   const totalPages = Math.max(1, Math.ceil(filteredLibro.length / pageSize));
   const currentPage = Math.min(Math.max(1, page), totalPages);
   const pagedLibro = filteredLibro.slice((currentPage - 1) * pageSize, currentPage * pageSize).map(r => ({
@@ -635,6 +646,7 @@ export function App() {
               libroColumnFilters={libroColumnFilters}
               hayLibroColFiltrosActivos={hayLibroColFiltrosActivos}
               limpiarLibroColFiltros={limpiarLibroColFiltros}
+              libroTotales={libroTotales}
               filterStyleTodos={filtro === 'Todos' ? 'background:#128752;border:1px solid #128752;color:#fff;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer' : 'background:#fff;border:1px solid #e2e0da;color:#5c6470;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer'}
               filterStyleAloha={filtro === 'Aloha' ? 'background:#128752;border:1px solid #128752;color:#fff;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer' : 'background:#fff;border:1px solid #e2e0da;color:#5c6470;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer'}
               filterStyleHiopos={filtro === 'Hiopos' ? 'background:#128752;border:1px solid #128752;color:#fff;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer' : 'background:#fff;border:1px solid #e2e0da;color:#5c6470;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer'}
