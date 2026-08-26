@@ -767,7 +767,7 @@ export function App() {
                   ? `Archivo cargado y comparado — ${rg90Files.map(f => f.name).join(', ')}`
                   : rg90Attached
                   ? `Archivo adjuntado — ${rg90Files.map(f => f.name).join(', ')}. Presioná "Analizar y comparar" para generar el resultado.`
-                  : 'El libro de ventas ya está en formato limpio y unificado. Cargá el/los archivo(s) del organismo recaudador (venta y/o nota de crédito) para comparar.'
+                  : ''
               }
               rg90FileLabel={rg90Attached ? rg90Files.map(f => f.name).join(', ') : 'Adjuntar archivo(s) RG90 (.xls / .xlsx)'}
               rg90DropzoneStyle={

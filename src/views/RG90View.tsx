@@ -91,9 +91,11 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                 3. Comparación contra registros de la RG90 (SET)
               </h3>
             </div>
-            <p style={{ fontSize: '12.5px', color: '#5c6470', marginTop: '2px' }}>
-              {rg90StatusText}
-            </p>
+            {rg90StatusText && (
+              <p style={{ fontSize: '12.5px', color: '#5c6470', marginTop: '2px' }}>
+                {rg90StatusText}
+              </p>
+            )}
           </div>
 
           {rg90Loaded && canQuitarArchivo && (

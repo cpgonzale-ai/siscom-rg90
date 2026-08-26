@@ -344,16 +344,11 @@ export const CargaView: React.FC<CargaViewProps> = ({
               justifyContent: 'space-between',
             }}
           >
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <CheckCircle2 size={20} color="#128752" />
-                <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#22262b' }}>
-                  2. Libro de Ventas Unificado y Limpio
-                </h3>
-              </div>
-              <p style={{ fontSize: '12.5px', color: '#5c6470', marginTop: '2px' }}>
-                Reportes consolidados y sanitizados para el período 01–10 junio 2026
-              </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <CheckCircle2 size={20} color="#128752" />
+              <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#22262b' }}>
+                2. Libro de Ventas Unificado y Limpio
+              </h3>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
