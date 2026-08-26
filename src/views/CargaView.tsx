@@ -1,8 +1,13 @@
 import React, { useRef } from 'react';
-import { UploadCloud, FileSpreadsheet, Trash2, Search, Download, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { UploadCloud, FileSpreadsheet, Trash2, Search, Download, RefreshCw, CheckCircle2, ArrowLeft, ArrowRight } from 'lucide-react';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
-import { secondaryBtnStyle } from '../components/Modal';
+import { primaryBtnStyle, secondaryBtnStyle } from '../components/Modal';
+
+// Misma fila de navegación (Volver / Siguiente) que usa Libro de Compras arriba de cada
+// paso, en vez de abajo — ver el mismo criterio aplicado ahí.
+const navRowStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
+const disabledBtnStyle: React.CSSProperties = { opacity: 0.5, cursor: 'not-allowed' };
 
 // Mismo formato que usa el backend para los importes ("18.891.429,00") — para el
 // totalizador del pie de tabla, que se calcula acá con los campos _num del libro.
@@ -31,6 +36,8 @@ interface CargaViewProps {
   showCargaCard: boolean;
   showStep2Content: boolean;
   openCargaUploader: () => void;
+  closeCargaUploader: () => void;
+  goToRg90: () => void;
   deleteLibro: () => void;
   downloadLimpio: () => void;
   pagedLibro: any[];
@@ -75,9 +82,12 @@ export const CargaView: React.FC<CargaViewProps> = ({
   doConvert,
   converting,
   convertError,
+  converted,
   showCargaCard,
   showStep2Content,
   openCargaUploader,
+  closeCargaUploader,
+  goToRg90,
   deleteLibro,
   downloadLimpio,
   pagedLibro,
@@ -115,6 +125,18 @@ export const CargaView: React.FC<CargaViewProps> = ({
 
       {/* Step 1: Upload Card */}
       {showCargaCard && (
+        <>
+        <div style={navRowStyle}>
+          <span />
+          <button
+            onClick={closeCargaUploader}
+            disabled={!converted}
+            style={{ ...primaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px', ...(!converted ? disabledBtnStyle : {}) }}
+          >
+            <span>Siguiente: Ver libro unificado</span>
+            <ArrowRight size={16} />
+          </button>
+        </div>
         <div
           style={{
             backgroundColor: '#ffffff',
@@ -293,11 +315,23 @@ export const CargaView: React.FC<CargaViewProps> = ({
             )}
           </div>
         </div>
+        </>
       )}
 
       {/* Step 2: Converted Sales Book Table Card */}
       {showStep2Content && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={navRowStyle}>
+            <button onClick={openCargaUploader} style={{ ...secondaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <ArrowLeft size={16} />
+              <span>Volver</span>
+            </button>
+            <button onClick={goToRg90} style={{ ...primaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span>Siguiente: Comparación RG90</span>
+              <ArrowRight size={16} />
+            </button>
+          </div>
+
           {/* Action Header Card */}
           <div
             style={{

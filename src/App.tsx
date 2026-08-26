@@ -641,6 +641,8 @@ export function App() {
               showCargaCard={!converted || cargaUploaderOpen}
               showStep2Content={converted && !cargaUploaderOpen}
               openCargaUploader={() => setCargaUploaderOpen(true)}
+              closeCargaUploader={() => setCargaUploaderOpen(false)}
+              goToRg90={() => setScreen('rg90')}
               deleteLibro={deleteLibro}
               downloadLimpio={downloadLimpio}
               pagedLibro={pagedLibro}
@@ -755,6 +757,7 @@ export function App() {
           {screen === 'rg90' && (
             <RG90View
               wizardSteps={wizardSteps}
+              onVolver={() => setScreen('carga')}
               rg90Loaded={rg90Loaded}
               rg90Attached={rg90Attached}
               rg90StatusText={

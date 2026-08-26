@@ -1,9 +1,15 @@
 import React, { useRef } from 'react';
-import { GitCompare, UploadCloud, RefreshCw, X } from 'lucide-react';
+import { GitCompare, UploadCloud, RefreshCw, X, ArrowLeft } from 'lucide-react';
 import { WizardSteps } from '../components/WizardSteps';
+import { secondaryBtnStyle } from '../components/Modal';
+
+// Misma fila de navegación (Volver) que usa Libro de Compras arriba de cada paso — acá no
+// hay "Siguiente" porque es el último paso, igual que el paso 3 de Compras.
+const navRowStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
 
 interface RG90ViewProps {
   wizardSteps: any[];
+  onVolver: () => void;
   rg90Loaded: boolean;
   rg90Attached: boolean;
   rg90StatusText: string;
@@ -30,6 +36,7 @@ interface RG90ViewProps {
 
 export const RG90View: React.FC<RG90ViewProps> = ({
   wizardSteps,
+  onVolver,
   rg90Loaded,
   rg90StatusText,
   rg90FileLabel,
@@ -57,6 +64,14 @@ export const RG90View: React.FC<RG90ViewProps> = ({
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* 3 Step Wizard Progress Bar */}
       <WizardSteps steps={wizardSteps} />
+
+      <div style={navRowStyle}>
+        <button onClick={onVolver} style={{ ...secondaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <ArrowLeft size={16} />
+          <span>Volver</span>
+        </button>
+        <span />
+      </div>
 
       {/* Upload RG90 Section */}
       <div
