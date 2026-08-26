@@ -55,8 +55,6 @@ interface CargaViewProps {
   nextBtnStyle: string;
   onVerTodos: () => void;
   step2Cards: any[];
-  alohaLoaded: boolean;
-  hioposLoaded: boolean;
   libroColumnFilters: { key: string; label: string; allValues: string[]; active: Set<string> | null; onChange: (next: Set<string> | null) => void }[];
   hayLibroColFiltrosActivos: boolean;
   limpiarLibroColFiltros: () => void;
@@ -65,9 +63,6 @@ interface CargaViewProps {
 
 export const CargaView: React.FC<CargaViewProps> = ({
   wizardSteps,
-  systemOptions,
-  selectedSystemKey,
-  onSelectSystem,
   onFileUpload,
   uploadedFilesList,
   removeAllFiles,
@@ -130,88 +125,46 @@ export const CargaView: React.FC<CargaViewProps> = ({
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <div>
-              <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#22262b' }}>
-                1. Cargar reportes en bruto de sistemas POS
-              </h3>
-              <p style={{ fontSize: '12.5px', color: '#5c6470', marginTop: '2px' }}>
-                Seleccioná el sistema origen y adjuntá los reportes descargados (Aloha .xls / Hiopos .xls)
-              </p>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <select
-                value={selectedSystemKey}
-                onChange={onSelectSystem}
-                style={{
-                  backgroundColor: '#ffffff',
-                  border: '1px solid #e2e0da',
-                  borderRadius: '7px',
-                  padding: '9px 12px',
-                  fontSize: '12.5px',
-                  fontWeight: 600,
-                  color: '#22262b',
-                }}
-              >
-                {systemOptions.map((s) => (
-                  <option key={s.key} value={s.key}>
-                    {s.label} — {s.desc}
-                  </option>
-                ))}
-              </select>
-
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                style={{
-                  backgroundColor: '#128752',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: '7px',
-                  padding: '9px 16px',
-                  fontSize: '12.5px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                }}
-              >
-                <UploadCloud size={16} />
-                <span>Adjuntar archivo</span>
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept=".xls,.xlsx,.csv"
-                style={{ display: 'none' }}
-                onChange={(e) => e.target.files && onFileUpload(e.target.files)}
-              />
-            </div>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#22262b' }}>
+              1. Adjuntar el libro de ventas del sistema
+            </h3>
           </div>
 
-          {/* Dropzone Box */}
-          <div
-            onClick={() => fileInputRef.current?.click()}
+          {/* Dropzone — mismo tamaño y texto que el de Libro de Compras: ya no hace falta
+              elegir el sistema antes de adjuntar, se detecta automáticamente por archivo al
+              analizar (ver el campo "Sistema" apagado en el listado de abajo). */}
+          <label
             style={{
-              border: '2px dashed #cfd6d0',
-              borderRadius: '10px',
-              padding: '32px 24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              border: '2px dashed #e2e0da',
+              borderRadius: '9px',
+              padding: '18px',
               textAlign: 'center',
               cursor: 'pointer',
+              fontSize: '13px',
+              color: '#5c6470',
               backgroundColor: '#fafbfa',
-              transition: 'all 0.15s ease',
               marginBottom: '20px',
             }}
           >
-            <UploadCloud size={36} color="#128752" style={{ margin: '0 auto 8px' }} />
-            <div style={{ fontSize: '13.5px', fontWeight: 600, color: '#22262b' }}>
-              Arrastrá los reportes en bruto acá o hacé clic para seleccionar
-            </div>
-            <div style={{ fontSize: '11.5px', color: '#9aa1ab', marginTop: '4px' }}>
-              Formatos soportados: Excel (.xls, .xlsx) descargados directamente de Aloha o Hiopos
-            </div>
-          </div>
+            <UploadCloud size={18} color="#128752" />
+            <span>
+              {uploadedFilesList.length > 0
+                ? `${uploadedFilesList.length} archivo(s) adjuntado(s) — click para agregar más`
+                : 'Click para adjuntar el archivo (.xls, .xlsx)'}
+            </span>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept=".xls,.xlsx,.csv"
+              style={{ display: 'none' }}
+              onChange={(e) => { if (e.target.files && e.target.files.length > 0) onFileUpload(e.target.files); e.target.value = ''; }}
+            />
+          </label>
 
           {/* Uploaded Files List */}
           {uploadedFilesList.length > 0 && (
@@ -261,15 +214,36 @@ export const CargaView: React.FC<CargaViewProps> = ({
                       <FileSpreadsheet size={18} color="#128752" />
                       <div>
                         <div style={{ fontSize: '13px', fontWeight: 600, color: '#22262b' }}>{f.fileName}</div>
-                        <div style={{ fontSize: '11px', color: '#9aa1ab' }}>
-                          Sistema: {f.sistemaLabel} · Carga: {f.uploadedAt}
+                        <div style={{ fontSize: '11px', color: '#9aa1ab', marginTop: '2px' }}>
+                          Carga: {f.uploadedAt}
                         </div>
                       </div>
                     </div>
 
-                    <button onClick={f.removeFile} style={parseInlineStyle(f.removeBtnStyle)}>
-                      Eliminar
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      {/* Campo "apagado": el sistema ya no se elige antes de adjuntar, se
+                          detecta al analizar (ver doConvert en App.tsx) — acá solo se
+                          muestra lo que se detectó, no es editable. */}
+                      <span
+                        title="Sistema detectado automáticamente al analizar"
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          color: '#9aa1ab',
+                          backgroundColor: '#f0eee8',
+                          border: '1px solid #e2e0da',
+                          borderRadius: '6px',
+                          padding: '5px 10px',
+                          cursor: 'not-allowed',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {f.sistemaLabel}
+                      </span>
+                      <button onClick={f.removeFile} style={parseInlineStyle(f.removeBtnStyle)}>
+                        Eliminar
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

@@ -177,16 +177,16 @@ export function App() {
     { key: 'Salto de numeración', label: 'Saltos', value: `${rg90Summary?.saltos ?? 0}`, color: '#b0740f' },
   ];
 
-  const alohaLoaded = uploadedFiles.some(f => f.sistemaKey === 'aloha');
-  const hioposLoaded = uploadedFiles.some(f => f.sistemaKey === 'hiopos');
   const hasAnyUpload = uploadedFiles.length > 0;
   const isFreshStart = !hasAnyUpload && !converted;
 
+  // El Paso 1 ya no pide elegir el sistema antes de adjuntar — se etiqueta 'auto' y el
+  // backend detecta, por archivo, cuál de los perfiles conocidos (Aloha/Hiopos/Universal)
+  // corresponde (ver doConvert). sistemaLabel queda como "Detectando…" hasta que se analiza.
   const handleFileUpload = (files: FileList) => {
-    const meta = SYSTEMS_META.find(s => s.key === selectedSystemKey) || SYSTEMS_META[0];
     const newFiles: UploadedFileMeta[] = Array.from(files).map(f => ({
       id: Date.now() + Math.random(),
-      sistemaKey: meta.key,
+      sistemaKey: 'auto',
       fileName: f.name,
       uploadedAt: 'hace un momento',
       rawFile: f,
@@ -236,38 +236,39 @@ export function App() {
       return;
     }
 
-    // Cada archivo se agrupa por el sistema con el que se adjuntó (f.sistemaKey), no por
-    // el que esté seleccionado en el dropdown al momento de analizar — así se puede cargar
-    // Aloha e Hiopos juntos en un mismo lote sin que los archivos de un sistema se validen
-    // (y rechacen) contra la firma del otro.
-    const filesPorSistema = new Map<string, File[]>();
-    uploadedFiles.forEach(f => {
-      if (!f.rawFile) return;
-      const lista = filesPorSistema.get(f.sistemaKey) || [];
-      lista.push(f.rawFile);
-      filesPorSistema.set(f.sistemaKey, lista);
-    });
-
-    if (filesPorSistema.size === 0) {
-      setConvertError('No hay archivos reales adjuntados para procesar. Adjuntá un archivo Aloha o Hiopos válido.');
+    const archivosReales = uploadedFiles.filter(f => f.rawFile).map(f => f.rawFile as File);
+    if (archivosReales.length === 0) {
+      setConvertError('No hay archivos reales adjuntados para procesar. Adjuntá un reporte de Aloha, Hiopos o del Formato Universal.');
       return;
     }
 
     setConverting(true);
     setConvertError(null);
     try {
-      const resultados = await Promise.all(
-        Array.from(filesPorSistema.entries()).map(([sistemaKey, archivos]) => ingestFilesApi(archivos, sistemaKey))
-      );
-      const rows = resultados.flatMap(r => r.rows || []);
-      const gaps = resultados.flatMap(r => r.gaps || []);
-      const cortes = resultados.flatMap(r => r.cortes || []);
+      // Un solo pedido para todos los archivos — ya no hace falta agruparlos por sistema
+      // de antemano: el backend detecta, por archivo, cuál de los perfiles conocidos
+      // corresponde (ver /api/ingest y archivos_detectados en la respuesta).
+      const resultado = await ingestFilesApi(archivosReales, 'auto');
+      const rows = resultado.rows || [];
+      const gaps = resultado.gaps || [];
+      const cortes = resultado.cortes || [];
       const rowsConLocal = rows.map(r => ({ ...r, local: resolveLocal(r.doc) }));
       const gapsConLocal = gaps.map(g => ({ ...g, local: resolveLocal(g.ultimo) }));
       setLibroRows(rowsConLocal);
       setCorrelatividadRows(gapsConLocal);
       setCortesRows(cortes);
-      setLoteId(resultados[0]?.lote_id);
+      setLoteId(resultado.lote_id);
+
+      // Completa, por archivo, el sistema que detectó el backend — el campo queda
+      // "apagado" en el Paso 1, solo para mostrar qué se reconoció (ver CargaView).
+      if (resultado.archivos_detectados) {
+        const porArchivo = new Map(resultado.archivos_detectados.map(a => [a.archivo, a]));
+        setUploadedFiles(prev => prev.map(f => {
+          const detectado = porArchivo.get(f.fileName);
+          return detectado ? { ...f, sistemaKey: detectado.sistema_key, sistemaLabel: detectado.sistema_label } : f;
+        }));
+      }
+
       if (rows.length === 0) {
         setConvertError('El servidor procesó el/los archivo(s) pero no encontró ningún comprobante válido. Revisá que sea el reporte correcto (hoja "tal como se descarga del sistema", sin editar a mano).');
       }
@@ -611,7 +612,7 @@ export function App() {
               onFileUpload={handleFileUpload}
               uploadedFilesList={uploadedFiles.map(f => ({
                 ...f,
-                sistemaLabel: (SYSTEMS_META.find(s => s.key === f.sistemaKey) || {}).label || f.sistemaKey,
+                sistemaLabel: f.sistemaLabel || 'Detectando…',
                 removeFile: () => setUploadedFiles(prev => prev.filter(x => x.id !== f.id)),
                 removeBtnStyle: 'background:#fff;border:1px solid #e2e0da;color:#b3402f;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer',
               }))}
@@ -620,16 +621,16 @@ export function App() {
               canConvertir={puede('boton:carga.convertir')}
               canBorrarLibro={puede('boton:carga.borrar_libro')}
               canDescargarCsv={puede('boton:carga.descargar_csv')}
-              canConvert={alohaLoaded || hioposLoaded}
+              canConvert={hasAnyUpload}
               convertHelpText={
                 converted
                   ? 'Ya existe un análisis generado para estos reportes.'
-                  : (alohaLoaded || hioposLoaded)
-                  ? 'Se aplicará el mapeo de campos definido para comparar y consolidar los reportes en un libro de ventas unificado.'
-                  : 'Cargá los reportes de Aloha o Hiopos para habilitar el análisis.'
+                  : hasAnyUpload
+                  ? 'Se detecta automáticamente el sistema de cada reporte adjuntado (Aloha, Hiopos o Universal) para armar el libro de ventas unificado.'
+                  : 'Adjuntá un reporte de Aloha, Hiopos o del Formato Universal para habilitar el análisis.'
               }
               convertBtnStyle={
-                (alohaLoaded || hioposLoaded) || converted
+                hasAnyUpload || converted
                   ? 'background:#f0a63d;color:#1a1a1a;border:none;border-radius:7px;padding:12px 20px;font-size:13px;font-weight:700;cursor:pointer'
                   : 'background:#e5e2da;color:#9aa1ab;border:none;border-radius:7px;padding:12px 20px;font-size:13px;font-weight:700;cursor:not-allowed'
               }
@@ -676,8 +677,6 @@ export function App() {
                 { label: 'Comprobantes', value: `${libroRows.length}` },
                 { label: 'Saltos', value: `${correlatividadRows.length}` },
               ]}
-              alohaLoaded={alohaLoaded}
-              hioposLoaded={hioposLoaded}
             />
           )}
 

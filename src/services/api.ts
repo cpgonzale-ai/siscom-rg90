@@ -45,6 +45,9 @@ export interface IngestResult {
   rows: LibroRow[];
   gaps: CorrelatividadRow[];
   cortes: CorteRow[];
+  // Sistema detectado automáticamente por archivo (el Paso 1 ya no lo pide de antemano) —
+  // ver /api/ingest.
+  archivos_detectados?: { archivo: string; sistema_key: string; sistema_label: string }[];
 }
 
 export interface CorrelatividadRow {
@@ -139,6 +142,9 @@ export interface CompraReconcileResult {
 export interface UploadedFileMeta {
   id: number;
   sistemaKey: string;
+  // Se completa recién después de analizar (ver archivos_detectados en IngestResult) — el
+  // Paso 1 ya no pide elegir el sistema de antemano, lo detecta el backend por archivo.
+  sistemaLabel?: string;
   fileName: string;
   uploadedAt: string;
   rawFile?: File;
