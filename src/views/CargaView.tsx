@@ -1,6 +1,8 @@
 import React, { useRef } from 'react';
 import { UploadCloud, FileSpreadsheet, Trash2, Search, Download, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { WizardSteps } from '../components/WizardSteps';
+import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
+import { secondaryBtnStyle } from '../components/Modal';
 
 interface CargaViewProps {
   wizardSteps: any[];
@@ -51,6 +53,9 @@ interface CargaViewProps {
   step2Cards: any[];
   alohaLoaded: boolean;
   hioposLoaded: boolean;
+  libroColumnFilters: { key: string; label: string; allValues: string[]; active: Set<string> | null; onChange: (next: Set<string> | null) => void }[];
+  hayLibroColFiltrosActivos: boolean;
+  limpiarLibroColFiltros: () => void;
 }
 
 export const CargaView: React.FC<CargaViewProps> = ({
@@ -96,6 +101,9 @@ export const CargaView: React.FC<CargaViewProps> = ({
   prevBtnStyle,
   nextBtnStyle,
   onVerTodos,
+  libroColumnFilters,
+  hayLibroColFiltrosActivos,
+  limpiarLibroColFiltros,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -421,45 +429,53 @@ export const CargaView: React.FC<CargaViewProps> = ({
               </button>
             </div>
 
-            {/* Universal Search Input */}
-            <div style={{ position: 'relative', width: '320px' }}>
-              <Search
-                size={16}
-                color="#9aa1ab"
-                style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}
-              />
-              <input
-                type="text"
-                placeholder="Buscar por doc, RUC, cliente, local..."
-                value={searchGeneral}
-                onChange={onSearchGeneral}
-                style={{
-                  width: '100%',
-                  padding: '9px 12px 9px 36px',
-                  border: '1px solid #e2e0da',
-                  borderRadius: '7px',
-                  fontSize: '12.5px',
-                  backgroundColor: '#ffffff',
-                }}
-              />
-              {searchGeneral && (
-                <button
-                  onClick={clearSearch}
-                  style={{
-                    position: 'absolute',
-                    right: '10px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    border: 'none',
-                    background: 'none',
-                    color: '#9aa1ab',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                  }}
-                >
-                  ✕
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {hayLibroColFiltrosActivos && (
+                <button onClick={limpiarLibroColFiltros} style={{ ...secondaryBtnStyle, padding: '9px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
+                  Limpiar filtros
                 </button>
               )}
+
+              {/* Universal Search Input */}
+              <div style={{ position: 'relative', width: '320px' }}>
+                <Search
+                  size={16}
+                  color="#9aa1ab"
+                  style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}
+                />
+                <input
+                  type="text"
+                  placeholder="Buscar por doc, RUC, cliente, local..."
+                  value={searchGeneral}
+                  onChange={onSearchGeneral}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px 9px 36px',
+                    border: '1px solid #e2e0da',
+                    borderRadius: '7px',
+                    fontSize: '12.5px',
+                    backgroundColor: '#ffffff',
+                  }}
+                />
+                {searchGeneral && (
+                  <button
+                    onClick={clearSearch}
+                    style={{
+                      position: 'absolute',
+                      right: '10px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      border: 'none',
+                      background: 'none',
+                      color: '#9aa1ab',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                    }}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -469,20 +485,27 @@ export const CargaView: React.FC<CargaViewProps> = ({
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
               <thead>
                 <tr style={{ backgroundColor: '#fafbfa', borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-                  <th style={{ padding: '12px 14px', fontWeight: 600 }}>Documento</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 600 }}>Tipo</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 600 }}>Sistema</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 600 }}>Local</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 600 }}>Fecha</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 600 }}>RUC</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 600 }}>Nombre</th>
+                  {['doc', 'tipo_doc', 'sistema', 'local', 'fecha', 'ruc', 'nombre'].map(key => {
+                    const col = libroColumnFilters.find(c => c.key === key);
+                    if (!col) return <th key={key} style={{ padding: '12px 14px', fontWeight: 600 }} />;
+                    return (
+                      <th key={key} style={{ padding: '12px 14px', fontWeight: 600 }}>
+                        <ExcelFilterHeader label={col.label} allValues={col.allValues} active={col.active} onChange={col.onChange} />
+                      </th>
+                    );
+                  })}
                   <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>Gravadas 10%</th>
                   <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 10%</th>
                   <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>Gravadas 5%</th>
                   <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 5%</th>
                   <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>Exentas</th>
                   <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>Total</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 600 }}>Estado</th>
+                  <th style={{ padding: '12px 14px', fontWeight: 600 }}>
+                    {(() => {
+                      const col = libroColumnFilters.find(c => c.key === 'estado');
+                      return col ? <ExcelFilterHeader label={col.label} allValues={col.allValues} active={col.active} onChange={col.onChange} /> : 'Estado';
+                    })()}
+                  </th>
                 </tr>
               </thead>
               <tbody>

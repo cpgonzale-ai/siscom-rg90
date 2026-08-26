@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { WizardSteps } from '../components/WizardSteps';
+import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
 import { secondaryBtnStyle, primaryBtnStyle, dangerBtnStyle } from '../components/Modal';
 import type { Local, CompraRow, CompraDiffRow } from '../services/api';
 import { ingestComprasApi, reconcileComprasApi } from '../services/api';
@@ -22,6 +23,31 @@ interface ArchivoAdjunto {
 
 const PAGE_SIZE = 50;
 
+// Columnas con filtro tipo Excel en la grilla del libro cargado (paso 1) — se dejan afuera
+// los importes (Gravada/IVA/Exenta/Total): son valores casi todos distintos entre sí, un
+// listado de checkboxes ahí no ayuda, para eso ya está el buscador general.
+const LIBRO_COLUMNAS: { key: string; label: string; getValue: (r: CompraRow) => string }[] = [
+  { key: 'doc', label: 'Documento', getValue: r => r.doc },
+  { key: 'local', label: 'Local', getValue: r => r.local || '' },
+  { key: 'fecha', label: 'Fecha', getValue: r => r.fecha },
+  { key: 'proveedor', label: 'RUC / Proveedor', getValue: r => `${r.ruc_proveedor}-${r.dv_proveedor} — ${r.proveedor}` },
+  { key: 'tipo_doc', label: 'Tipo', getValue: r => r.tipo_doc },
+  { key: 'condicion', label: 'Forma de pago', getValue: r => r.condicion || '' },
+  { key: 'timbrado', label: 'Timbrado', getValue: r => r.timbrado || '' },
+  { key: 'estado', label: 'Estado', getValue: r => r.estado },
+];
+
+// Misma idea para la grilla de la RG (paso 2) — sin Estado, esa grilla no tiene esa columna.
+const RG_COLUMNAS: { key: string; label: string; getValue: (r: CompraRow) => string }[] = [
+  { key: 'doc', label: 'Documento', getValue: r => r.doc },
+  { key: 'local', label: 'Local', getValue: r => r.local || '' },
+  { key: 'fecha', label: 'Fecha', getValue: r => r.fecha },
+  { key: 'proveedor', label: 'RUC / Proveedor', getValue: r => `${r.ruc_proveedor}${r.dv_proveedor ? `-${r.dv_proveedor}` : ''} — ${r.proveedor}` },
+  { key: 'tipo_doc', label: 'Tipo', getValue: r => r.tipo_doc },
+  { key: 'condicion', label: 'Forma de pago', getValue: r => r.condicion || '' },
+  { key: 'timbrado', label: 'Timbrado', getValue: r => r.timbrado || '' },
+];
+
 export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) => {
   const puede = (clave: string) => permisos.has(clave);
 
@@ -36,6 +62,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const [loteId, setLoteId] = useState<number | undefined>(undefined);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [colFiltros, setColFiltros] = useState<Record<string, Set<string> | null>>({});
 
   // ── Paso 2: adjuntar RG y su propia grilla ──────────────────────────────
   const [rgFiles, setRgFiles] = useState<File[]>([]);
@@ -44,6 +71,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const [rgRows, setRgRows] = useState<CompraRow[]>([]);
   const [rgGridSearch, setRgGridSearch] = useState('');
   const [rgGridPage, setRgGridPage] = useState(1);
+  const [rgColFiltros, setRgColFiltros] = useState<Record<string, Set<string> | null>>({});
 
   // ── Paso 3: resultado de la comparación ─────────────────────────────────
   const [diffs, setDiffs] = useState<CompraDiffRow[]>([]);
@@ -132,8 +160,10 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
     setRows([]);
     setLoteId(undefined);
     setArchivos([]);
+    setColFiltros({});
     setRgFiles([]);
     setRgRows([]);
+    setRgColFiltros({});
     setDiffs([]);
     setSummary(null);
     setDiffCategoryFilter('');
@@ -155,6 +185,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const quitarRg = () => {
     setRgFiles([]);
     setRgRows([]);
+    setRgColFiltros({});
     setDiffs([]);
     setSummary(null);
     setDiffCategoryFilter('');
@@ -206,22 +237,38 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   };
 
   const filteredRows = useMemo(() => {
-    if (!search.trim()) return rows;
-    const q = search.trim().toLowerCase();
-    return rows.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
-  }, [rows, search]);
+    let lista = rows;
+    for (const col of LIBRO_COLUMNAS) {
+      const activo = colFiltros[col.key];
+      if (activo) lista = lista.filter(r => activo.has(col.getValue(r)));
+    }
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      lista = lista.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
+    }
+    return lista;
+  }, [rows, search, colFiltros]);
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const currentPage = Math.min(Math.max(1, page), totalPages);
   const pagedRows = filteredRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const hayColFiltrosActivos = Object.values(colFiltros).some(v => v !== null && v !== undefined);
 
   const filteredRgRows = useMemo(() => {
-    if (!rgGridSearch.trim()) return rgRows;
-    const q = rgGridSearch.trim().toLowerCase();
-    return rgRows.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
-  }, [rgRows, rgGridSearch]);
+    let lista = rgRows;
+    for (const col of RG_COLUMNAS) {
+      const activo = rgColFiltros[col.key];
+      if (activo) lista = lista.filter(r => activo.has(col.getValue(r)));
+    }
+    if (rgGridSearch.trim()) {
+      const q = rgGridSearch.trim().toLowerCase();
+      lista = lista.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
+    }
+    return lista;
+  }, [rgRows, rgGridSearch, rgColFiltros]);
   const totalRgPages = Math.max(1, Math.ceil(filteredRgRows.length / PAGE_SIZE));
   const currentRgPage = Math.min(Math.max(1, rgGridPage), totalRgPages);
   const pagedRgRows = filteredRgRows.slice((currentRgPage - 1) * PAGE_SIZE, currentRgPage * PAGE_SIZE);
+  const hayRgColFiltrosActivos = Object.values(rgColFiltros).some(v => v !== null && v !== undefined);
 
   const filteredDiffs = useMemo(() => {
     let list = diffs;
@@ -317,13 +364,18 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
       {rows.length > 0 && (
         <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', overflow: 'hidden' }}>
           <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e0da', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fafbfa', flexWrap: 'wrap', gap: '10px' }}>
-            <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>Libro de Compras ({rows.length.toLocaleString('es-PY')} comprobantes)</h4>
+            <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>Libro de Compras ({filteredRows.length.toLocaleString('es-PY')} de {rows.length.toLocaleString('es-PY')} comprobantes)</h4>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <input
                 type="text" placeholder="Buscar..." value={search}
                 onChange={e => { setSearch(e.target.value); setPage(1); }}
                 style={{ padding: '7px 12px', border: '1px solid #e2e0da', borderRadius: '6px', fontSize: '12px', width: '200px' }}
               />
+              {hayColFiltrosActivos && (
+                <button onClick={() => { setColFiltros({}); setPage(1); }} style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px' }}>
+                  Limpiar filtros
+                </button>
+              )}
               {puede('boton:compras.descargar_csv') && (
                 <button onClick={descargarCsv} style={{ ...secondaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <Download size={14} />
@@ -343,20 +395,30 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>Documento</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>Local</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>Fecha</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>RUC / Proveedor</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>Tipo</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>Forma de pago</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>Timbrado</th>
+                  {LIBRO_COLUMNAS.filter(col => col.key !== 'estado').map(col => (
+                    <th key={col.key} style={{ padding: '10px 14px', fontWeight: 600 }}>
+                      <ExcelFilterHeader
+                        label={col.label}
+                        allValues={rows.map(col.getValue)}
+                        active={colFiltros[col.key] ?? null}
+                        onChange={(next) => { setColFiltros(prev => ({ ...prev, [col.key]: next })); setPage(1); }}
+                      />
+                    </th>
+                  ))}
                   <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>Gravada 10%</th>
                   <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 10%</th>
                   <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>Gravada 5%</th>
                   <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 5%</th>
                   <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>Exenta</th>
                   <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>Total</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>Estado</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>
+                    <ExcelFilterHeader
+                      label="Estado"
+                      allValues={rows.map(r => r.estado)}
+                      active={colFiltros['estado'] ?? null}
+                      onChange={(next) => { setColFiltros(prev => ({ ...prev, estado: next })); setPage(1); }}
+                    />
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -478,25 +540,35 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
       {rgRows.length > 0 && (
         <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', overflow: 'hidden' }}>
           <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e0da', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fafbfa', flexWrap: 'wrap', gap: '10px' }}>
-            <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>RG (SET) — Compras ({rgRows.length.toLocaleString('es-PY')} comprobantes)</h4>
-            <input
-              type="text" placeholder="Buscar..." value={rgGridSearch}
-              onChange={e => { setRgGridSearch(e.target.value); setRgGridPage(1); }}
-              style={{ padding: '7px 12px', border: '1px solid #e2e0da', borderRadius: '6px', fontSize: '12px', width: '200px' }}
-            />
+            <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>RG (SET) — Compras ({filteredRgRows.length.toLocaleString('es-PY')} de {rgRows.length.toLocaleString('es-PY')} comprobantes)</h4>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <input
+                type="text" placeholder="Buscar..." value={rgGridSearch}
+                onChange={e => { setRgGridSearch(e.target.value); setRgGridPage(1); }}
+                style={{ padding: '7px 12px', border: '1px solid #e2e0da', borderRadius: '6px', fontSize: '12px', width: '200px' }}
+              />
+              {hayRgColFiltrosActivos && (
+                <button onClick={() => { setRgColFiltros({}); setRgGridPage(1); }} style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px' }}>
+                  Limpiar filtros
+                </button>
+              )}
+            </div>
           </div>
 
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>Documento</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>Local</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>Fecha</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>RUC / Proveedor</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>Tipo</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>Forma de pago</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>Timbrado</th>
+                  {RG_COLUMNAS.map(col => (
+                    <th key={col.key} style={{ padding: '10px 14px', fontWeight: 600 }}>
+                      <ExcelFilterHeader
+                        label={col.label}
+                        allValues={rgRows.map(col.getValue)}
+                        active={rgColFiltros[col.key] ?? null}
+                        onChange={(next) => { setRgColFiltros(prev => ({ ...prev, [col.key]: next })); setRgGridPage(1); }}
+                      />
+                    </th>
+                  ))}
                   <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>Gravada 10%</th>
                   <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 10%</th>
                   <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>Gravada 5%</th>

@@ -66,6 +66,20 @@ const SYSTEMS_META = [
   { key: 'universal', label: 'Universal', desc: 'Planilla estándar para locales sin export de Aloha/Hiopos' },
 ];
 
+// Columnas con filtro tipo Excel en la grilla del libro de ventas unificado (paso 2 de
+// Carga). Se dejan afuera los importes (Gravadas/IVA/Exentas/Total): valores casi todos
+// distintos entre sí, ahí ya está el buscador general — un listado de checkboxes no ayuda.
+const LIBRO_COLUMNAS: { key: string; label: string; getValue: (r: LibroRow) => string }[] = [
+  { key: 'doc', label: 'Documento', getValue: r => r.doc },
+  { key: 'tipo_doc', label: 'Tipo', getValue: r => r.tipo_doc || 'Factura' },
+  { key: 'sistema', label: 'Sistema', getValue: r => r.sistema },
+  { key: 'local', label: 'Local', getValue: r => r.local },
+  { key: 'fecha', label: 'Fecha', getValue: r => r.fecha },
+  { key: 'ruc', label: 'RUC', getValue: r => r.ruc },
+  { key: 'nombre', label: 'Nombre', getValue: r => r.nombre },
+  { key: 'estado', label: 'Estado', getValue: r => r.estado },
+];
+
 export function App() {
   const [authed, setAuthed] = useState<boolean>(!!getAuthToken());
   const [screen, setScreen] = useState<Screen>('dashboard');
@@ -136,6 +150,7 @@ export function App() {
   const [estadoFilter] = useState<string>('');
   const [correlFiltro, setCorrelFiltro] = useState<string>('Todos');
   const [searchGeneral, setSearchGeneral] = useState<string>('');
+  const [libroColFiltros, setLibroColFiltros] = useState<Record<string, Set<string> | null>>({});
   const [page, setPage] = useState<number>(1);
   const [libroCompletoSearch, setLibroCompletoSearch] = useState<string>('');
   const pageSize = 20;
@@ -328,6 +343,7 @@ export function App() {
       onConfirm: () => {
         setConverted(false);
         setLibroRows([]);
+        setLibroColFiltros({});
         setCorrelatividadRows([]);
         setCortesRows([]);
         setRg90Loaded(false);
@@ -466,10 +482,24 @@ export function App() {
   // Table filtering and pagination
   let filteredLibro = libroRows.filter(r => matchesSistema(r.sistema, filtro));
   if (estadoFilter) filteredLibro = filteredLibro.filter(r => r.estado === estadoFilter);
+  for (const col of LIBRO_COLUMNAS) {
+    const activo = libroColFiltros[col.key];
+    if (activo) filteredLibro = filteredLibro.filter(r => activo.has(col.getValue(r)));
+  }
   if (searchGeneral.trim()) {
     const q = searchGeneral.trim().toLowerCase();
     filteredLibro = filteredLibro.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
   }
+
+  const libroColumnFilters = LIBRO_COLUMNAS.map(col => ({
+    key: col.key,
+    label: col.label,
+    allValues: libroRows.map(col.getValue),
+    active: libroColFiltros[col.key] ?? null,
+    onChange: (next: Set<string> | null) => { setLibroColFiltros(prev => ({ ...prev, [col.key]: next })); setPage(1); },
+  }));
+  const hayLibroColFiltrosActivos = Object.values(libroColFiltros).some(v => v !== null && v !== undefined);
+  const limpiarLibroColFiltros = () => { setLibroColFiltros({}); setPage(1); };
 
   const totalPages = Math.max(1, Math.ceil(filteredLibro.length / pageSize));
   const currentPage = Math.min(Math.max(1, page), totalPages);
@@ -602,6 +632,9 @@ export function App() {
               deleteLibro={deleteLibro}
               downloadLimpio={downloadLimpio}
               pagedLibro={pagedLibro}
+              libroColumnFilters={libroColumnFilters}
+              hayLibroColFiltrosActivos={hayLibroColFiltrosActivos}
+              limpiarLibroColFiltros={limpiarLibroColFiltros}
               filterStyleTodos={filtro === 'Todos' ? 'background:#128752;border:1px solid #128752;color:#fff;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer' : 'background:#fff;border:1px solid #e2e0da;color:#5c6470;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer'}
               filterStyleAloha={filtro === 'Aloha' ? 'background:#128752;border:1px solid #128752;color:#fff;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer' : 'background:#fff;border:1px solid #e2e0da;color:#5c6470;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer'}
               filterStyleHiopos={filtro === 'Hiopos' ? 'background:#128752;border:1px solid #128752;color:#fff;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer' : 'background:#fff;border:1px solid #e2e0da;color:#5c6470;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer'}
