@@ -38,6 +38,8 @@ interface CargaViewProps {
   openCargaUploader: () => void;
   closeCargaUploader: () => void;
   goToRg90: () => void;
+  saltosCount: number;
+  goToCorrelatividad: () => void;
   deleteLibro: () => void;
   downloadLimpio: () => void;
   pagedLibro: any[];
@@ -88,6 +90,8 @@ export const CargaView: React.FC<CargaViewProps> = ({
   openCargaUploader,
   closeCargaUploader,
   goToRg90,
+  saltosCount,
+  goToCorrelatividad,
   deleteLibro,
   downloadLimpio,
   pagedLibro,
@@ -420,6 +424,35 @@ export const CargaView: React.FC<CargaViewProps> = ({
 
           {/* Los cortes/subtotales del reporte original ya no se muestran acá — quedan
               guardados en memoria (App.tsx) para usarse al armar el libro en limpio. */}
+
+          {/* Totalizador de saltos de numeración — lleva al detalle en Control de
+              correlatividad, no se resuelve acá (esta grilla no muestra huecos, solo el
+              libro ya consolidado). */}
+          <div
+            onClick={goToCorrelatividad}
+            style={{
+              backgroundColor: saltosCount > 0 ? '#fdf1de' : '#ffffff',
+              border: `1px solid ${saltosCount > 0 ? '#f0a63d' : '#e2e0da'}`,
+              borderRadius: '10px',
+              padding: '16px 20px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: '#5c6470' }}>Saltos de numeración</div>
+              <div style={{ fontSize: '24px', fontWeight: 700, color: saltosCount > 0 ? '#b0740f' : '#128752', marginTop: '4px' }}>
+                {saltosCount}
+              </div>
+            </div>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: '#5c6470', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              Ver control de correlatividad
+              <ArrowRight size={14} />
+            </span>
+          </div>
 
           {/* Cards & Controls Bar */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
