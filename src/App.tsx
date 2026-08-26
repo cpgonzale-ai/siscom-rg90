@@ -158,6 +158,14 @@ export function App() {
   const [rg90Search, setRg90Search] = useState<string>('');
   const [rg90CategoryFilter, setRg90CategoryFilter] = useState<string>('');
 
+  // Paso 3 (Adjuntar RG90 y listar) vs Paso 4 (Resultado) — mismo criterio que el
+  // pasoMostrado de ComprasView: se muestra un paso a la vez, no se acumula todo abajo.
+  const [rg90PasoMostrado, setRg90PasoMostrado] = useState<3 | 4>(3);
+  const [rg90Rows, setRg90Rows] = useState<LibroRow[]>([]);
+  const [rg90GridSearch, setRg90GridSearch] = useState<string>('');
+  const [rg90GridPage, setRg90GridPage] = useState<number>(1);
+  const [rg90GridColFiltros, setRg90GridColFiltros] = useState<Record<string, Set<string> | null>>({});
+
   const [libroRows, setLibroRows] = useState<LibroRow[]>([]);
   const [correlatividadRows, setCorrelatividadRows] = useState<CorrelatividadRow[]>([]);
   const [cortesRows, setCortesRows] = useState<CorteRow[]>([]);
@@ -308,6 +316,8 @@ export function App() {
     try {
       const res = await reconcileApi(rg90Files, libroRows, loteId);
       setRg90DiffRows(res.diffs || []);
+      setRg90Rows(res.rg90_rows || []);
+      setRg90GridPage(1);
       setRg90Summary({
         coinciden: res.summary?.coinciden ?? 0,
         no_en_rg90: res.summary?.no_en_rg90 ?? 0,
@@ -315,6 +325,8 @@ export function App() {
         saltos: res.summary?.saltos ?? 0,
       });
       setRg90Loaded(true);
+      // Se queda en el Paso 3, listando los registros de la RG90 — el usuario avanza al
+      // Paso 4 con "Siguiente" cuando quiera ver el resultado, igual que Compras.
     } catch (e) {
       setRg90Error(e instanceof Error ? e.message : 'Error al ejecutar la comparación RG90.');
     } finally {
@@ -333,6 +345,9 @@ export function App() {
         setRg90DiffRows([]);
         setRg90Summary(null);
         setRg90Error(null);
+        setRg90Rows([]);
+        setRg90GridColFiltros({});
+        setRg90PasoMostrado(3);
       },
     });
   };
@@ -353,6 +368,9 @@ export function App() {
         setRg90DiffRows([]);
         setRg90Summary(null);
         setRg90Error(null);
+        setRg90Rows([]);
+        setRg90GridColFiltros({});
+        setRg90PasoMostrado(3);
         setCargaUploaderOpen(true);
       },
     });
@@ -437,11 +455,11 @@ export function App() {
     guidanceText = 'Ya cargaste reportes. Analizalos y convertilos para generar el libro de ventas.';
   } else if (converted && !rg90Loaded) {
     nextCtaLabel = 'Cargar y comparar RG90';
-    nextCtaAction = () => setScreen('rg90');
+    nextCtaAction = () => { setScreen('rg90'); setRg90PasoMostrado(3); };
     guidanceText = 'El libro de ventas ya está listo. Cargá el archivo RG90 para comparar.';
   } else if (converted && rg90Loaded) {
     nextCtaLabel = 'Ver comparación';
-    nextCtaAction = () => setScreen('rg90');
+    nextCtaAction = () => { setScreen('rg90'); setRg90PasoMostrado(4); };
     guidanceText = 'Todo listo — revisá el resultado de la comparación.';
   }
 
@@ -458,12 +476,17 @@ export function App() {
     statusTextStyle: st.status === 'done' ? 'color:#128752' : st.status === 'active' ? 'color:#b0740f' : 'color:#9aa1ab',
   }));
 
+  // Paso 3 (Adjuntar RG90 y listar) y Paso 4 (Resultado) viven en la misma pantalla
+  // ('rg90'), distinguidos por rg90PasoMostrado — igual que Compras separa sus 3 pasos
+  // dentro de una sola vista. current se calcula por pantalla+estado, no solo por
+  // converted/rg90Loaded, para que el paso activo refleje dónde está el usuario de verdad.
   const wizardSteps = [
     { n: 1, label: 'Cargar reportes' },
     { n: 2, label: 'Datos comparados' },
-    { n: 3, label: 'Comparación RG90' },
+    { n: 3, label: 'Adjuntar RG90' },
+    { n: 4, label: 'Resultados' },
   ].map(st => {
-    const current = !converted ? 1 : !rg90Loaded ? 2 : 3;
+    const current = !converted ? 1 : screen !== 'rg90' ? 2 : !rg90Loaded ? 3 : 4;
     const active = st.n === current;
     const done = st.n < current;
     const reachable = st.n <= current;
@@ -475,7 +498,8 @@ export function App() {
       goTo: !reachable || active ? undefined : () => {
         if (st.n === 1) setScreen('carga');
         else if (st.n === 2) setScreen('carga');
-        else setScreen('rg90');
+        else if (st.n === 3) { setScreen('rg90'); setRg90PasoMostrado(3); }
+        else { setScreen('rg90'); setRg90PasoMostrado(4); }
       },
     };
   });
@@ -519,6 +543,38 @@ export function App() {
     ...r,
     estadoStyle: r.estado === 'Anulada' ? 'background:#fbe9e3;color:#b3402f;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px' : 'background:#e8f3ec;color:#128752;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px',
   }));
+
+  // Grilla del Paso 3 (Adjuntar RG90) — mismos filtros/columnas/totalizador que la del
+  // Paso 2, reutilizando LIBRO_COLUMNAS porque rg90Rows tiene la misma forma (LibroRow[]).
+  let filteredRg90Rows = rg90Rows;
+  for (const col of LIBRO_COLUMNAS) {
+    const activo = rg90GridColFiltros[col.key];
+    if (activo) filteredRg90Rows = filteredRg90Rows.filter(r => activo.has(col.getValue(r)));
+  }
+  if (rg90GridSearch.trim()) {
+    const q = rg90GridSearch.trim().toLowerCase();
+    filteredRg90Rows = filteredRg90Rows.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
+  }
+  const rg90GridColumnFilters = LIBRO_COLUMNAS.map(col => ({
+    key: col.key,
+    label: col.label,
+    allValues: rg90Rows.map(col.getValue),
+    active: rg90GridColFiltros[col.key] ?? null,
+    onChange: (next: Set<string> | null) => { setRg90GridColFiltros(prev => ({ ...prev, [col.key]: next })); setRg90GridPage(1); },
+  }));
+  const hayRg90GridColFiltrosActivos = Object.values(rg90GridColFiltros).some(v => v !== null && v !== undefined);
+  const limpiarRg90GridColFiltros = () => { setRg90GridColFiltros({}); setRg90GridPage(1); };
+  const rg90GridTotales = {
+    gravadas: filteredRg90Rows.reduce((s, r) => s + (r.gravadas_num || 0), 0),
+    iva: filteredRg90Rows.reduce((s, r) => s + (r.iva_num || 0), 0),
+    gravadas_5: filteredRg90Rows.reduce((s, r) => s + (r.gravadas_5_num || 0), 0),
+    iva_5: filteredRg90Rows.reduce((s, r) => s + (r.iva_5_num || 0), 0),
+    exentas: filteredRg90Rows.reduce((s, r) => s + (r.exentas_num || 0), 0),
+    total: filteredRg90Rows.reduce((s, r) => s + (r.total_num || 0), 0),
+  };
+  const rg90GridTotalPages = Math.max(1, Math.ceil(filteredRg90Rows.length / pageSize));
+  const rg90GridCurrentPage = Math.min(Math.max(1, rg90GridPage), rg90GridTotalPages);
+  const pagedRg90Rows = filteredRg90Rows.slice((rg90GridCurrentPage - 1) * pageSize, rg90GridCurrentPage * pageSize);
 
   const filteredCorrel = correlatividadRows.filter(r => matchesSistema(r.sistema, correlFiltro));
 
@@ -757,7 +813,10 @@ export function App() {
           {screen === 'rg90' && (
             <RG90View
               wizardSteps={wizardSteps}
-              onVolver={() => setScreen('carga')}
+              pasoMostrado={rg90PasoMostrado}
+              onVolverCarga={() => setScreen('carga')}
+              onSiguienteResultado={() => rg90Loaded && setRg90PasoMostrado(4)}
+              onVolverPaso3={() => setRg90PasoMostrado(3)}
               rg90Loaded={rg90Loaded}
               rg90Attached={rg90Attached}
               rg90StatusText={
@@ -799,6 +858,19 @@ export function App() {
               clearRg90Search={() => setRg90Search('')}
               rg90CategoryFilter={rg90CategoryFilter}
               clearRg90Category={() => setRg90CategoryFilter('')}
+              rg90GridRows={pagedRg90Rows}
+              rg90GridTotalCount={rg90Rows.length}
+              rg90GridFilteredCount={filteredRg90Rows.length}
+              rg90GridColumnFilters={rg90GridColumnFilters}
+              hayRg90GridColFiltrosActivos={hayRg90GridColFiltrosActivos}
+              limpiarRg90GridColFiltros={limpiarRg90GridColFiltros}
+              rg90GridTotales={rg90GridTotales}
+              rg90GridSearch={rg90GridSearch}
+              onRg90GridSearch={(e) => { setRg90GridSearch(e.target.value); setRg90GridPage(1); }}
+              rg90GridCurrentPage={rg90GridCurrentPage}
+              rg90GridTotalPages={rg90GridTotalPages}
+              rg90GridPrevPage={() => setRg90GridPage(p => Math.max(1, p - 1))}
+              rg90GridNextPage={() => setRg90GridPage(p => Math.min(rg90GridTotalPages, p + 1))}
             />
           )}
         </div>
