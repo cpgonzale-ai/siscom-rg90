@@ -63,6 +63,7 @@ const TITLES: Record<Screen, [string, string]> = {
 const SYSTEMS_META = [
   { key: 'aloha', label: 'Aloha', desc: 'Sistema de punto de venta · Juan Valdez' },
   { key: 'hiopos', label: 'Hiopos', desc: 'Sistema de punto de venta · La Cabrera, 100 M y otros' },
+  { key: 'universal', label: 'Universal', desc: 'Planilla estándar para locales sin export de Aloha/Hiopos' },
 ];
 
 export function App() {
@@ -604,9 +605,11 @@ export function App() {
               filterStyleTodos={filtro === 'Todos' ? 'background:#128752;border:1px solid #128752;color:#fff;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer' : 'background:#fff;border:1px solid #e2e0da;color:#5c6470;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer'}
               filterStyleAloha={filtro === 'Aloha' ? 'background:#128752;border:1px solid #128752;color:#fff;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer' : 'background:#fff;border:1px solid #e2e0da;color:#5c6470;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer'}
               filterStyleHiopos={filtro === 'Hiopos' ? 'background:#128752;border:1px solid #128752;color:#fff;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer' : 'background:#fff;border:1px solid #e2e0da;color:#5c6470;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer'}
+              filterStyleUniversal={filtro === 'Universal' ? 'background:#128752;border:1px solid #128752;color:#fff;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer' : 'background:#fff;border:1px solid #e2e0da;color:#5c6470;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer'}
               setFilterTodos={() => { setFiltro('Todos'); setPage(1); }}
               setFilterAloha={() => { setFiltro('Aloha'); setPage(1); }}
               setFilterHiopos={() => { setFiltro('Hiopos'); setPage(1); }}
+              setFilterUniversal={() => { setFiltro('Universal'); setPage(1); }}
               searchGeneral={searchGeneral}
               onSearchGeneral={(e) => { setSearchGeneral(e.target.value); setPage(1); }}
               clearSearch={() => { setSearchGeneral(''); setPage(1); }}

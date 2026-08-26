@@ -31,9 +31,11 @@ interface CargaViewProps {
   filterStyleTodos: string;
   filterStyleAloha: string;
   filterStyleHiopos: string;
+  filterStyleUniversal: string;
   setFilterTodos: () => void;
   setFilterAloha: () => void;
   setFilterHiopos: () => void;
+  setFilterUniversal: () => void;
   searchGeneral: string;
   onSearchGeneral: (e: React.ChangeEvent<HTMLInputElement>) => void;
   clearSearch: () => void;
@@ -77,9 +79,11 @@ export const CargaView: React.FC<CargaViewProps> = ({
   filterStyleTodos,
   filterStyleAloha,
   filterStyleHiopos,
+  filterStyleUniversal,
   setFilterTodos,
   setFilterAloha,
   setFilterHiopos,
+  setFilterUniversal,
   searchGeneral,
   onSearchGeneral,
   clearSearch,
@@ -411,6 +415,9 @@ export const CargaView: React.FC<CargaViewProps> = ({
               </button>
               <button onClick={setFilterHiopos} style={parseInlineStyle(filterStyleHiopos)}>
                 Hiopos
+              </button>
+              <button onClick={setFilterUniversal} style={parseInlineStyle(filterStyleUniversal)}>
+                Universal
               </button>
             </div>
 
