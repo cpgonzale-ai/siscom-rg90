@@ -1,8 +1,8 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { UploadCloud, FileSpreadsheet, Trash2, Search, Download, RefreshCw, CheckCircle2, ArrowLeft, ArrowRight } from 'lucide-react';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
-import { primaryBtnStyle, secondaryBtnStyle } from '../components/Modal';
+import { Modal, primaryBtnStyle, secondaryBtnStyle } from '../components/Modal';
 
 // Misma fila de navegación (Volver / Siguiente) que usa Libro de Compras arriba de cada
 // paso, en vez de abajo — ver el mismo criterio aplicado ahí.
@@ -38,8 +38,7 @@ interface CargaViewProps {
   openCargaUploader: () => void;
   closeCargaUploader: () => void;
   goToRg90: () => void;
-  saltosCount: number;
-  goToCorrelatividad: () => void;
+  saltosRows: any[];
   deleteLibro: () => void;
   downloadLimpio: () => void;
   pagedLibro: any[];
@@ -90,8 +89,7 @@ export const CargaView: React.FC<CargaViewProps> = ({
   openCargaUploader,
   closeCargaUploader,
   goToRg90,
-  saltosCount,
-  goToCorrelatividad,
+  saltosRows,
   deleteLibro,
   downloadLimpio,
   pagedLibro,
@@ -121,6 +119,7 @@ export const CargaView: React.FC<CargaViewProps> = ({
   libroTotales,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [saltosModalOpen, setSaltosModalOpen] = useState(false);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -425,35 +424,6 @@ export const CargaView: React.FC<CargaViewProps> = ({
           {/* Los cortes/subtotales del reporte original ya no se muestran acá — quedan
               guardados en memoria (App.tsx) para usarse al armar el libro en limpio. */}
 
-          {/* Totalizador de saltos de numeración — lleva al detalle en Control de
-              correlatividad, no se resuelve acá (esta grilla no muestra huecos, solo el
-              libro ya consolidado). */}
-          <div
-            onClick={goToCorrelatividad}
-            style={{
-              backgroundColor: saltosCount > 0 ? '#fdf1de' : '#ffffff',
-              border: `1px solid ${saltosCount > 0 ? '#f0a63d' : '#e2e0da'}`,
-              borderRadius: '10px',
-              padding: '16px 20px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            <div>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: '#5c6470' }}>Saltos de numeración</div>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: saltosCount > 0 ? '#b0740f' : '#128752', marginTop: '4px' }}>
-                {saltosCount}
-              </div>
-            </div>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: '#5c6470', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              Ver control de correlatividad
-              <ArrowRight size={14} />
-            </span>
-          </div>
-
           {/* Cards & Controls Bar */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -468,6 +438,18 @@ export const CargaView: React.FC<CargaViewProps> = ({
               </button>
               <button onClick={setFilterUniversal} style={parseInlineStyle(filterStyleUniversal)}>
                 Universal
+              </button>
+              {/* No es un filtro de esta grilla — abre el detalle en un modal (ver más
+                  abajo), mismo estilo que los botones de sistema para que quede en la
+                  misma fila, a la derecha de Universal. */}
+              <button
+                onClick={() => setSaltosModalOpen(true)}
+                style={{
+                  background: '#ffffff', border: '1px solid #e2e0da', color: '#5c6470',
+                  borderRadius: '7px', padding: '8px 14px', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                Saltos ({saltosRows.length})
               </button>
             </div>
 
@@ -647,6 +629,51 @@ export const CargaView: React.FC<CargaViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {saltosModalOpen && (
+        <Modal title={`Saltos de numeración detectados (${saltosRows.length})`} onClose={() => setSaltosModalOpen(false)} width="900px">
+          {saltosRows.length === 0 ? (
+            <p style={{ fontSize: '13px', color: '#5c6470' }}>No se detectaron saltos de numeración en el libro cargado.</p>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
+                    <th style={{ padding: '10px 12px', fontWeight: 600 }}>Local / Establecimiento</th>
+                    <th style={{ padding: '10px 12px', fontWeight: 600 }}>Sistema</th>
+                    <th style={{ padding: '10px 12px', fontWeight: 600 }}>Tipo</th>
+                    <th style={{ padding: '10px 12px', fontWeight: 600 }}>Último N° Procesado</th>
+                    <th style={{ padding: '10px 12px', fontWeight: 600 }}>Salto Detectado</th>
+                    <th style={{ padding: '10px 12px', fontWeight: 600, textAlign: 'center' }}>Faltantes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {saltosRows.map((r: any, i: number) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #f0eee8' }}>
+                      <td style={{ padding: '10px 12px', fontWeight: 600, color: '#22262b' }}>{r.local}</td>
+                      <td style={{ padding: '10px 12px', color: '#5c6470' }}>{r.sistema}</td>
+                      <td style={{ padding: '10px 12px' }}>
+                        <span
+                          style={{
+                            background: r.tipo_doc === 'Nota de Crédito' ? '#f1eef8' : '#eef2fb',
+                            color: r.tipo_doc === 'Nota de Crédito' ? '#5b3aa8' : '#2f5fa8',
+                            fontSize: '11px', fontWeight: 600, padding: '3px 9px', borderRadius: '20px',
+                          }}
+                        >
+                          {r.tipo_doc || 'Factura'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '10px 12px', color: '#5c6470', fontFamily: 'monospace' }}>{r.ultimo}</td>
+                      <td style={{ padding: '10px 12px', color: '#b3402f', fontWeight: 600, fontFamily: 'monospace' }}>{r.salto}</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: '#b0740f' }}>{r.cantidad}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Modal>
       )}
     </div>
   );

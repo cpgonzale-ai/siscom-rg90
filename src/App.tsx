@@ -699,8 +699,7 @@ export function App() {
               openCargaUploader={() => setCargaUploaderOpen(true)}
               closeCargaUploader={() => setCargaUploaderOpen(false)}
               goToRg90={() => setScreen('rg90')}
-              saltosCount={correlatividadRows.length}
-              goToCorrelatividad={() => setScreen('correl')}
+              saltosRows={correlatividadRows}
               deleteLibro={deleteLibro}
               downloadLimpio={downloadLimpio}
               pagedLibro={pagedLibro}
