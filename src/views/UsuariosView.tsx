@@ -1,11 +1,20 @@
-import React, { useState } from 'react';
-import { Plus, Pencil, UserX, Users as UsersIcon, Eye, EyeOff } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Plus, Pencil, UserX, Users as UsersIcon, Eye, EyeOff, Search } from 'lucide-react';
 import { Modal, fieldLabelStyle, fieldInputStyle, primaryBtnStyle, secondaryBtnStyle, dangerBtnStyle } from '../components/Modal';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { AuditoriaModal } from '../components/AuditoriaModal';
+import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
 import type { Usuario, Rol } from '../services/api';
 import { createUsuarioApi, updateUsuarioApi, deleteUsuarioApi } from '../services/api';
 import { PASSWORD_HINT, validarPassword } from '../utils/password';
+
+const COLUMNAS: { key: string; label: string; getValue: (u: Usuario) => string }[] = [
+  { key: 'nombre', label: 'Nombre', getValue: u => u.nombre },
+  { key: 'nro_documento', label: 'N° Documento', getValue: u => u.nro_documento },
+  { key: 'email', label: 'Email', getValue: u => u.email },
+  { key: 'rol', label: 'Rol', getValue: u => u.rol },
+  { key: 'estado', label: 'Estado', getValue: u => (u.activo ? 'Activo' : 'Inactivo') },
+];
 
 interface UsuariosViewProps {
   usuarios: Usuario[];
@@ -39,6 +48,24 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
   const [confirmDeactivate, setConfirmDeactivate] = useState<Usuario | null>(null);
   const [auditoriaDe, setAuditoriaDe] = useState<Usuario | null>(null);
   const [verPassword, setVerPassword] = useState(false);
+
+  const [busqueda, setBusqueda] = useState('');
+  const [filtrosColumna, setFiltrosColumna] = useState<Record<string, Set<string> | null>>({});
+
+  const usuariosFiltrados = useMemo(() => {
+    let lista = usuarios;
+    for (const col of COLUMNAS) {
+      const activo = filtrosColumna[col.key];
+      if (activo) lista = lista.filter(u => activo.has(col.getValue(u)));
+    }
+    if (busqueda.trim()) {
+      const q = busqueda.trim().toLowerCase();
+      lista = lista.filter(u => COLUMNAS.some(col => col.getValue(u).toLowerCase().includes(q)));
+    }
+    return lista;
+  }, [usuarios, filtrosColumna, busqueda]);
+
+  const hayFiltrosActivos = busqueda.trim() !== '' || Object.values(filtrosColumna).some(v => v !== null && v !== undefined);
 
   const openCrear = () => { setForm(EMPTY_FORM); setFormError(null); setVerPassword(false); setModalOpen('crear'); };
   const openEditar = (u: Usuario) => {
@@ -126,19 +153,45 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
       )}
 
       <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', overflow: 'hidden' }}>
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid #e2e0da', backgroundColor: '#fafbfa', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ position: 'relative', flex: '0 1 280px' }}>
+            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#9aa1ab' }} />
+            <input
+              type="text" placeholder="Buscar en todos los campos..." value={busqueda}
+              onChange={e => setBusqueda(e.target.value)}
+              style={{ width: '100%', padding: '8px 10px 8px 30px', border: '1px solid #e2e0da', borderRadius: '6px', fontSize: '12.5px', boxSizing: 'border-box' }}
+            />
+          </div>
+          {hayFiltrosActivos && (
+            <button
+              onClick={() => { setBusqueda(''); setFiltrosColumna({}); }}
+              style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px' }}
+            >
+              Limpiar filtros
+            </button>
+          )}
+          <span style={{ fontSize: '12px', color: '#9aa1ab', marginLeft: 'auto' }}>
+            {usuariosFiltrados.length} de {usuarios.length}
+          </span>
+        </div>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
           <thead>
             <tr style={{ backgroundColor: '#fafbfa', borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-              <th style={{ padding: '12px 16px', fontWeight: 600 }}>Nombre</th>
-              <th style={{ padding: '12px 16px', fontWeight: 600 }}>N° Documento</th>
-              <th style={{ padding: '12px 16px', fontWeight: 600 }}>Email</th>
-              <th style={{ padding: '12px 16px', fontWeight: 600 }}>Rol</th>
-              <th style={{ padding: '12px 16px', fontWeight: 600 }}>Estado</th>
+              {COLUMNAS.map(col => (
+                <th key={col.key} style={{ padding: '12px 16px', fontWeight: 600 }}>
+                  <ExcelFilterHeader
+                    label={col.label}
+                    allValues={usuarios.map(col.getValue)}
+                    active={filtrosColumna[col.key] ?? null}
+                    onChange={(next) => setFiltrosColumna(prev => ({ ...prev, [col.key]: next }))}
+                  />
+                </th>
+              ))}
               <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>Acción</th>
             </tr>
           </thead>
           <tbody>
-            {usuarios.map(u => (
+            {usuariosFiltrados.map(u => (
               <tr key={u.id} style={{ borderBottom: '1px solid #f0eee8' }}>
                 <td style={{ padding: '12px 16px', fontWeight: 600, color: '#22262b' }}>{u.nombre}</td>
                 <td style={{ padding: '12px 16px', color: '#5c6470' }}>{u.nro_documento}</td>
@@ -175,9 +228,11 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
                 </td>
               </tr>
             ))}
-            {!loading && usuarios.length === 0 && (
+            {!loading && usuariosFiltrados.length === 0 && (
               <tr>
-                <td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: '#9aa1ab' }}>No hay usuarios cargados.</td>
+                <td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: '#9aa1ab' }}>
+                  {usuarios.length === 0 ? 'No hay usuarios cargados.' : 'Ningún usuario coincide con el filtro aplicado.'}
+                </td>
               </tr>
             )}
           </tbody>

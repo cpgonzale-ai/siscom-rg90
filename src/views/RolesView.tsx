@@ -1,10 +1,17 @@
 import React, { useMemo, useState } from 'react';
-import { Plus, Pencil, Trash2, ShieldCheck, Lock, Eye } from 'lucide-react';
+import { Plus, Pencil, Trash2, ShieldCheck, Lock, Eye, Search } from 'lucide-react';
 import { Modal, fieldLabelStyle, fieldInputStyle, primaryBtnStyle, secondaryBtnStyle, dangerBtnStyle } from '../components/Modal';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { AuditoriaModal } from '../components/AuditoriaModal';
+import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
 import type { Rol, Permiso } from '../services/api';
 import { createRolApi, updateRolApi, deleteRolApi } from '../services/api';
+
+const COLUMNAS: { key: string; label: string; getValue: (r: Rol) => string }[] = [
+  { key: 'nombre', label: 'Rol', getValue: r => r.nombre },
+  { key: 'descripcion', label: 'Descripción', getValue: r => r.descripcion || '' },
+  { key: 'estado', label: 'Estado', getValue: r => (r.estado === 'activo' ? 'Activo' : 'Inactivo') },
+];
 
 interface RolesViewProps {
   roles: Rol[];
@@ -39,6 +46,24 @@ export const RolesView: React.FC<RolesViewProps> = ({ roles, permisos, loading, 
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<Rol | null>(null);
   const [auditoriaDe, setAuditoriaDe] = useState<Rol | null>(null);
+
+  const [busqueda, setBusqueda] = useState('');
+  const [filtrosColumna, setFiltrosColumna] = useState<Record<string, Set<string> | null>>({});
+
+  const rolesFiltrados = useMemo(() => {
+    let lista = roles;
+    for (const col of COLUMNAS) {
+      const activo = filtrosColumna[col.key];
+      if (activo) lista = lista.filter(r => activo.has(col.getValue(r)));
+    }
+    if (busqueda.trim()) {
+      const q = busqueda.trim().toLowerCase();
+      lista = lista.filter(r => COLUMNAS.some(col => col.getValue(r).toLowerCase().includes(q)));
+    }
+    return lista;
+  }, [roles, filtrosColumna, busqueda]);
+
+  const hayFiltrosActivos = busqueda.trim() !== '' || Object.values(filtrosColumna).some(v => v !== null && v !== undefined);
 
   const grupos = useMemo(() => {
     const porPantalla: Record<string, Permiso[]> = {};
@@ -143,18 +168,46 @@ export const RolesView: React.FC<RolesViewProps> = ({ roles, permisos, loading, 
       )}
 
       <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', overflow: 'hidden' }}>
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid #e2e0da', backgroundColor: '#fafbfa', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ position: 'relative', flex: '0 1 280px' }}>
+            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#9aa1ab' }} />
+            <input
+              type="text" placeholder="Buscar en todos los campos..." value={busqueda}
+              onChange={e => setBusqueda(e.target.value)}
+              style={{ width: '100%', padding: '8px 10px 8px 30px', border: '1px solid #e2e0da', borderRadius: '6px', fontSize: '12.5px', boxSizing: 'border-box' }}
+            />
+          </div>
+          {hayFiltrosActivos && (
+            <button
+              onClick={() => { setBusqueda(''); setFiltrosColumna({}); }}
+              style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px' }}
+            >
+              Limpiar filtros
+            </button>
+          )}
+          <span style={{ fontSize: '12px', color: '#9aa1ab', marginLeft: 'auto' }}>
+            {rolesFiltrados.length} de {roles.length}
+          </span>
+        </div>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
           <thead>
             <tr style={{ backgroundColor: '#fafbfa', borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-              <th style={{ padding: '12px 16px', fontWeight: 600 }}>Rol</th>
-              <th style={{ padding: '12px 16px', fontWeight: 600 }}>Descripción</th>
-              <th style={{ padding: '12px 16px', fontWeight: 600 }}>Estado</th>
+              {COLUMNAS.map(col => (
+                <th key={col.key} style={{ padding: '12px 16px', fontWeight: 600 }}>
+                  <ExcelFilterHeader
+                    label={col.label}
+                    allValues={roles.map(col.getValue)}
+                    active={filtrosColumna[col.key] ?? null}
+                    onChange={(next) => setFiltrosColumna(prev => ({ ...prev, [col.key]: next }))}
+                  />
+                </th>
+              ))}
               <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'center' }}>Permisos</th>
               <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>Acción</th>
             </tr>
           </thead>
           <tbody>
-            {roles.map(r => (
+            {rolesFiltrados.map(r => (
               <tr key={r.id} style={{ borderBottom: '1px solid #f0eee8' }}>
                 <td style={{ padding: '12px 16px', fontWeight: 600, color: '#22262b' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -195,9 +248,11 @@ export const RolesView: React.FC<RolesViewProps> = ({ roles, permisos, loading, 
                 </td>
               </tr>
             ))}
-            {!loading && roles.length === 0 && (
+            {!loading && rolesFiltrados.length === 0 && (
               <tr>
-                <td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: '#9aa1ab' }}>No hay roles cargados.</td>
+                <td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: '#9aa1ab' }}>
+                  {roles.length === 0 ? 'No hay roles cargados.' : 'Ningún rol coincide con el filtro aplicado.'}
+                </td>
               </tr>
             )}
           </tbody>
