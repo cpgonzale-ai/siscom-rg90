@@ -20,10 +20,11 @@ interface FormState {
   nombre: string;
   punto_expedicion: string;
   codigo: string;
+  abreviatura: string;
   estado: 'activo' | 'inactivo';
 }
 
-const EMPTY_FORM: FormState = { nombre: '', punto_expedicion: '', codigo: '', estado: 'activo' };
+const EMPTY_FORM: FormState = { nombre: '', punto_expedicion: '', codigo: '', abreviatura: '', estado: 'activo' };
 
 export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, error, refetch, canCrear, canEditar, canEliminar }) => {
   const [modalOpen, setModalOpen] = useState<'crear' | 'editar' | null>(null);
@@ -37,7 +38,7 @@ export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, erro
   const openCrear = () => { setForm(EMPTY_FORM); setFormError(null); setModalOpen('crear'); };
   const openEditar = (l: Local) => {
     setEditingId(l.id);
-    setForm({ nombre: l.nombre, punto_expedicion: l.punto_expedicion, codigo: l.codigo || '', estado: l.estado });
+    setForm({ nombre: l.nombre, punto_expedicion: l.punto_expedicion, codigo: l.codigo || '', abreviatura: l.abreviatura || '', estado: l.estado });
     setFormError(null);
     setModalOpen('editar');
   };
@@ -51,7 +52,7 @@ export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, erro
     setSaving(true);
     setFormError(null);
     try {
-      const datos = { nombre: form.nombre.trim(), punto_expedicion: form.punto_expedicion.trim(), codigo: form.codigo.trim() || null, estado: form.estado };
+      const datos = { nombre: form.nombre.trim(), punto_expedicion: form.punto_expedicion.trim(), codigo: form.codigo.trim() || null, abreviatura: form.abreviatura.trim() || null, estado: form.estado };
       if (modalOpen === 'crear') {
         await createLocalApi(datos);
       } else if (editingId !== null) {
@@ -120,6 +121,7 @@ export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, erro
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>Nombre</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>Punto de expedición</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>Código</th>
+              <th style={{ padding: '12px 16px', fontWeight: 600 }}>Abreviatura</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>Estado</th>
               <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>Acción</th>
             </tr>
@@ -130,6 +132,7 @@ export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, erro
                 <td style={{ padding: '12px 16px', fontWeight: 600, color: '#22262b' }}>{l.nombre}</td>
                 <td style={{ padding: '12px 16px', color: '#5c6470', fontFamily: 'monospace' }}>{l.punto_expedicion}</td>
                 <td style={{ padding: '12px 16px', color: '#5c6470' }}>{l.codigo || '—'}</td>
+                <td style={{ padding: '12px 16px', color: '#5c6470' }}>{l.abreviatura || '—'}</td>
                 <td style={{ padding: '12px 16px' }}>
                   <span style={{
                     background: l.estado === 'activo' ? '#e8f3ec' : '#f0eee8',
@@ -163,7 +166,7 @@ export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, erro
             ))}
             {!loading && locales.length === 0 && (
               <tr>
-                <td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: '#9aa1ab' }}>
+                <td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: '#9aa1ab' }}>
                   No hay locales cargados todavía.
                 </td>
               </tr>
@@ -187,6 +190,9 @@ export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, erro
 
           <label style={fieldLabelStyle}>Código de sucursal (opcional — usado en Libro de Compras)</label>
           <input style={fieldInputStyle} value={form.codigo} onChange={e => setForm({ ...form, codigo: e.target.value })} placeholder="ej. 1 — dónde se recibe la factura de compra" />
+
+          <label style={fieldLabelStyle}>Abreviatura (opcional)</label>
+          <input style={fieldInputStyle} value={form.abreviatura} onChange={e => setForm({ ...form, abreviatura: e.target.value })} placeholder="ej. JV" />
 
           <label style={fieldLabelStyle}>Estado</label>
           <select

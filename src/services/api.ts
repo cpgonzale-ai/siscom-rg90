@@ -149,6 +149,7 @@ export interface Local {
   nombre: string;
   punto_expedicion: string;
   codigo: string | null;
+  abreviatura: string | null;
   estado: 'activo' | 'inactivo';
   created_at: string;
   updated_at: string;
