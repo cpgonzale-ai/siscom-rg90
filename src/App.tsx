@@ -828,7 +828,8 @@ export function App() {
                   ? `Archivo adjuntado — ${rg90Files.map(f => f.name).join(', ')}. Presioná "Analizar y comparar" para generar el resultado.`
                   : ''
               }
-              rg90FileLabel={rg90Attached ? rg90Files.map(f => f.name).join(', ') : 'Adjuntar archivo(s) RG90 (.xls / .xlsx)'}
+              rg90FileLabel={rg90Attached ? `${rg90Files.length} archivo(s) adjuntado(s) — click para agregar más` : 'Adjuntar archivo(s) RG90 (.xls / .xlsx)'}
+              rg90FileNames={rg90Files.map(f => f.name)}
               rg90DropzoneStyle={
                 (rg90Attached ? 'background:#f4f2ed;color:#22262b;font-weight:600' : 'background:#fafbfa;color:#5c6470;border:1px dashed #cfd6d0') +
                 ';flex:1;min-width:220px;border-radius:7px;padding:9px 14px;font-size:12.5px;cursor:pointer'

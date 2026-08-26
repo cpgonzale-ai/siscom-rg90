@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { GitCompare, UploadCloud, RefreshCw, X, ArrowLeft, ArrowRight } from 'lucide-react';
+import { GitCompare, UploadCloud, RefreshCw, X, ArrowLeft, ArrowRight, FileSpreadsheet } from 'lucide-react';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
 import { primaryBtnStyle, secondaryBtnStyle } from '../components/Modal';
@@ -26,6 +26,7 @@ interface RG90ViewProps {
   rg90Attached: boolean;
   rg90StatusText: string;
   rg90FileLabel: string;
+  rg90FileNames: string[];
   rg90DropzoneStyle: string;
   rg90AnalyzeBtnStyle: string;
   rg90Analyzing: boolean;
@@ -69,6 +70,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   rg90Loaded,
   rg90StatusText,
   rg90FileLabel,
+  rg90FileNames,
   rg90DropzoneStyle,
   rg90AnalyzeBtnStyle,
   rg90Analyzing,
@@ -187,6 +189,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
             <input
               ref={fileInputRef}
               type="file"
+              multiple
               accept=".xls,.xlsx"
               style={{ display: 'none' }}
               onChange={(e) => {
@@ -194,6 +197,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                   simulateRg90();
                   onRg90FileUpload(e.target.files);
                 }
+                e.target.value = '';
               }}
             />
 
@@ -203,6 +207,21 @@ export const RG90View: React.FC<RG90ViewProps> = ({
               </button>
             )}
           </div>
+
+          {/* Lista de archivos adjuntados — la RG90 se descarga en reportes separados por
+              tipo de comprobante (venta y nota de crédito, Minuta 3), así que puede hacer
+              falta adjuntar más de uno antes de comparar; se consolidan todos en el
+              backend (ver /api/reconcile). */}
+          {rg90FileNames.length > 0 && (
+            <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {rg90FileNames.map((name, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#fafbfa', border: '1px solid #f0eee8', borderRadius: '7px', fontSize: '12.5px', color: '#22262b' }}>
+                  <FileSpreadsheet size={14} color="#5c6470" />
+                  <span>{name}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           {rg90Error && (
             <div
