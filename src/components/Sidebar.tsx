@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, FileSpreadsheet, ListTree, GitCompare, ShieldCheck, MapPin, Users, KeyRound, ChevronDown, ChevronRight, ShoppingCart } from 'lucide-react';
+import { LayoutDashboard, FileSpreadsheet, ShieldCheck, MapPin, Users, KeyRound, ChevronDown, ChevronRight, ShoppingCart } from 'lucide-react';
 import logoConsultora from '../assets/logo-consultora-san-miguel.png';
 
 type Screen = 'dashboard' | 'carga' | 'correl' | 'rg90' | 'libroCompleto' | 'compras' | 'locales' | 'usuarios' | 'roles';
@@ -105,31 +105,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate, per
           <button style={navItemStyle('carga')} onClick={() => onNavigate('carga')}>
             <div style={dotStyle('carga')} />
             <FileSpreadsheet size={17} />
-            <span>Carga y libro de ventas</span>
+            <span>Libro Ventas vs RG90</span>
           </button>
         )}
 
-        {puede('pantalla:correlatividad') && (
-          <button style={navItemStyle('correl')} onClick={() => onNavigate('correl')}>
-            <div style={dotStyle('correl')} />
-            <ListTree size={17} />
-            <span>Control de correlatividad</span>
-          </button>
-        )}
-
-        {puede('pantalla:rg90') && (
-          <button style={navItemStyle('rg90')} onClick={() => onNavigate('rg90')}>
-            <div style={dotStyle('rg90')} />
-            <GitCompare size={17} />
-            <span>Comparación contra RG90</span>
-          </button>
-        )}
+        {/* Control de correlatividad y Comparación contra RG90 se ocultan del menú — siguen
+            existiendo como pantallas (se llega por los botones "Siguiente" del wizard de
+            Libro de Ventas y por el modal de saltos del Paso 2), solo se saca el acceso
+            directo acá. */}
 
         {puede('pantalla:compras') && (
           <button style={navItemStyle('compras')} onClick={() => onNavigate('compras')}>
             <div style={dotStyle('compras')} />
             <ShoppingCart size={17} />
-            <span>Libro de Compras</span>
+            <span>Libro compras vs RG90</span>
           </button>
         )}
 
