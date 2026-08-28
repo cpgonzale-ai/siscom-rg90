@@ -6,6 +6,7 @@ import {
 import { ConfirmModal } from '../components/ConfirmModal';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
+import { ColumnPicker } from '../components/ColumnPicker';
 import { secondaryBtnStyle, primaryBtnStyle, dangerBtnStyle } from '../components/Modal';
 import type { Local, CompraRow, CompraDiffRow, CompraDiffLado } from '../services/api';
 import { ingestComprasApi, reconcileComprasApi } from '../services/api';
@@ -81,6 +82,11 @@ const valorCeldaDiff = (d: CompraDiffRow, lado: 'libro' | 'rg', campo: keyof Com
   return d.diferencias_detalle && campo in d.diferencias_detalle ? valor : '0,00';
 };
 
+// Diferencia (Libro − RG) para un campo — con signo, mismo formato que el resto de los
+// importes. Los lados "—" (comprobante que no está de ese lado) cuentan como 0.
+const diferenciaCampo = (d: CompraDiffRow, campo: keyof CompraDiffLado): string =>
+  formatGs(parseGs(valorCeldaDiff(d, 'libro', campo)) - parseGs(valorCeldaDiff(d, 'rg', campo)));
+
 // Columnas de la grilla de resultado (paso 3), texto e importes — estos últimos con el
 // mismo valor que se ve en cada celda (post v()/valorCeldaDiff), no el crudo del backend.
 const DIFF_COLUMNAS: { key: string; label: string; getValue: (d: CompraDiffRow) => string }[] = [
@@ -99,7 +105,40 @@ const DIFF_COLUMNAS: { key: string; label: string; getValue: (d: CompraDiffRow) 
   { key: 'rg_iva_5', label: 'IVA 5%', getValue: d => valorCeldaDiff(d, 'rg', 'iva_5') },
   { key: 'rg_exenta', label: 'Exenta', getValue: d => valorCeldaDiff(d, 'rg', 'exenta') },
   { key: 'rg_total', label: 'Total', getValue: d => valorCeldaDiff(d, 'rg', 'total') },
+  { key: 'dif_gravada_10', label: 'Gravada 10%', getValue: d => diferenciaCampo(d, 'gravada_10') },
+  { key: 'dif_gravada_5', label: 'Gravada 5%', getValue: d => diferenciaCampo(d, 'gravada_5') },
+  { key: 'dif_iva_10', label: 'IVA 10%', getValue: d => diferenciaCampo(d, 'iva_10') },
+  { key: 'dif_iva_5', label: 'IVA 5%', getValue: d => diferenciaCampo(d, 'iva_5') },
+  { key: 'dif_exenta', label: 'Exenta', getValue: d => diferenciaCampo(d, 'exenta') },
+  { key: 'dif_total', label: 'Total', getValue: d => diferenciaCampo(d, 'total') },
   { key: 'diferencia', label: 'Motivo de la diferencia', getValue: d => d.diferencia },
+];
+
+// Todas las columnas de esta grilla, para el selector de "qué columnas visualizar" — mismo
+// key que DIFF_COLUMNAS, con label sin repetir "Gravada 10%" tres veces sin contexto.
+const DIFF_COLUMNAS_PICKER: { key: string; label: string }[] = [
+  { key: 'doc', label: 'Documento' },
+  { key: 'proveedor', label: 'Proveedor' },
+  { key: 'local', label: 'Local' },
+  { key: 'libro_gravada_10', label: 'Libro — Gravada 10%' },
+  { key: 'libro_gravada_5', label: 'Libro — Gravada 5%' },
+  { key: 'libro_iva_10', label: 'Libro — IVA 10%' },
+  { key: 'libro_iva_5', label: 'Libro — IVA 5%' },
+  { key: 'libro_exenta', label: 'Libro — Exenta' },
+  { key: 'libro_total', label: 'Libro — Total' },
+  { key: 'rg_gravada_10', label: 'RG — Gravada 10%' },
+  { key: 'rg_gravada_5', label: 'RG — Gravada 5%' },
+  { key: 'rg_iva_10', label: 'RG — IVA 10%' },
+  { key: 'rg_iva_5', label: 'RG — IVA 5%' },
+  { key: 'rg_exenta', label: 'RG — Exenta' },
+  { key: 'rg_total', label: 'RG — Total' },
+  { key: 'dif_gravada_10', label: 'Diferencia — Gravada 10%' },
+  { key: 'dif_gravada_5', label: 'Diferencia — Gravada 5%' },
+  { key: 'dif_iva_10', label: 'Diferencia — IVA 10%' },
+  { key: 'dif_iva_5', label: 'Diferencia — IVA 5%' },
+  { key: 'dif_exenta', label: 'Diferencia — Exenta' },
+  { key: 'dif_total', label: 'Diferencia — Total' },
+  { key: 'diferencia', label: 'Motivo de la diferencia' },
 ];
 
 export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) => {
@@ -133,6 +172,9 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const [diffSearch, setDiffSearch] = useState('');
   const [diffCategoryFilter, setDiffCategoryFilter] = useState<string>('');
   const [diffColFiltros, setDiffColFiltros] = useState<Record<string, Set<string> | null>>({});
+  // Por defecto se ocultan los 6 importes "Diferencia" (Libro − RG) — quedan disponibles
+  // desde el selector de columnas, pero no todos los usuarios los necesitan siempre.
+  const [diffColOcultas, setDiffColOcultas] = useState<Set<string>>(new Set(['dif_gravada_10', 'dif_gravada_5', 'dif_iva_10', 'dif_iva_5', 'dif_exenta', 'dif_total']));
 
   // Cuál de los 3 pasos se muestra en pantalla (a diferencia de ventas, que separa Carga y
   // RG90 en pantallas distintas del sidebar, acá es una sola pantalla — así que se
@@ -366,14 +408,22 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
 
   const CAMPOS_DIFF: (keyof CompraDiffLado)[] = ['gravada_10', 'gravada_5', 'iva_10', 'iva_5', 'exenta', 'total'];
   const diffTotales = useMemo(() => {
-    const acc = { libro: {} as Record<string, number>, rg: {} as Record<string, number> };
+    const acc = { libro: {} as Record<string, number>, rg: {} as Record<string, number>, dif: {} as Record<string, number> };
     for (const campo of CAMPOS_DIFF) {
       acc.libro[campo] = filteredDiffs.reduce((s, d) => s + parseGs(valorCeldaDiff(d, 'libro', campo)), 0);
       acc.rg[campo] = filteredDiffs.reduce((s, d) => s + parseGs(valorCeldaDiff(d, 'rg', campo)), 0);
+      acc.dif[campo] = acc.libro[campo] - acc.rg[campo];
     }
     return acc;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredDiffs]);
+
+  // Columnas realmente visibles de cada grupo (según el selector de columnas) — se usan
+  // tanto para el colSpan del encabezado agrupado como para mapear las celdas del cuerpo,
+  // así no hay que repetir la lista de campos en cada lugar.
+  const diffLibroColsVisibles = DIFF_COLUMNAS.filter(c => c.key.startsWith('libro_') && !diffColOcultas.has(c.key));
+  const diffRgColsVisibles = DIFF_COLUMNAS.filter(c => c.key.startsWith('rg_') && !diffColOcultas.has(c.key));
+  const diffDifColsVisibles = DIFF_COLUMNAS.filter(c => c.key.startsWith('dif_') && !diffColOcultas.has(c.key));
 
   const cardStyle: React.CSSProperties = {
     backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '12px',
@@ -782,6 +832,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                     Limpiar filtros
                   </button>
                 )}
+                <ColumnPicker columnas={DIFF_COLUMNAS_PICKER} ocultas={diffColOcultas} onChange={setDiffColOcultas} />
                 <input
                   type="text" placeholder="Buscar por doc, proveedor..." value={diffSearch}
                   onChange={e => setDiffSearch(e.target.value)}
@@ -793,7 +844,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-                  {DIFF_COLUMNAS.filter(c => ['doc', 'proveedor', 'local'].includes(c.key)).map(col => (
+                  {DIFF_COLUMNAS.filter(c => ['doc', 'proveedor', 'local'].includes(c.key) && !diffColOcultas.has(c.key)).map(col => (
                     <th key={col.key} rowSpan={2} style={{ padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom' }}>
                       <ExcelFilterHeader
                         label={col.label}
@@ -803,24 +854,33 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                       />
                     </th>
                   ))}
-                  <th colSpan={6} style={{ padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>Libro de Compras</th>
-                  <th colSpan={6} style={{ padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>RG (SET)</th>
-                  <th rowSpan={2} style={{ padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom', borderLeft: '2px solid #e2e0da' }}>
-                    {(() => {
-                      const col = DIFF_COLUMNAS.find(c => c.key === 'diferencia')!;
-                      return (
-                        <ExcelFilterHeader
-                          label={col.label}
-                          allValues={diffs.map(col.getValue)}
-                          active={diffColFiltros[col.key] ?? null}
-                          onChange={(next) => setDiffColFiltros(prev => ({ ...prev, [col.key]: next }))}
-                        />
-                      );
-                    })()}
-                  </th>
+                  {diffLibroColsVisibles.length > 0 && (
+                    <th colSpan={diffLibroColsVisibles.length} style={{ padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>Libro de Compras</th>
+                  )}
+                  {diffRgColsVisibles.length > 0 && (
+                    <th colSpan={diffRgColsVisibles.length} style={{ padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>RG (SET)</th>
+                  )}
+                  {diffDifColsVisibles.length > 0 && (
+                    <th colSpan={diffDifColsVisibles.length} style={{ padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>Diferencia (Libro − RG)</th>
+                  )}
+                  {!diffColOcultas.has('diferencia') && (
+                    <th rowSpan={2} style={{ padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom', borderLeft: '2px solid #e2e0da' }}>
+                      {(() => {
+                        const col = DIFF_COLUMNAS.find(c => c.key === 'diferencia')!;
+                        return (
+                          <ExcelFilterHeader
+                            label={col.label}
+                            allValues={diffs.map(col.getValue)}
+                            active={diffColFiltros[col.key] ?? null}
+                            onChange={(next) => setDiffColFiltros(prev => ({ ...prev, [col.key]: next }))}
+                          />
+                        );
+                      })()}
+                    </th>
+                  )}
                 </tr>
                 <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-                  {DIFF_COLUMNAS.filter(c => c.key.startsWith('libro_')).map((col, i) => (
+                  {[diffLibroColsVisibles, diffRgColsVisibles, diffDifColsVisibles].flatMap(grupo => grupo.map((col, i) => (
                     <th key={col.key} style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right', ...(i === 0 ? { borderLeft: '2px solid #e2e0da' } : {}) }}>
                       <ExcelFilterHeader
                         label={col.label}
@@ -830,81 +890,61 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                         align="right"
                       />
                     </th>
-                  ))}
-                  {DIFF_COLUMNAS.filter(c => c.key.startsWith('rg_')).map((col, i) => (
-                    <th key={col.key} style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right', ...(i === 0 ? { borderLeft: '2px solid #e2e0da' } : {}) }}>
-                      <ExcelFilterHeader
-                        label={col.label}
-                        allValues={diffs.map(col.getValue)}
-                        active={diffColFiltros[col.key] ?? null}
-                        onChange={(next) => setDiffColFiltros(prev => ({ ...prev, [col.key]: next }))}
-                        align="right"
-                      />
-                    </th>
-                  ))}
+                  )))}
                 </tr>
               </thead>
               <tbody>
-                {filteredDiffs.map((d, i) => {
-                  // Para no ensuciar la tabla con columnas iguales de los dos lados: si la
-                  // fila es "Diferencia de monto", el campo que no está en
-                  // diferencias_detalle (no difiere) se muestra en 0 — solo quedan visibles
-                  // los importes que realmente causan la diferencia. Gravada 10%/5% nunca se
-                  // valida como diferencia (igual que en ventas), así que siempre va en 0 en
-                  // este caso. Las filas "No llegó a la interfaz"/"No en libro propio" se
-                  // muestran completas tal cual, porque ahí el punto es mostrar qué hay del
-                  // lado que sí tiene el comprobante.
-                  const v = (campo: string, valor: string) => {
-                    if (d.diferencia !== 'Diferencia de monto' || valor === '—') return valor;
-                    return d.diferencias_detalle && campo in d.diferencias_detalle ? valor : '0,00';
-                  };
-                  return (
+                {filteredDiffs.map((d, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid #f0eee8' }}>
-                    <td style={{ padding: '10px 14px', fontWeight: 600, color: '#22262b' }}>{d.doc}</td>
-                    <td style={{ padding: '10px 14px', color: '#5c6470' }}>{d.proveedor}</td>
-                    <td style={{ padding: '10px 14px', color: '#5c6470' }}>{d.local}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470', borderLeft: '2px solid #f0eee8' }}>{v('gravada_10', d.libro.gravada_10)}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{v('gravada_5', d.libro.gravada_5)}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{v('iva_10', d.libro.iva_10)}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{v('iva_5', d.libro.iva_5)}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{v('exenta', d.libro.exenta)}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: '#22262b' }}>{v('total', d.libro.total)}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470', borderLeft: '2px solid #f0eee8' }}>{v('gravada_10', d.rg.gravada_10)}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{v('gravada_5', d.rg.gravada_5)}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{v('iva_10', d.rg.iva_10)}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{v('iva_5', d.rg.iva_5)}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{v('exenta', d.rg.exenta)}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: '#22262b' }}>{v('total', d.rg.total)}</td>
-                    <td style={{ padding: '10px 14px', borderLeft: '2px solid #f0eee8' }}>
-                      <span style={{
-                        background: d.diferencia === 'Diferencia de monto' ? '#fdf1de' : '#fbe9e3',
-                        color: d.diferencia === 'Diferencia de monto' ? '#b0740f' : '#b3402f',
-                        fontSize: '11px', fontWeight: 600, padding: '4px 10px', borderRadius: '20px', whiteSpace: 'nowrap',
-                      }}>
-                        {d.diferencia}
-                        {d.diferencias_detalle ? ` (${Object.keys(d.diferencias_detalle).join(', ')})` : ''}
-                      </span>
-                    </td>
+                    {!diffColOcultas.has('doc') && <td style={{ padding: '10px 14px', fontWeight: 600, color: '#22262b' }}>{d.doc}</td>}
+                    {!diffColOcultas.has('proveedor') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{d.proveedor}</td>}
+                    {!diffColOcultas.has('local') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{d.local}</td>}
+                    {[diffLibroColsVisibles, diffRgColsVisibles, diffDifColsVisibles].flatMap(grupo => grupo.map((col, i) => (
+                      <td
+                        key={col.key}
+                        style={{
+                          padding: '10px 14px', textAlign: 'right', color: '#5c6470',
+                          ...(i === 0 ? { borderLeft: '2px solid #f0eee8' } : {}),
+                          ...(col.key.endsWith('_total') ? { fontWeight: 600, color: '#22262b' } : {}),
+                        }}
+                      >
+                        {col.getValue(d)}
+                      </td>
+                    )))}
+                    {!diffColOcultas.has('diferencia') && (
+                      <td style={{ padding: '10px 14px', borderLeft: '2px solid #f0eee8' }}>
+                        <span style={{
+                          background: d.diferencia === 'Diferencia de monto' ? '#fdf1de' : '#fbe9e3',
+                          color: d.diferencia === 'Diferencia de monto' ? '#b0740f' : '#b3402f',
+                          fontSize: '11px', fontWeight: 600, padding: '4px 10px', borderRadius: '20px', whiteSpace: 'nowrap',
+                        }}>
+                          {d.diferencia}
+                          {d.diferencias_detalle ? ` (${Object.keys(d.diferencias_detalle).join(', ')})` : ''}
+                        </span>
+                      </td>
+                    )}
                   </tr>
-                  );
-                })}
+                ))}
               </tbody>
               <tfoot>
                 <tr style={{ borderTop: '2px solid #e2e0da', backgroundColor: '#fafbfa', fontWeight: 700, color: '#22262b' }}>
-                  <td colSpan={3} style={{ padding: '10px 14px' }}>Total ({filteredDiffs.length.toLocaleString('es-PY')} filas)</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right', borderLeft: '2px solid #e2e0da' }}>{formatGs(diffTotales.libro.gravada_10)}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(diffTotales.libro.gravada_5)}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(diffTotales.libro.iva_10)}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(diffTotales.libro.iva_5)}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(diffTotales.libro.exenta)}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(diffTotales.libro.total)}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right', borderLeft: '2px solid #e2e0da' }}>{formatGs(diffTotales.rg.gravada_10)}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(diffTotales.rg.gravada_5)}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(diffTotales.rg.iva_10)}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(diffTotales.rg.iva_5)}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(diffTotales.rg.exenta)}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(diffTotales.rg.total)}</td>
-                  <td style={{ padding: '10px 14px', borderLeft: '2px solid #e2e0da' }} />
+                  <td colSpan={['doc', 'proveedor', 'local'].filter(k => !diffColOcultas.has(k)).length} style={{ padding: '10px 14px' }}>Total ({filteredDiffs.length.toLocaleString('es-PY')} filas)</td>
+                  {diffLibroColsVisibles.map((col, i) => (
+                    <td key={col.key} style={{ padding: '10px 14px', textAlign: 'right', ...(i === 0 ? { borderLeft: '2px solid #e2e0da' } : {}) }}>
+                      {formatGs(diffTotales.libro[col.key.replace('libro_', '')])}
+                    </td>
+                  ))}
+                  {diffRgColsVisibles.map((col, i) => (
+                    <td key={col.key} style={{ padding: '10px 14px', textAlign: 'right', ...(i === 0 ? { borderLeft: '2px solid #e2e0da' } : {}) }}>
+                      {formatGs(diffTotales.rg[col.key.replace('rg_', '')])}
+                    </td>
+                  ))}
+                  {diffDifColsVisibles.map((col, i) => (
+                    <td key={col.key} style={{ padding: '10px 14px', textAlign: 'right', ...(i === 0 ? { borderLeft: '2px solid #e2e0da' } : {}) }}>
+                      {formatGs(diffTotales.dif[col.key.replace('dif_', '')])}
+                    </td>
+                  ))}
+                  {!diffColOcultas.has('diferencia') && <td style={{ padding: '10px 14px', borderLeft: '2px solid #e2e0da' }} />}
                 </tr>
               </tfoot>
             </table>

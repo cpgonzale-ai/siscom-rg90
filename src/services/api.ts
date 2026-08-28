@@ -60,13 +60,25 @@ export interface CorrelatividadRow {
   estado: string;
 }
 
+// Desglose por tasa (gravada 10%/5%, IVA 10%/5%, exenta, total) de un lado de la
+// comparación — mismo shape que CompraDiffLado, ver reconcile_with_rg90() en engine.py.
+export interface RG90DiffLado {
+  gravada_10: string;
+  iva_10: string;
+  gravada_5: string;
+  iva_5: string;
+  exenta: string;
+  total: string;
+}
+
 export interface RG90DiffRow {
   doc: string;
   sistema: string;
   local: string;
-  libro: string;
-  rg90: string;
+  libro: RG90DiffLado;
+  rg90: RG90DiffLado;
   diferencia: string;
+  diferencias_detalle?: Record<string, number>;
 }
 
 // Libro de Compras (Minuta 5) — a diferencia de LibroRow (ventas), acá "clave" es la que se

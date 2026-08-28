@@ -3,6 +3,7 @@ import { UploadCloud, FileSpreadsheet, Trash2, Search, Download, RefreshCw, Chec
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
 import { Modal, primaryBtnStyle, secondaryBtnStyle } from '../components/Modal';
+import { TablaSaltos } from '../components/TablaSaltos';
 import { formatGs } from '../utils/format';
 
 // Misma fila de navegación (Volver / Siguiente) que usa Libro de Compras arriba de cada
@@ -623,42 +624,7 @@ export const CargaView: React.FC<CargaViewProps> = ({
           {saltosRows.length === 0 ? (
             <p style={{ fontSize: '13px', color: '#5c6470' }}>No se detectaron saltos de numeración en el libro cargado.</p>
           ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-                    <th style={{ padding: '10px 12px', fontWeight: 600 }}>Local / Establecimiento</th>
-                    <th style={{ padding: '10px 12px', fontWeight: 600 }}>Sistema</th>
-                    <th style={{ padding: '10px 12px', fontWeight: 600 }}>Tipo</th>
-                    <th style={{ padding: '10px 12px', fontWeight: 600 }}>Último N° Procesado</th>
-                    <th style={{ padding: '10px 12px', fontWeight: 600 }}>Salto Detectado</th>
-                    <th style={{ padding: '10px 12px', fontWeight: 600, textAlign: 'center' }}>Faltantes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {saltosRows.map((r: any, i: number) => (
-                    <tr key={i} style={{ borderBottom: '1px solid #f0eee8' }}>
-                      <td style={{ padding: '10px 12px', fontWeight: 600, color: '#22262b' }}>{r.local}</td>
-                      <td style={{ padding: '10px 12px', color: '#5c6470' }}>{r.sistema}</td>
-                      <td style={{ padding: '10px 12px' }}>
-                        <span
-                          style={{
-                            background: r.tipo_doc === 'Nota de Crédito' ? '#f1eef8' : '#eef2fb',
-                            color: r.tipo_doc === 'Nota de Crédito' ? '#5b3aa8' : '#2f5fa8',
-                            fontSize: '11px', fontWeight: 600, padding: '3px 9px', borderRadius: '20px',
-                          }}
-                        >
-                          {r.tipo_doc || 'Factura'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '10px 12px', color: '#5c6470', fontFamily: 'monospace' }}>{r.ultimo}</td>
-                      <td style={{ padding: '10px 12px', color: '#b3402f', fontWeight: 600, fontFamily: 'monospace' }}>{r.salto}</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: '#b0740f' }}>{r.cantidad}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <TablaSaltos rows={saltosRows} />
           )}
         </Modal>
       )}

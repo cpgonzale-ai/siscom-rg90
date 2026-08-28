@@ -3,62 +3,84 @@ import { GitCompare, UploadCloud, RefreshCw, X, ArrowLeft, ArrowRight, FileSprea
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
 import { Modal, primaryBtnStyle, secondaryBtnStyle } from '../components/Modal';
+import { ColumnPicker } from '../components/ColumnPicker';
+import { TablaSaltos } from '../components/TablaSaltos';
 import { formatGs } from '../utils/format';
 import { downloadExcel } from '../utils/exportExcel';
+import type { RG90DiffRow, RG90DiffLado } from '../services/api';
 
-// Misma tabla de saltos que el modal del Paso 2 (CargaView) — acá se reutiliza para el
-// Paso 3 (saltos dentro de la RG90) y el Paso 4 (total combinado libro + RG90), agregando
-// una columna "Origen" cuando hace falta distinguir de cuál de los dos viene cada salto.
-const TablaSaltos: React.FC<{ rows: any[]; conOrigen?: boolean }> = ({ rows, conOrigen }) => (
-  <div style={{ overflowX: 'auto' }}>
-    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
-      <thead>
-        <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-          {conOrigen && <th style={{ padding: '10px 12px', fontWeight: 600 }}>Origen</th>}
-          <th style={{ padding: '10px 12px', fontWeight: 600 }}>Local / Establecimiento</th>
-          <th style={{ padding: '10px 12px', fontWeight: 600 }}>Sistema</th>
-          <th style={{ padding: '10px 12px', fontWeight: 600 }}>Tipo</th>
-          <th style={{ padding: '10px 12px', fontWeight: 600 }}>Último N° Procesado</th>
-          <th style={{ padding: '10px 12px', fontWeight: 600 }}>Salto Detectado</th>
-          <th style={{ padding: '10px 12px', fontWeight: 600, textAlign: 'center' }}>Faltantes</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r: any, i: number) => (
-          <tr key={i} style={{ borderBottom: '1px solid #f0eee8' }}>
-            {conOrigen && (
-              <td style={{ padding: '10px 12px' }}>
-                <span style={{
-                  background: r.__origen === 'RG90' ? '#eef2fb' : '#e8f3ec',
-                  color: r.__origen === 'RG90' ? '#2f5fa8' : '#128752',
-                  fontSize: '11px', fontWeight: 600, padding: '3px 9px', borderRadius: '20px',
-                }}>
-                  {r.__origen}
-                </span>
-              </td>
-            )}
-            <td style={{ padding: '10px 12px', fontWeight: 600, color: '#22262b' }}>{r.local}</td>
-            <td style={{ padding: '10px 12px', color: '#5c6470' }}>{r.sistema}</td>
-            <td style={{ padding: '10px 12px' }}>
-              <span
-                style={{
-                  background: r.tipo_doc === 'Nota de Crédito' ? '#f1eef8' : '#eef2fb',
-                  color: r.tipo_doc === 'Nota de Crédito' ? '#5b3aa8' : '#2f5fa8',
-                  fontSize: '11px', fontWeight: 600, padding: '3px 9px', borderRadius: '20px',
-                }}
-              >
-                {r.tipo_doc || 'Factura'}
-              </span>
-            </td>
-            <td style={{ padding: '10px 12px', color: '#5c6470', fontFamily: 'monospace' }}>{r.ultimo}</td>
-            <td style={{ padding: '10px 12px', color: '#b3402f', fontWeight: 600, fontFamily: 'monospace' }}>{r.salto}</td>
-            <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: '#b0740f' }}>{r.cantidad}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-);
+// Suma de importes formateados como los devuelve el backend ("18.891.429,00") — se
+// necesita volver a número para poder sumar/restar entre filas antes de re-formatear.
+const parseGs = (s: string): number => {
+  const n = parseFloat(String(s ?? '').replace(/\./g, '').replace(',', '.'));
+  return isNaN(n) ? 0 : n;
+};
+
+// Mismo criterio que en Compras: si la fila es "Diferencia de monto", el campo que no está
+// en diferencias_detalle (no difiere) se muestra en 0 — solo quedan visibles los importes
+// que realmente causan la diferencia.
+const valorCeldaDiffVentas = (d: RG90DiffRow, lado: 'libro' | 'rg90', campo: keyof RG90DiffLado): string => {
+  const valor = d[lado][campo];
+  if (d.diferencia !== 'Diferencia de monto' || valor === '—') return valor;
+  return d.diferencias_detalle && campo in d.diferencias_detalle ? valor : '0,00';
+};
+
+const diferenciaCampoVentas = (d: RG90DiffRow, campo: keyof RG90DiffLado): string =>
+  formatGs(parseGs(valorCeldaDiffVentas(d, 'libro', campo)) - parseGs(valorCeldaDiffVentas(d, 'rg90', campo)));
+
+const CAMPOS_DIFF_VENTAS: (keyof RG90DiffLado)[] = ['gravada_10', 'gravada_5', 'iva_10', 'iva_5', 'exenta', 'total'];
+
+// Mismas columnas/estilo que la grilla de resultado de Libro de Compras (Documento,
+// Sistema/Local, desglose Libro/RG90 por tasa, Diferencia por tasa, Motivo).
+const RG90_DIFF_COLUMNAS: { key: string; label: string; getValue: (d: RG90DiffRow) => string }[] = [
+  { key: 'doc', label: 'Documento', getValue: d => d.doc },
+  { key: 'sistema', label: 'Sistema', getValue: d => d.sistema },
+  { key: 'local', label: 'Local', getValue: d => d.local },
+  { key: 'libro_gravada_10', label: 'Gravada 10%', getValue: d => valorCeldaDiffVentas(d, 'libro', 'gravada_10') },
+  { key: 'libro_gravada_5', label: 'Gravada 5%', getValue: d => valorCeldaDiffVentas(d, 'libro', 'gravada_5') },
+  { key: 'libro_iva_10', label: 'IVA 10%', getValue: d => valorCeldaDiffVentas(d, 'libro', 'iva_10') },
+  { key: 'libro_iva_5', label: 'IVA 5%', getValue: d => valorCeldaDiffVentas(d, 'libro', 'iva_5') },
+  { key: 'libro_exenta', label: 'Exenta', getValue: d => valorCeldaDiffVentas(d, 'libro', 'exenta') },
+  { key: 'libro_total', label: 'Total', getValue: d => valorCeldaDiffVentas(d, 'libro', 'total') },
+  { key: 'rg_gravada_10', label: 'Gravada 10%', getValue: d => valorCeldaDiffVentas(d, 'rg90', 'gravada_10') },
+  { key: 'rg_gravada_5', label: 'Gravada 5%', getValue: d => valorCeldaDiffVentas(d, 'rg90', 'gravada_5') },
+  { key: 'rg_iva_10', label: 'IVA 10%', getValue: d => valorCeldaDiffVentas(d, 'rg90', 'iva_10') },
+  { key: 'rg_iva_5', label: 'IVA 5%', getValue: d => valorCeldaDiffVentas(d, 'rg90', 'iva_5') },
+  { key: 'rg_exenta', label: 'Exenta', getValue: d => valorCeldaDiffVentas(d, 'rg90', 'exenta') },
+  { key: 'rg_total', label: 'Total', getValue: d => valorCeldaDiffVentas(d, 'rg90', 'total') },
+  { key: 'dif_gravada_10', label: 'Gravada 10%', getValue: d => diferenciaCampoVentas(d, 'gravada_10') },
+  { key: 'dif_gravada_5', label: 'Gravada 5%', getValue: d => diferenciaCampoVentas(d, 'gravada_5') },
+  { key: 'dif_iva_10', label: 'IVA 10%', getValue: d => diferenciaCampoVentas(d, 'iva_10') },
+  { key: 'dif_iva_5', label: 'IVA 5%', getValue: d => diferenciaCampoVentas(d, 'iva_5') },
+  { key: 'dif_exenta', label: 'Exenta', getValue: d => diferenciaCampoVentas(d, 'exenta') },
+  { key: 'dif_total', label: 'Total', getValue: d => diferenciaCampoVentas(d, 'total') },
+  { key: 'diferencia', label: 'Diferencia / Diagnóstico', getValue: d => d.diferencia },
+];
+
+const RG90_DIFF_COLUMNAS_PICKER: { key: string; label: string }[] = [
+  { key: 'doc', label: 'Documento' },
+  { key: 'sistema', label: 'Sistema' },
+  { key: 'local', label: 'Local' },
+  { key: 'libro_gravada_10', label: 'Libro — Gravada 10%' },
+  { key: 'libro_gravada_5', label: 'Libro — Gravada 5%' },
+  { key: 'libro_iva_10', label: 'Libro — IVA 10%' },
+  { key: 'libro_iva_5', label: 'Libro — IVA 5%' },
+  { key: 'libro_exenta', label: 'Libro — Exenta' },
+  { key: 'libro_total', label: 'Libro — Total' },
+  { key: 'rg_gravada_10', label: 'RG90 — Gravada 10%' },
+  { key: 'rg_gravada_5', label: 'RG90 — Gravada 5%' },
+  { key: 'rg_iva_10', label: 'RG90 — IVA 10%' },
+  { key: 'rg_iva_5', label: 'RG90 — IVA 5%' },
+  { key: 'rg_exenta', label: 'RG90 — Exenta' },
+  { key: 'rg_total', label: 'RG90 — Total' },
+  { key: 'dif_gravada_10', label: 'Diferencia — Gravada 10%' },
+  { key: 'dif_gravada_5', label: 'Diferencia — Gravada 5%' },
+  { key: 'dif_iva_10', label: 'Diferencia — IVA 10%' },
+  { key: 'dif_iva_5', label: 'Diferencia — IVA 5%' },
+  { key: 'dif_exenta', label: 'Diferencia — Exenta' },
+  { key: 'dif_total', label: 'Diferencia — Total' },
+  { key: 'diferencia', label: 'Diferencia / Diagnóstico' },
+];
 
 // Misma fila de navegación (Volver / Siguiente) que usa Libro de Compras arriba de cada
 // paso, en vez de abajo.
@@ -181,6 +203,30 @@ export const RG90View: React.FC<RG90ViewProps> = ({
     ...saltosLibroRows.map(r => ({ ...r, __origen: 'Libro venta' })),
     ...saltosRgRows.map(r => ({ ...r, __origen: 'RG90' })),
   ];
+
+  // Grilla de resultado (Paso 4) — mismo patrón de filtro por columna + selector de
+  // columnas que Libro de Compras (ComprasView), acá local a la vista porque el filtro de
+  // texto general y el de categoría (las cards) ya se resuelven en App.tsx.
+  const [diffColFiltros, setDiffColFiltros] = useState<Record<string, Set<string> | null>>({});
+  const [diffColOcultas, setDiffColOcultas] = useState<Set<string>>(new Set(['dif_gravada_10', 'dif_gravada_5', 'dif_iva_10', 'dif_iva_5', 'dif_exenta', 'dif_total']));
+  let filteredRg90DiffCols = rg90Diff as RG90DiffRow[];
+  for (const col of RG90_DIFF_COLUMNAS) {
+    const activo = diffColFiltros[col.key];
+    if (activo) filteredRg90DiffCols = filteredRg90DiffCols.filter(d => activo.has(col.getValue(d)));
+  }
+  const hayDiffColFiltrosActivos = Object.values(diffColFiltros).some(v => v !== null && v !== undefined);
+  const diffTotalesVentas = (() => {
+    const acc = { libro: {} as Record<string, number>, rg: {} as Record<string, number>, dif: {} as Record<string, number> };
+    for (const campo of CAMPOS_DIFF_VENTAS) {
+      acc.libro[campo] = filteredRg90DiffCols.reduce((s, d) => s + parseGs(valorCeldaDiffVentas(d, 'libro', campo)), 0);
+      acc.rg[campo] = filteredRg90DiffCols.reduce((s, d) => s + parseGs(valorCeldaDiffVentas(d, 'rg90', campo)), 0);
+      acc.dif[campo] = acc.libro[campo] - acc.rg[campo];
+    }
+    return acc;
+  })();
+  const diffLibroColsVisibles = RG90_DIFF_COLUMNAS.filter(c => c.key.startsWith('libro_') && !diffColOcultas.has(c.key));
+  const diffRgColsVisibles = RG90_DIFF_COLUMNAS.filter(c => c.key.startsWith('rg_') && !diffColOcultas.has(c.key));
+  const diffDifColsVisibles = RG90_DIFF_COLUMNAS.filter(c => c.key.startsWith('dif_') && !diffColOcultas.has(c.key));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -508,7 +554,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>
-                Detalle de Discrepancias e Inconsistencias
+                Detalle de Discrepancias e Inconsistencias ({filteredRg90DiffCols.length.toLocaleString('es-PY')} de {rg90Diff.length.toLocaleString('es-PY')})
               </h4>
               {rg90CategoryFilter && (
                 <span
@@ -530,47 +576,131 @@ export const RG90View: React.FC<RG90ViewProps> = ({
               )}
             </div>
 
-            <input
-              type="text"
-              placeholder="Buscar por doc, local..."
-              value={rg90Search}
-              onChange={onRg90Search}
-              style={{
-                padding: '7px 12px',
-                border: '1px solid #e2e0da',
-                borderRadius: '6px',
-                fontSize: '12px',
-                width: '220px',
-              }}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {hayDiffColFiltrosActivos && (
+                <button onClick={() => setDiffColFiltros({})} style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px' }}>
+                  Limpiar filtros
+                </button>
+              )}
+              <ColumnPicker columnas={RG90_DIFF_COLUMNAS_PICKER} ocultas={diffColOcultas} onChange={setDiffColOcultas} />
+              <input
+                type="text"
+                placeholder="Buscar por doc, local..."
+                value={rg90Search}
+                onChange={onRg90Search}
+                style={{
+                  padding: '7px 12px',
+                  border: '1px solid #e2e0da',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  width: '220px',
+                }}
+              />
+            </div>
           </div>
 
+          <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-                <th style={{ padding: '12px 16px', fontWeight: 600 }}>N° Documento</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Sistema</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Local</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>Monto Libro Venta</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>Monto RG90 SET</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Diferencia / Diagnóstico</th>
+                {RG90_DIFF_COLUMNAS.filter(c => ['doc', 'sistema', 'local'].includes(c.key) && !diffColOcultas.has(c.key)).map(col => (
+                  <th key={col.key} rowSpan={2} style={{ padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom' }}>
+                    <ExcelFilterHeader
+                      label={col.label}
+                      allValues={rg90Diff.map(col.getValue)}
+                      active={diffColFiltros[col.key] ?? null}
+                      onChange={(next) => setDiffColFiltros(prev => ({ ...prev, [col.key]: next }))}
+                    />
+                  </th>
+                ))}
+                {diffLibroColsVisibles.length > 0 && (
+                  <th colSpan={diffLibroColsVisibles.length} style={{ padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>Libro de Ventas</th>
+                )}
+                {diffRgColsVisibles.length > 0 && (
+                  <th colSpan={diffRgColsVisibles.length} style={{ padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>RG90 (SET)</th>
+                )}
+                {diffDifColsVisibles.length > 0 && (
+                  <th colSpan={diffDifColsVisibles.length} style={{ padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>Diferencia (Libro − RG90)</th>
+                )}
+                {!diffColOcultas.has('diferencia') && (
+                  <th rowSpan={2} style={{ padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom', borderLeft: '2px solid #e2e0da' }}>
+                    {(() => {
+                      const col = RG90_DIFF_COLUMNAS.find(c => c.key === 'diferencia')!;
+                      return (
+                        <ExcelFilterHeader
+                          label={col.label}
+                          allValues={rg90Diff.map(col.getValue)}
+                          active={diffColFiltros[col.key] ?? null}
+                          onChange={(next) => setDiffColFiltros(prev => ({ ...prev, [col.key]: next }))}
+                        />
+                      );
+                    })()}
+                  </th>
+                )}
+              </tr>
+              <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
+                {[diffLibroColsVisibles, diffRgColsVisibles, diffDifColsVisibles].flatMap(grupo => grupo.map((col, i) => (
+                  <th key={col.key} style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right', ...(i === 0 ? { borderLeft: '2px solid #e2e0da' } : {}) }}>
+                    <ExcelFilterHeader
+                      label={col.label}
+                      allValues={rg90Diff.map(col.getValue)}
+                      active={diffColFiltros[col.key] ?? null}
+                      onChange={(next) => setDiffColFiltros(prev => ({ ...prev, [col.key]: next }))}
+                      align="right"
+                    />
+                  </th>
+                )))}
               </tr>
             </thead>
             <tbody>
-              {rg90Diff.map((r: any, i: number) => (
+              {filteredRg90DiffCols.map((r: any, i: number) => (
                 <tr key={i} style={{ borderBottom: '1px solid #f0eee8' }}>
-                  <td style={{ padding: '12px 16px', fontWeight: 600, color: '#22262b' }}>{r.doc}</td>
-                  <td style={{ padding: '12px 16px', color: '#5c6470' }}>{r.sistema}</td>
-                  <td style={{ padding: '12px 16px', color: '#5c6470' }}>{r.local}</td>
-                  <td style={{ padding: '12px 16px', textAlign: 'right', color: '#5c6470' }}>{r.libro}</td>
-                  <td style={{ padding: '12px 16px', textAlign: 'right', color: '#5c6470' }}>{r.rg90}</td>
-                  <td style={{ padding: '12px 16px' }}>
-                    <span style={parseInlineStyle(r.diffChipStyle)}>{r.diferencia}</span>
-                  </td>
+                  {!diffColOcultas.has('doc') && <td style={{ padding: '10px 14px', fontWeight: 600, color: '#22262b' }}>{r.doc}</td>}
+                  {!diffColOcultas.has('sistema') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.sistema}</td>}
+                  {!diffColOcultas.has('local') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.local}</td>}
+                  {[diffLibroColsVisibles, diffRgColsVisibles, diffDifColsVisibles].flatMap(grupo => grupo.map((col, i) => (
+                    <td
+                      key={col.key}
+                      style={{
+                        padding: '10px 14px', textAlign: 'right', color: '#5c6470',
+                        ...(i === 0 ? { borderLeft: '2px solid #f0eee8' } : {}),
+                        ...(col.key.endsWith('_total') ? { fontWeight: 600, color: '#22262b' } : {}),
+                      }}
+                    >
+                      {col.getValue(r)}
+                    </td>
+                  )))}
+                  {!diffColOcultas.has('diferencia') && (
+                    <td style={{ padding: '10px 14px', borderLeft: '2px solid #f0eee8' }}>
+                      <span style={parseInlineStyle(r.diffChipStyle)}>{r.diferencia}</span>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr style={{ borderTop: '2px solid #e2e0da', backgroundColor: '#fafbfa', fontWeight: 700, color: '#22262b' }}>
+                <td colSpan={['doc', 'sistema', 'local'].filter(k => !diffColOcultas.has(k)).length} style={{ padding: '10px 14px' }}>Total ({filteredRg90DiffCols.length.toLocaleString('es-PY')} filas)</td>
+                {diffLibroColsVisibles.map((col, i) => (
+                  <td key={col.key} style={{ padding: '10px 14px', textAlign: 'right', ...(i === 0 ? { borderLeft: '2px solid #e2e0da' } : {}) }}>
+                    {formatGs(diffTotalesVentas.libro[col.key.replace('libro_', '')])}
+                  </td>
+                ))}
+                {diffRgColsVisibles.map((col, i) => (
+                  <td key={col.key} style={{ padding: '10px 14px', textAlign: 'right', ...(i === 0 ? { borderLeft: '2px solid #e2e0da' } : {}) }}>
+                    {formatGs(diffTotalesVentas.rg[col.key.replace('rg_', '')])}
+                  </td>
+                ))}
+                {diffDifColsVisibles.map((col, i) => (
+                  <td key={col.key} style={{ padding: '10px 14px', textAlign: 'right', ...(i === 0 ? { borderLeft: '2px solid #e2e0da' } : {}) }}>
+                    {formatGs(diffTotalesVentas.dif[col.key.replace('dif_', '')])}
+                  </td>
+                ))}
+                {!diffColOcultas.has('diferencia') && <td style={{ padding: '10px 14px', borderLeft: '2px solid #e2e0da' }} />}
+              </tr>
+            </tfoot>
           </table>
+          </div>
         </div>
 
         {/* Breakdown per Local Table */}
