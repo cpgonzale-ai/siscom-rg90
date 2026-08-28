@@ -3,6 +3,8 @@ import { GitCompare, UploadCloud, RefreshCw, X, ArrowLeft, ArrowRight, FileSprea
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
 import { Modal, primaryBtnStyle, secondaryBtnStyle } from '../components/Modal';
+import { formatGs } from '../utils/format';
+import { downloadExcel } from '../utils/exportExcel';
 
 // Misma tabla de saltos que el modal del Paso 2 (CargaView) — acá se reutiliza para el
 // Paso 3 (saltos dentro de la RG90) y el Paso 4 (total combinado libro + RG90), agregando
@@ -63,10 +65,6 @@ const TablaSaltos: React.FC<{ rows: any[]; conOrigen?: boolean }> = ({ rows, con
 const navRowStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
 const disabledBtnStyle: React.CSSProperties = { opacity: 0.5, cursor: 'not-allowed' };
 
-// Mismo formato que usa el backend para los importes ("18.891.429,00") — para el
-// totalizador del pie de tabla de la grilla de la RG90.
-const formatGs = (n: number): string => n.toLocaleString('es-PY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
 interface RG90ViewProps {
   wizardSteps: any[];
   // Paso 3 (Adjuntar RG90 y listar) vs Paso 4 (Resultado) — antes era un único paso; se
@@ -101,6 +99,7 @@ interface RG90ViewProps {
   clearRg90Category: () => void;
   // Grilla del Paso 3 (registros de la RG90 tal como se parsearon)
   rg90GridRows: any[];
+  rg90GridAllRows: any[];
   rg90GridTotalCount: number;
   rg90GridFilteredCount: number;
   rg90GridColumnFilters: { key: string; label: string; allValues: string[]; active: Set<string> | null; onChange: (next: Set<string> | null) => void }[];
@@ -147,6 +146,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   rg90CategoryFilter,
   clearRg90Category,
   rg90GridRows,
+  rg90GridAllRows,
   rg90GridTotalCount,
   rg90GridFilteredCount,
   rg90GridColumnFilters,
@@ -163,11 +163,22 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   saltosRgRows,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const colFilter = (key: string) => rg90GridColumnFilters.find(c => c.key === key);
+
+  const descargarRg90Excel = () => {
+    if (rg90GridAllRows.length === 0) return;
+    const headers = ['Documento', 'Tipo', 'Sistema', 'Local', 'Fecha', 'RUC', 'Nombre', 'Gravadas 10%', 'IVA 10%', 'Gravadas 5%', 'IVA 5%', 'Exentas', 'Total', 'Estado'];
+    // Importes con el mismo texto ya formateado de la grilla — no un number — para que el
+    // Excel descargado coincida con la pantalla tal cual.
+    const dataRows = rg90GridAllRows.map((r: any) => [
+      r.doc, r.tipo_doc || 'Factura', r.sistema, r.local, r.fecha, r.ruc, r.nombre,
+      r.gravadas, r.iva, r.gravadas_5 ?? '0,00', r.iva_5 ?? '0,00', r.exentas, r.total, r.estado,
+    ]);
+    downloadExcel('RG90_Ventas.xlsx', 'RG90 (SET) — Ventas', headers, dataRows);
+  };
   const [saltosRgModalOpen, setSaltosRgModalOpen] = useState(false);
   const [saltosTotalModalOpen, setSaltosTotalModalOpen] = useState(false);
   const saltosTotales = [
-    ...saltosLibroRows.map(r => ({ ...r, __origen: 'Libro propio' })),
+    ...saltosLibroRows.map(r => ({ ...r, __origen: 'Libro venta' })),
     ...saltosRgRows.map(r => ({ ...r, __origen: 'RG90' })),
   ];
 
@@ -339,6 +350,9 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                     Limpiar filtros
                   </button>
                 )}
+                <button onClick={descargarRg90Excel} style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px' }}>
+                  Excel
+                </button>
                 <input
                   type="text" placeholder="Buscar..." value={rg90GridSearch}
                   onChange={onRg90GridSearch}
@@ -351,27 +365,14 @@ export const RG90View: React.FC<RG90ViewProps> = ({
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#fafbfa', borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-                    {['doc', 'tipo_doc', 'sistema', 'local', 'fecha', 'ruc', 'nombre'].map(key => {
-                      const col = colFilter(key);
-                      if (!col) return <th key={key} style={{ padding: '12px 14px', fontWeight: 600 }} />;
+                    {rg90GridColumnFilters.map(col => {
+                      const esImporte = ['gravadas', 'iva', 'gravadas_5', 'iva_5', 'exentas', 'total'].includes(col.key);
                       return (
-                        <th key={key} style={{ padding: '12px 14px', fontWeight: 600 }}>
-                          <ExcelFilterHeader label={col.label} allValues={col.allValues} active={col.active} onChange={col.onChange} />
+                        <th key={col.key} style={{ padding: '12px 14px', fontWeight: 600, textAlign: esImporte ? 'right' : 'left' }}>
+                          <ExcelFilterHeader label={col.label} allValues={col.allValues} active={col.active} onChange={col.onChange} align={esImporte ? 'right' : 'left'} />
                         </th>
                       );
                     })}
-                    <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>Gravadas 10%</th>
-                    <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 10%</th>
-                    <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>Gravadas 5%</th>
-                    <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 5%</th>
-                    <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>Exentas</th>
-                    <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>Total</th>
-                    <th style={{ padding: '12px 14px', fontWeight: 600 }}>
-                      {(() => {
-                        const col = colFilter('estado');
-                        return col ? <ExcelFilterHeader label={col.label} allValues={col.allValues} active={col.active} onChange={col.onChange} /> : 'Estado';
-                      })()}
-                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -449,21 +450,16 @@ export const RG90View: React.FC<RG90ViewProps> = ({
           <span />
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#22262b', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <GitCompare size={20} color="#128752" />
-            4. Resultado de la comparación
-          </h3>
-          {/* Total combinado: saltos del libro propio (Paso 2) + saltos dentro de la RG90
-              (Paso 3) — el modal distingue el origen de cada uno con una columna aparte.
-              secondaryBtnStyle, igual que "Volver" — el otro botón de este paso. */}
-          <button onClick={() => setSaltosTotalModalOpen(true)} style={secondaryBtnStyle}>
-            Saltos ({saltosTotales.length})
-          </button>
-        </div>
+        <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#22262b', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <GitCompare size={20} color="#128752" />
+          4. Resultado de la comparación
+        </h3>
 
-        {/* RG90 Summary Filter Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${rg90Cards.length}, 1fr)`, gap: '14px' }}>
+        {/* RG90 Summary Filter Cards — "Saltos" va como 4ª card, al costado derecho de
+            "No en libro venta" (antes era un botón aparte, al lado del título). Total
+            combinado: saltos del libro venta (Paso 2) + saltos dentro de la RG90 (Paso 3) —
+            el modal distingue el origen de cada uno con una columna aparte. */}
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${rg90Cards.length + 1}, 1fr)`, gap: '14px' }}>
           {rg90Cards.map((c: any, idx: number) => (
             <div
               key={idx}
@@ -484,6 +480,18 @@ export const RG90View: React.FC<RG90ViewProps> = ({
               </div>
             </div>
           ))}
+          <div
+            onClick={() => setSaltosTotalModalOpen(true)}
+            style={{
+              backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px',
+              padding: '16px 20px', cursor: 'pointer', transition: 'all 0.15s ease',
+            }}
+          >
+            <div style={{ fontSize: '12px', fontWeight: 600, color: '#5c6470' }}>Saltos</div>
+            <div style={{ fontSize: '24px', fontWeight: 700, color: '#b0740f', marginTop: '4px' }}>
+              {saltosTotales.length}
+            </div>
+          </div>
         </div>
 
         {/* Discrepancies Table */}
@@ -543,7 +551,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                 <th style={{ padding: '12px 16px', fontWeight: 600 }}>N° Documento</th>
                 <th style={{ padding: '12px 16px', fontWeight: 600 }}>Sistema</th>
                 <th style={{ padding: '12px 16px', fontWeight: 600 }}>Local</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>Monto Libro Propio</th>
+                <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>Monto Libro Venta</th>
                 <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>Monto RG90 SET</th>
                 <th style={{ padding: '12px 16px', fontWeight: 600 }}>Diferencia / Diagnóstico</th>
               </tr>
@@ -612,7 +620,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
       {saltosTotalModalOpen && (
         <Modal title={`Saltos de numeración — total (${saltosTotales.length})`} onClose={() => setSaltosTotalModalOpen(false)} width="960px">
           {saltosTotales.length === 0 ? (
-            <p style={{ fontSize: '13px', color: '#5c6470' }}>No se detectaron saltos de numeración, ni en el libro propio ni en la RG90.</p>
+            <p style={{ fontSize: '13px', color: '#5c6470' }}>No se detectaron saltos de numeración, ni en el libro venta ni en la RG90.</p>
           ) : (
             <TablaSaltos rows={saltosTotales} conOrigen />
           )}

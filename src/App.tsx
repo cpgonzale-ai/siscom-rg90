@@ -13,6 +13,8 @@ import { ComprasView } from './views/ComprasView';
 import { LocalesView } from './views/LocalesView';
 import { UsuariosView } from './views/UsuariosView';
 import { RolesView } from './views/RolesView';
+import { formatGs } from './utils/format';
+import { downloadExcel } from './utils/exportExcel';
 
 import {
   LibroRow,
@@ -69,6 +71,9 @@ const SYSTEMS_META = [
 // Columnas con filtro tipo Excel en la grilla del libro de ventas unificado (paso 2 de
 // Carga). Se dejan afuera los importes (Gravadas/IVA/Exentas/Total): valores casi todos
 // distintos entre sí, ahí ya está el buscador general — un listado de checkboxes no ayuda.
+// Los importes usan el mismo texto ya formateado por el backend (r.gravadas, no
+// r.gravadas_num) — el filtro tiene que ofrecer/comparar exactamente lo que se ve en la
+// grilla, sin reformatear ("18.891.429,00" tal cual, nunca invertir coma y punto).
 const LIBRO_COLUMNAS: { key: string; label: string; getValue: (r: LibroRow) => string }[] = [
   { key: 'doc', label: 'Documento', getValue: r => r.doc },
   { key: 'tipo_doc', label: 'Tipo', getValue: r => r.tipo_doc || 'Factura' },
@@ -77,6 +82,12 @@ const LIBRO_COLUMNAS: { key: string; label: string; getValue: (r: LibroRow) => s
   { key: 'fecha', label: 'Fecha', getValue: r => r.fecha },
   { key: 'ruc', label: 'RUC', getValue: r => r.ruc },
   { key: 'nombre', label: 'Nombre', getValue: r => r.nombre },
+  { key: 'gravadas', label: 'Gravadas 10%', getValue: r => r.gravadas },
+  { key: 'iva', label: 'IVA 10%', getValue: r => r.iva },
+  { key: 'gravadas_5', label: 'Gravadas 5%', getValue: r => r.gravadas_5 ?? '0,00' },
+  { key: 'iva_5', label: 'IVA 5%', getValue: r => r.iva_5 ?? '0,00' },
+  { key: 'exentas', label: 'Exentas', getValue: r => r.exentas },
+  { key: 'total', label: 'Total', getValue: r => r.total },
   { key: 'estado', label: 'Estado', getValue: r => r.estado },
 ];
 
@@ -190,7 +201,7 @@ export function App() {
   const rg90CardsState = [
     { key: '', label: 'Coinciden', value: `${rg90Summary?.coinciden ?? 0}`, color: '#128752' },
     { key: 'No llegó a la interfaz', label: 'No en RG90', value: `${rg90Summary?.no_en_rg90 ?? 0}`, color: '#b3402f' },
-    { key: 'No en libro propio', label: 'No en libro propio', value: `${rg90Summary?.no_en_libro ?? 0}`, color: '#b3402f' },
+    { key: 'No en libro propio', label: 'No en libro venta', value: `${rg90Summary?.no_en_libro ?? 0}`, color: '#b3402f' },
   ];
 
   const hasAnyUpload = uploadedFiles.length > 0;
@@ -393,11 +404,13 @@ export function App() {
   // Factura, el de Nota de Cr\u00E9dito, el NETO (suma de ambos) y un Check de redondeo.
   const downloadLimpio = () => {
     const headers = ['Proyecto', 'Factura', 'Tipo Doc.', 'Fecha', 'Ruc', 'Nombre', 'Gravadas 10%', 'IVA 10%', 'Gravadas 5%', 'IVA 5%', 'Exentas', 'Total Neto', 'Estado'];
-    const esc = (v: any) => `"${String(v).replace(/"/g, '""')}"`;
+    // Los importes van con el mismo texto ya formateado que se ve en la grilla (r.gravadas,
+    // no r.gravadas_num) — así el Excel descargado coincide con la pantalla tal cual, sin
+    // arriesgar que se invierta coma y punto al re-formatear un number.
     const dataRows = libroRows.map(r => [
       r.local, r.doc, r.tipo_doc ?? 'Factura', r.fecha, r.ruc, r.nombre,
-      r.gravadas_num ?? 0, r.iva_num ?? 0, r.gravadas_5_num ?? 0, r.iva_5_num ?? 0, r.exentas_num ?? 0, r.total_num ?? 0, r.estado,
-    ].map(esc).join(';'));
+      r.gravadas, r.iva, r.gravadas_5 ?? '0,00', r.iva_5 ?? '0,00', r.exentas, r.total, r.estado,
+    ]);
 
     const sumFields = (pred: (r: LibroRow) => boolean) => {
       const subset = libroRows.filter(pred);
@@ -430,29 +443,22 @@ export function App() {
       console.info('[libro limpio] cortes/subtotales del reporte original disponibles para cotejar:', cortesRows);
     }
 
-    const totalRow = ['', '', '', '', '', 'TOTAL', totalGeneral.gravada10, totalGeneral.iva10, totalGeneral.gravada5, totalGeneral.iva5, totalGeneral.exentas, totalGeneral.total, ''].map(esc).join(';');
-    const blank = ['', '', '', '', '', '', '', '', '', '', '', '', ''].map(esc).join(';');
-    const resumenHeader = ['', '', '', '', '', 'RESUMEN', '', '', '', '', '', '', ''].map(esc).join(';');
-    const facturaRow = ['', '', '', '', '', 'Factura', totalFactura.gravada10, totalFactura.iva10, totalFactura.gravada5, totalFactura.iva5, totalFactura.exentas, totalFactura.total, ''].map(esc).join(';');
-    const ncRow = ['', '', '', '', '', 'Nota de Cr\u00E9dito', totalNC.gravada10, totalNC.iva10, totalNC.gravada5, totalNC.iva5, totalNC.exentas, totalNC.total, ''].map(esc).join(';');
-    const netoRow = ['', '', '', '', '', 'NETO', neto.gravada10, neto.iva10, neto.gravada5, neto.iva5, neto.exentas, neto.total, ''].map(esc).join(';');
-    const checkRow = ['', '', '', '', '', 'Check', '', '', '', '', '', check, ''].map(esc).join(';');
+    // Los totales/resumen s\u00ED se calculan ac\u00E1 (son agregados que no vienen del backend), pero
+    // se formatean con el mismo criterio ("18.891.429,00") antes de escribirlos \u2014 nunca se
+    // dejan como number en la celda.
+    const totalRow = ['', '', '', '', '', 'TOTAL', formatGs(totalGeneral.gravada10), formatGs(totalGeneral.iva10), formatGs(totalGeneral.gravada5), formatGs(totalGeneral.iva5), formatGs(totalGeneral.exentas), formatGs(totalGeneral.total), ''];
+    const blank = ['', '', '', '', '', '', '', '', '', '', '', '', ''];
+    const resumenHeader = ['', '', '', '', '', 'RESUMEN', '', '', '', '', '', '', ''];
+    const facturaRow = ['', '', '', '', '', 'Factura', formatGs(totalFactura.gravada10), formatGs(totalFactura.iva10), formatGs(totalFactura.gravada5), formatGs(totalFactura.iva5), formatGs(totalFactura.exentas), formatGs(totalFactura.total), ''];
+    const ncRow = ['', '', '', '', '', 'Nota de Cr\u00E9dito', formatGs(totalNC.gravada10), formatGs(totalNC.iva10), formatGs(totalNC.gravada5), formatGs(totalNC.iva5), formatGs(totalNC.exentas), formatGs(totalNC.total), ''];
+    const netoRow = ['', '', '', '', '', 'NETO', formatGs(neto.gravada10), formatGs(neto.iva10), formatGs(neto.gravada5), formatGs(neto.iva5), formatGs(neto.exentas), formatGs(neto.total), ''];
+    const checkRow = ['', '', '', '', '', 'Check', '', '', '', '', '', formatGs(check), ''];
 
-    const csv = '\uFEFF' + [
-      headers.map(esc).join(';'), ...dataRows, totalRow,
+    downloadExcel('Libro_Ventas_Global_formato_limpio.xlsx', 'Libro de Ventas', headers, [
+      ...dataRows, totalRow,
       blank, blank, blank,
       resumenHeader, blank, facturaRow, ncRow, netoRow, checkRow,
-    ].join('\r\n');
-
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'Libro_Ventas_Global_formato_limpio.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    ]);
   };
 
   // Guidance texts and wizard steps
@@ -874,6 +880,7 @@ export function App() {
               rg90CategoryFilter={rg90CategoryFilter}
               clearRg90Category={() => setRg90CategoryFilter('')}
               rg90GridRows={pagedRg90Rows}
+              rg90GridAllRows={rg90Rows}
               rg90GridTotalCount={rg90Rows.length}
               rg90GridFilteredCount={filteredRg90Rows.length}
               rg90GridColumnFilters={rg90GridColumnFilters}

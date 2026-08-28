@@ -3,15 +3,12 @@ import { UploadCloud, FileSpreadsheet, Trash2, Search, Download, RefreshCw, Chec
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
 import { Modal, primaryBtnStyle, secondaryBtnStyle } from '../components/Modal';
+import { formatGs } from '../utils/format';
 
 // Misma fila de navegación (Volver / Siguiente) que usa Libro de Compras arriba de cada
 // paso, en vez de abajo — ver el mismo criterio aplicado ahí.
 const navRowStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
 const disabledBtnStyle: React.CSSProperties = { opacity: 0.5, cursor: 'not-allowed' };
-
-// Mismo formato que usa el backend para los importes ("18.891.429,00") — para el
-// totalizador del pie de tabla, que se calcula acá con los campos _num del libro.
-const formatGs = (n: number): string => n.toLocaleString('es-PY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 interface CargaViewProps {
   wizardSteps: any[];
@@ -418,7 +415,7 @@ export const CargaView: React.FC<CargaViewProps> = ({
                   }}
                 >
                   <Download size={14} />
-                  <span>Descargar CSV</span>
+                  <span>Descargar Excel</span>
                 </button>
               )}
             </div>
@@ -512,27 +509,14 @@ export const CargaView: React.FC<CargaViewProps> = ({
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
               <thead>
                 <tr style={{ backgroundColor: '#fafbfa', borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-                  {['doc', 'tipo_doc', 'sistema', 'local', 'fecha', 'ruc', 'nombre'].map(key => {
-                    const col = libroColumnFilters.find(c => c.key === key);
-                    if (!col) return <th key={key} style={{ padding: '12px 14px', fontWeight: 600 }} />;
+                  {libroColumnFilters.map(col => {
+                    const esImporte = ['gravadas', 'iva', 'gravadas_5', 'iva_5', 'exentas', 'total'].includes(col.key);
                     return (
-                      <th key={key} style={{ padding: '12px 14px', fontWeight: 600 }}>
-                        <ExcelFilterHeader label={col.label} allValues={col.allValues} active={col.active} onChange={col.onChange} />
+                      <th key={col.key} style={{ padding: '12px 14px', fontWeight: 600, textAlign: esImporte ? 'right' : 'left' }}>
+                        <ExcelFilterHeader label={col.label} allValues={col.allValues} active={col.active} onChange={col.onChange} align={esImporte ? 'right' : 'left'} />
                       </th>
                     );
                   })}
-                  <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>Gravadas 10%</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 10%</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>Gravadas 5%</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 5%</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>Exentas</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>Total</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 600 }}>
-                    {(() => {
-                      const col = libroColumnFilters.find(c => c.key === 'estado');
-                      return col ? <ExcelFilterHeader label={col.label} allValues={col.allValues} active={col.active} onChange={col.onChange} /> : 'Estado';
-                    })()}
-                  </th>
                 </tr>
               </thead>
               <tbody>

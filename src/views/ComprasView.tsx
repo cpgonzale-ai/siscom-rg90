@@ -9,6 +9,8 @@ import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
 import { secondaryBtnStyle, primaryBtnStyle, dangerBtnStyle } from '../components/Modal';
 import type { Local, CompraRow, CompraDiffRow, CompraDiffLado } from '../services/api';
 import { ingestComprasApi, reconcileComprasApi } from '../services/api';
+import { downloadExcel } from '../utils/exportExcel';
+import { formatGs } from '../utils/format';
 
 interface ComprasViewProps {
   locales: Local[];
@@ -26,6 +28,9 @@ const PAGE_SIZE = 50;
 // Columnas con filtro tipo Excel en la grilla del libro cargado (paso 1) — se dejan afuera
 // los importes (Gravada/IVA/Exenta/Total): son valores casi todos distintos entre sí, un
 // listado de checkboxes ahí no ayuda, para eso ya está el buscador general.
+// Los importes usan el mismo texto ya formateado por el backend (r.gravadas, no
+// r.gravadas_num) — el filtro ofrece/compara exactamente lo que se ve en la grilla, sin
+// reformatear ("18.891.429,00" tal cual, nunca invertir coma y punto).
 const LIBRO_COLUMNAS: { key: string; label: string; getValue: (r: CompraRow) => string }[] = [
   { key: 'doc', label: 'Documento', getValue: r => r.doc },
   { key: 'local', label: 'Local', getValue: r => r.local || '' },
@@ -34,6 +39,12 @@ const LIBRO_COLUMNAS: { key: string; label: string; getValue: (r: CompraRow) => 
   { key: 'tipo_doc', label: 'Tipo', getValue: r => r.tipo_doc },
   { key: 'condicion', label: 'Forma de pago', getValue: r => r.condicion || '' },
   { key: 'timbrado', label: 'Timbrado', getValue: r => r.timbrado || '' },
+  { key: 'gravadas', label: 'Gravada 10%', getValue: r => r.gravadas },
+  { key: 'iva', label: 'IVA 10%', getValue: r => r.iva },
+  { key: 'gravadas_5', label: 'Gravada 5%', getValue: r => r.gravadas_5 },
+  { key: 'iva_5', label: 'IVA 5%', getValue: r => r.iva_5 },
+  { key: 'exentas', label: 'Exenta', getValue: r => r.exentas },
+  { key: 'total', label: 'Total', getValue: r => r.total },
   { key: 'estado', label: 'Estado', getValue: r => r.estado },
 ];
 
@@ -46,16 +57,12 @@ const RG_COLUMNAS: { key: string; label: string; getValue: (r: CompraRow) => str
   { key: 'tipo_doc', label: 'Tipo', getValue: r => r.tipo_doc },
   { key: 'condicion', label: 'Forma de pago', getValue: r => r.condicion || '' },
   { key: 'timbrado', label: 'Timbrado', getValue: r => r.timbrado || '' },
-];
-
-// Columnas de texto de la grilla de resultado (paso 3) — los importes de cada lado
-// (Libro/RG) quedan afuera del filtro de checkboxes por la misma razón que en las demás
-// grillas: son casi todos distintos entre sí.
-const DIFF_COLUMNAS: { key: string; label: string; getValue: (d: CompraDiffRow) => string }[] = [
-  { key: 'doc', label: 'Documento', getValue: d => d.doc },
-  { key: 'proveedor', label: 'Proveedor', getValue: d => d.proveedor },
-  { key: 'local', label: 'Local', getValue: d => d.local },
-  { key: 'diferencia', label: 'Motivo de la diferencia', getValue: d => d.diferencia },
+  { key: 'gravadas', label: 'Gravada 10%', getValue: r => r.gravadas },
+  { key: 'iva', label: 'IVA 10%', getValue: r => r.iva },
+  { key: 'gravadas_5', label: 'Gravada 5%', getValue: r => r.gravadas_5 },
+  { key: 'iva_5', label: 'IVA 5%', getValue: r => r.iva_5 },
+  { key: 'exentas', label: 'Exenta', getValue: r => r.exentas },
+  { key: 'total', label: 'Total', getValue: r => r.total },
 ];
 
 // Suma de importes formateados como los devuelve el backend ("18.891.429,00") — se
@@ -64,7 +71,36 @@ const parseGs = (s: string): number => {
   const n = parseFloat(String(s ?? '').replace(/\./g, '').replace(',', '.'));
   return isNaN(n) ? 0 : n;
 };
-const formatGs = (n: number): string => n.toLocaleString('es-PY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Mismo criterio de "en cero si no es la causa de la diferencia" que usa cada celda al
+// renderizarse — se repite acá para poder filtrar/sumar los importes REALMENTE visibles en
+// la grilla, no los crudos que trae el backend.
+const valorCeldaDiff = (d: CompraDiffRow, lado: 'libro' | 'rg', campo: keyof CompraDiffLado): string => {
+  const valor = d[lado][campo];
+  if (d.diferencia !== 'Diferencia de monto' || valor === '—') return valor;
+  return d.diferencias_detalle && campo in d.diferencias_detalle ? valor : '0,00';
+};
+
+// Columnas de la grilla de resultado (paso 3), texto e importes — estos últimos con el
+// mismo valor que se ve en cada celda (post v()/valorCeldaDiff), no el crudo del backend.
+const DIFF_COLUMNAS: { key: string; label: string; getValue: (d: CompraDiffRow) => string }[] = [
+  { key: 'doc', label: 'Documento', getValue: d => d.doc },
+  { key: 'proveedor', label: 'Proveedor', getValue: d => d.proveedor },
+  { key: 'local', label: 'Local', getValue: d => d.local },
+  { key: 'libro_gravada_10', label: 'Gravada 10%', getValue: d => valorCeldaDiff(d, 'libro', 'gravada_10') },
+  { key: 'libro_gravada_5', label: 'Gravada 5%', getValue: d => valorCeldaDiff(d, 'libro', 'gravada_5') },
+  { key: 'libro_iva_10', label: 'IVA 10%', getValue: d => valorCeldaDiff(d, 'libro', 'iva_10') },
+  { key: 'libro_iva_5', label: 'IVA 5%', getValue: d => valorCeldaDiff(d, 'libro', 'iva_5') },
+  { key: 'libro_exenta', label: 'Exenta', getValue: d => valorCeldaDiff(d, 'libro', 'exenta') },
+  { key: 'libro_total', label: 'Total', getValue: d => valorCeldaDiff(d, 'libro', 'total') },
+  { key: 'rg_gravada_10', label: 'Gravada 10%', getValue: d => valorCeldaDiff(d, 'rg', 'gravada_10') },
+  { key: 'rg_gravada_5', label: 'Gravada 5%', getValue: d => valorCeldaDiff(d, 'rg', 'gravada_5') },
+  { key: 'rg_iva_10', label: 'IVA 10%', getValue: d => valorCeldaDiff(d, 'rg', 'iva_10') },
+  { key: 'rg_iva_5', label: 'IVA 5%', getValue: d => valorCeldaDiff(d, 'rg', 'iva_5') },
+  { key: 'rg_exenta', label: 'Exenta', getValue: d => valorCeldaDiff(d, 'rg', 'exenta') },
+  { key: 'rg_total', label: 'Total', getValue: d => valorCeldaDiff(d, 'rg', 'total') },
+  { key: 'diferencia', label: 'Motivo de la diferencia', getValue: d => d.diferencia },
+];
 
 export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) => {
   const puede = (clave: string) => permisos.has(clave);
@@ -238,24 +274,27 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
     }
   };
 
-  const descargarCsv = () => {
+  const descargarExcel = () => {
     if (rows.length === 0) return;
-    const esc = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const headers = ['Documento', 'Local', 'Fecha', 'RUC Proveedor', 'Proveedor', 'Tipo', 'Condición', 'Timbrado', 'Gravada 10%', 'IVA 10%', 'Gravada 5%', 'IVA 5%', 'Exenta', 'Total', 'Estado'];
+    // Importes con el mismo texto ya formateado de la grilla (r.gravadas, no un number) —
+    // el Excel descargado coincide con la pantalla tal cual, sin riesgo de que se invierta
+    // coma y punto al abrirlo.
     const dataRows = rows.map(r => [
       r.doc, r.local, r.fecha, `${r.ruc_proveedor}-${r.dv_proveedor}`, r.proveedor, r.tipo_doc, r.condicion, r.timbrado,
       r.gravadas, r.iva, r.gravadas_5, r.iva_5, r.exentas, r.total, r.estado,
-    ].map(esc).join(';'));
-    const csv = '﻿' + [headers.map(esc).join(';'), ...dataRows].join('\r\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'Libro_de_Compras.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    ]);
+    downloadExcel('Libro_de_Compras.xlsx', 'Libro de Compras', headers, dataRows);
+  };
+
+  const descargarRgExcel = () => {
+    if (rgRows.length === 0) return;
+    const headers = ['Documento', 'Local', 'Fecha', 'RUC Proveedor', 'Proveedor', 'Tipo', 'Condición', 'Timbrado', 'Gravada 10%', 'IVA 10%', 'Gravada 5%', 'IVA 5%', 'Exenta', 'Total'];
+    const dataRows = rgRows.map(r => [
+      r.doc, r.local, r.fecha, r.dv_proveedor ? `${r.ruc_proveedor}-${r.dv_proveedor}` : r.ruc_proveedor, r.proveedor, r.tipo_doc, r.condicion, r.timbrado,
+      r.gravadas, r.iva, r.gravadas_5, r.iva_5, r.exentas, r.total,
+    ]);
+    downloadExcel('RG_Compras.xlsx', 'RG (SET) — Compras', headers, dataRows);
   };
 
   const filteredRows = useMemo(() => {
@@ -325,14 +364,6 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   }, [diffs, diffSearch, diffCategoryFilter, diffColFiltros]);
   const hayDiffColFiltrosActivos = Object.values(diffColFiltros).some(v => v !== null && v !== undefined);
 
-  // Mismo criterio de "en cero si no es la causa de la diferencia" que se usa al renderizar
-  // cada celda (ver v() más abajo, en el render) — se repite acá afuera para poder sumar
-  // los importes REALMENTE visibles en la grilla, no los crudos que trae el backend.
-  const valorCeldaDiff = (d: CompraDiffRow, lado: 'libro' | 'rg', campo: keyof CompraDiffLado): string => {
-    const valor = d[lado][campo];
-    if (d.diferencia !== 'Diferencia de monto' || valor === '—') return valor;
-    return d.diferencias_detalle && campo in d.diferencias_detalle ? valor : '0,00';
-  };
   const CAMPOS_DIFF: (keyof CompraDiffLado)[] = ['gravada_10', 'gravada_5', 'iva_10', 'iva_5', 'exenta', 'total'];
   const diffTotales = useMemo(() => {
     const acc = { libro: {} as Record<string, number>, rg: {} as Record<string, number> };
@@ -443,9 +474,9 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                 </button>
               )}
               {puede('boton:compras.descargar_csv') && (
-                <button onClick={descargarCsv} style={{ ...secondaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <button onClick={descargarExcel} style={{ ...secondaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <Download size={14} />
-                  <span>CSV</span>
+                  <span>Excel</span>
                 </button>
               )}
               {puede('boton:compras.borrar_libro') && (
@@ -461,30 +492,20 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-                  {LIBRO_COLUMNAS.filter(col => col.key !== 'estado').map(col => (
-                    <th key={col.key} style={{ padding: '10px 14px', fontWeight: 600 }}>
-                      <ExcelFilterHeader
-                        label={col.label}
-                        allValues={rows.map(col.getValue)}
-                        active={colFiltros[col.key] ?? null}
-                        onChange={(next) => { setColFiltros(prev => ({ ...prev, [col.key]: next })); setPage(1); }}
-                      />
-                    </th>
-                  ))}
-                  <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>Gravada 10%</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 10%</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>Gravada 5%</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 5%</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>Exenta</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>Total</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>
-                    <ExcelFilterHeader
-                      label="Estado"
-                      allValues={rows.map(r => r.estado)}
-                      active={colFiltros['estado'] ?? null}
-                      onChange={(next) => { setColFiltros(prev => ({ ...prev, estado: next })); setPage(1); }}
-                    />
-                  </th>
+                  {LIBRO_COLUMNAS.map(col => {
+                    const esImporte = ['gravadas', 'iva', 'gravadas_5', 'iva_5', 'exentas', 'total'].includes(col.key);
+                    return (
+                      <th key={col.key} style={{ padding: '10px 14px', fontWeight: 600, textAlign: esImporte ? 'right' : 'left' }}>
+                        <ExcelFilterHeader
+                          label={col.label}
+                          allValues={rows.map(col.getValue)}
+                          active={colFiltros[col.key] ?? null}
+                          onChange={(next) => { setColFiltros(prev => ({ ...prev, [col.key]: next })); setPage(1); }}
+                          align={esImporte ? 'right' : 'left'}
+                        />
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
@@ -630,6 +651,9 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                   Limpiar filtros
                 </button>
               )}
+              <button onClick={descargarRgExcel} style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px' }}>
+                Excel
+              </button>
             </div>
           </div>
 
@@ -637,22 +661,20 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-                  {RG_COLUMNAS.map(col => (
-                    <th key={col.key} style={{ padding: '10px 14px', fontWeight: 600 }}>
-                      <ExcelFilterHeader
-                        label={col.label}
-                        allValues={rgRows.map(col.getValue)}
-                        active={rgColFiltros[col.key] ?? null}
-                        onChange={(next) => { setRgColFiltros(prev => ({ ...prev, [col.key]: next })); setRgGridPage(1); }}
-                      />
-                    </th>
-                  ))}
-                  <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>Gravada 10%</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 10%</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>Gravada 5%</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 5%</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>Exenta</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, textAlign: 'right' }}>Total</th>
+                  {RG_COLUMNAS.map(col => {
+                    const esImporte = ['gravadas', 'iva', 'gravadas_5', 'iva_5', 'exentas', 'total'].includes(col.key);
+                    return (
+                      <th key={col.key} style={{ padding: '10px 14px', fontWeight: 600, textAlign: esImporte ? 'right' : 'left' }}>
+                        <ExcelFilterHeader
+                          label={col.label}
+                          allValues={rgRows.map(col.getValue)}
+                          active={rgColFiltros[col.key] ?? null}
+                          onChange={(next) => { setRgColFiltros(prev => ({ ...prev, [col.key]: next })); setRgGridPage(1); }}
+                          align={esImporte ? 'right' : 'left'}
+                        />
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
@@ -716,7 +738,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
             {[
               { key: '', label: 'Coinciden', value: summary.coinciden, color: '#128752' },
               { key: 'No llegó a la interfaz', label: 'No en RG', value: summary.no_en_rg, color: '#b3402f' },
-              { key: 'No en libro propio', label: 'No en libro propio', value: summary.no_en_libro, color: '#b3402f' },
+              { key: 'No en libro propio', label: 'No en libro compra', value: summary.no_en_libro, color: '#b3402f' },
               { key: 'Diferencia de monto', label: 'Diferencia de monto', value: summary.diferencia_monto, color: '#b0740f' },
             ].map(c => {
               const activa = diffCategoryFilter === c.key && c.key !== '';
@@ -771,7 +793,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-                  {DIFF_COLUMNAS.filter(c => c.key !== 'diferencia').map(col => (
+                  {DIFF_COLUMNAS.filter(c => ['doc', 'proveedor', 'local'].includes(c.key)).map(col => (
                     <th key={col.key} rowSpan={2} style={{ padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom' }}>
                       <ExcelFilterHeader
                         label={col.label}
@@ -798,18 +820,28 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                   </th>
                 </tr>
                 <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-                  <th style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right', borderLeft: '2px solid #e2e0da' }}>Gravada 10%</th>
-                  <th style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right' }}>Gravada 5%</th>
-                  <th style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 10%</th>
-                  <th style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 5%</th>
-                  <th style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right' }}>Exenta</th>
-                  <th style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right' }}>Total</th>
-                  <th style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right', borderLeft: '2px solid #e2e0da' }}>Gravada 10%</th>
-                  <th style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right' }}>Gravada 5%</th>
-                  <th style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 10%</th>
-                  <th style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right' }}>IVA 5%</th>
-                  <th style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right' }}>Exenta</th>
-                  <th style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right' }}>Total</th>
+                  {DIFF_COLUMNAS.filter(c => c.key.startsWith('libro_')).map((col, i) => (
+                    <th key={col.key} style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right', ...(i === 0 ? { borderLeft: '2px solid #e2e0da' } : {}) }}>
+                      <ExcelFilterHeader
+                        label={col.label}
+                        allValues={diffs.map(col.getValue)}
+                        active={diffColFiltros[col.key] ?? null}
+                        onChange={(next) => setDiffColFiltros(prev => ({ ...prev, [col.key]: next }))}
+                        align="right"
+                      />
+                    </th>
+                  ))}
+                  {DIFF_COLUMNAS.filter(c => c.key.startsWith('rg_')).map((col, i) => (
+                    <th key={col.key} style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right', ...(i === 0 ? { borderLeft: '2px solid #e2e0da' } : {}) }}>
+                      <ExcelFilterHeader
+                        label={col.label}
+                        allValues={diffs.map(col.getValue)}
+                        active={diffColFiltros[col.key] ?? null}
+                        onChange={(next) => setDiffColFiltros(prev => ({ ...prev, [col.key]: next }))}
+                        align="right"
+                      />
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
