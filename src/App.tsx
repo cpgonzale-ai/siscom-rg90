@@ -188,7 +188,7 @@ export function App() {
   const [rg90Files, setRg90Files] = useState<File[]>([]);
   const [rg90Analyzing, setRg90Analyzing] = useState<boolean>(false);
   const [rg90Error, setRg90Error] = useState<string | null>(null);
-  const [rg90Summary, setRg90Summary] = useState<{ coinciden: number; no_en_rg90: number; no_en_libro: number; saltos: number } | null>(null);
+  const [rg90Summary, setRg90Summary] = useState<{ coinciden: number; no_en_rg90: number; no_en_libro: number; saltos: number; diferencia_monto: number } | null>(null);
   const [loteId, setLoteId] = useState<number | undefined>(undefined);
   const [converting, setConverting] = useState<boolean>(false);
   const [convertError, setConvertError] = useState<string | null>(null);
@@ -202,6 +202,7 @@ export function App() {
     { key: '', label: 'Coinciden', value: `${rg90Summary?.coinciden ?? 0}`, color: '#128752' },
     { key: 'No llegó a la interfaz', label: 'No en RG90', value: `${rg90Summary?.no_en_rg90 ?? 0}`, color: '#b3402f' },
     { key: 'No en libro propio', label: 'No en libro venta', value: `${rg90Summary?.no_en_libro ?? 0}`, color: '#b3402f' },
+    { key: 'Diferencia de monto', label: 'Diferencia de monto', value: `${rg90Summary?.diferencia_monto ?? 0}`, color: '#b0740f' },
   ];
 
   const hasAnyUpload = uploadedFiles.length > 0;
@@ -343,6 +344,7 @@ export function App() {
         no_en_rg90: res.summary?.no_en_rg90 ?? 0,
         no_en_libro: res.summary?.no_en_libro ?? 0,
         saltos: res.summary?.saltos ?? 0,
+        diferencia_monto: res.summary?.diferencia_monto ?? 0,
       });
       setRg90Loaded(true);
       // Se queda en el Paso 3, listando los registros de la RG90 — el usuario avanza al

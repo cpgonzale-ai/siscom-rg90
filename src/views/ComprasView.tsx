@@ -172,9 +172,12 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const [diffSearch, setDiffSearch] = useState('');
   const [diffCategoryFilter, setDiffCategoryFilter] = useState<string>('');
   const [diffColFiltros, setDiffColFiltros] = useState<Record<string, Set<string> | null>>({});
-  // Por defecto se ocultan los 6 importes "Diferencia" (Libro − RG) — quedan disponibles
-  // desde el selector de columnas, pero no todos los usuarios los necesitan siempre.
-  const [diffColOcultas, setDiffColOcultas] = useState<Set<string>>(new Set(['dif_gravada_10', 'dif_gravada_5', 'dif_iva_10', 'dif_iva_5', 'dif_exenta', 'dif_total']));
+  // Por defecto se ocultan los 6 importes "Diferencia" (Libro − RG) y la Gravada 10%/5% de
+  // ambos lados (Libro y RG) — quedan todos disponibles desde el selector de columnas.
+  const [diffColOcultas, setDiffColOcultas] = useState<Set<string>>(new Set([
+    'libro_gravada_10', 'libro_gravada_5', 'rg_gravada_10', 'rg_gravada_5',
+    'dif_gravada_10', 'dif_gravada_5', 'dif_iva_10', 'dif_iva_5', 'dif_exenta', 'dif_total',
+  ]));
 
   // Cuál de los 3 pasos se muestra en pantalla (a diferencia de ventas, que separa Carga y
   // RG90 en pantallas distintas del sidebar, acá es una sola pantalla — así que se
@@ -405,6 +408,16 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
     return list;
   }, [diffs, diffSearch, diffCategoryFilter, diffColFiltros]);
   const hayDiffColFiltrosActivos = Object.values(diffColFiltros).some(v => v !== null && v !== undefined);
+
+  // Excel de la grilla de resultado (Paso 3) — mismos labels del selector de columnas y
+  // solo las filas que quedan tras los filtros de columna + categoría + búsqueda
+  // (filteredDiffs ya viene con todo eso aplicado, ver arriba).
+  const descargarDiffExcel = () => {
+    if (filteredDiffs.length === 0) return;
+    const headers = DIFF_COLUMNAS_PICKER.map(c => c.label);
+    const dataRows = filteredDiffs.map(d => DIFF_COLUMNAS.map(col => col.getValue(d)));
+    downloadExcel('Resultado_Comparacion_Compras_RG.xlsx', 'Resultado — Compras vs RG', headers, dataRows);
+  };
 
   const CAMPOS_DIFF: (keyof CompraDiffLado)[] = ['gravada_10', 'gravada_5', 'iva_10', 'iva_5', 'exenta', 'total'];
   const diffTotales = useMemo(() => {
@@ -833,6 +846,14 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                   </button>
                 )}
                 <ColumnPicker columnas={DIFF_COLUMNAS_PICKER} ocultas={diffColOcultas} onChange={setDiffColOcultas} />
+                <button
+                  onClick={descargarDiffExcel}
+                  disabled={filteredDiffs.length === 0}
+                  style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <FileSpreadsheet size={14} color="#5c6470" />
+                  <span>Excel</span>
+                </button>
                 <input
                   type="text" placeholder="Buscar por doc, proveedor..." value={diffSearch}
                   onChange={e => setDiffSearch(e.target.value)}

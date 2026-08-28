@@ -228,6 +228,19 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   const diffRgColsVisibles = RG90_DIFF_COLUMNAS.filter(c => c.key.startsWith('rg_') && !diffColOcultas.has(c.key));
   const diffDifColsVisibles = RG90_DIFF_COLUMNAS.filter(c => c.key.startsWith('dif_') && !diffColOcultas.has(c.key));
 
+  // Excel de la grilla de resultado (Paso 4) — mismos labels del selector de columnas
+  // (más descriptivos que los de la cabecera agrupada) y solo las filas que quedan tras
+  // los filtros de columna + categoría + búsqueda (filteredRg90DiffCols ya viene con todo
+  // eso aplicado, ver App.tsx/filteredRg90Diff y el filtro por columna de acá arriba).
+  const descargarDiffVentasExcel = () => {
+    if (filteredRg90DiffCols.length === 0) return;
+    const headers = RG90_DIFF_COLUMNAS_PICKER.map(c => c.label);
+    const dataRows = filteredRg90DiffCols.map(d =>
+      RG90_DIFF_COLUMNAS.map(col => col.getValue(d))
+    );
+    downloadExcel('Resultado_Comparacion_Ventas_RG90.xlsx', 'Resultado — Ventas vs RG90', headers, dataRows);
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* 4 Step Wizard Progress Bar */}
@@ -583,6 +596,14 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                 </button>
               )}
               <ColumnPicker columnas={RG90_DIFF_COLUMNAS_PICKER} ocultas={diffColOcultas} onChange={setDiffColOcultas} />
+              <button
+                onClick={descargarDiffVentasExcel}
+                disabled={filteredRg90DiffCols.length === 0}
+                style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <FileSpreadsheet size={14} color="#5c6470" />
+                <span>Excel</span>
+              </button>
               <input
                 type="text"
                 placeholder="Buscar por doc, local..."
