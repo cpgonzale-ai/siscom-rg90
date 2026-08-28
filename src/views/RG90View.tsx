@@ -455,14 +455,9 @@ export const RG90View: React.FC<RG90ViewProps> = ({
             4. Resultado de la comparación
           </h3>
           {/* Total combinado: saltos del libro propio (Paso 2) + saltos dentro de la RG90
-              (Paso 3) — el modal distingue el origen de cada uno con una columna aparte. */}
-          <button
-            onClick={() => setSaltosTotalModalOpen(true)}
-            style={{
-              background: '#ffffff', border: '1px solid #e2e0da', color: '#5c6470',
-              borderRadius: '7px', padding: '8px 14px', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer',
-            }}
-          >
+              (Paso 3) — el modal distingue el origen de cada uno con una columna aparte.
+              secondaryBtnStyle, igual que "Volver" — el otro botón de este paso. */}
+          <button onClick={() => setSaltosTotalModalOpen(true)} style={secondaryBtnStyle}>
             Saltos ({saltosTotales.length})
           </button>
         </div>
