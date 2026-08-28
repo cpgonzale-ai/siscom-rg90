@@ -248,23 +248,26 @@ export const CargaView: React.FC<CargaViewProps> = ({
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       {/* Campo "apagado": el sistema ya no se elige antes de adjuntar, se
                           detecta al analizar (ver doConvert en App.tsx) — acá solo se
-                          muestra lo que se detectó, no es editable. */}
-                      <span
-                        title="Sistema detectado automáticamente al analizar"
-                        style={{
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          color: '#9aa1ab',
-                          backgroundColor: '#f0eee8',
-                          border: '1px solid #e2e0da',
-                          borderRadius: '6px',
-                          padding: '5px 10px',
-                          cursor: 'not-allowed',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {f.sistemaLabel}
-                      </span>
+                          muestra lo que se detectó, no es editable. Mientras todavía no se
+                          analizó, se oculta en vez de mostrar "Detectando…". */}
+                      {f.sistemaLabel !== 'Detectando…' && (
+                        <span
+                          title="Sistema detectado automáticamente al analizar"
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            color: '#9aa1ab',
+                            backgroundColor: '#f0eee8',
+                            border: '1px solid #e2e0da',
+                            borderRadius: '6px',
+                            padding: '5px 10px',
+                            cursor: 'not-allowed',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {f.sistemaLabel}
+                        </span>
+                      )}
                       <button onClick={f.removeFile} style={parseInlineStyle(f.removeBtnStyle)}>
                         Eliminar
                       </button>

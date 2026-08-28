@@ -306,6 +306,24 @@ export const RG90View: React.FC<RG90ViewProps> = ({
           )}
         </div>
 
+        {/* Mismo lugar que el botón de saltos del Paso 2 (CargaView): una fila de
+            controles propia, entre la card de carga y la grilla — no adentro del header de
+            la grilla. Solo se muestra si se detectaron saltos DENTRO de la RG90 misma, a
+            diferencia del botón del Paso 2, que siempre está visible. */}
+        {saltosRgRows.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={() => setSaltosRgModalOpen(true)}
+              style={{
+                background: '#ffffff', border: '1px solid #e2e0da', color: '#5c6470',
+                borderRadius: '7px', padding: '8px 14px', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              Saltos ({saltosRgRows.length})
+            </button>
+          </div>
+        )}
+
         {/* Grilla de la RG90 cargada — igual que la del libro propio en el paso 2, para
             poder consultar los registros de la RG90 por separado antes de ver el
             resultado en el Paso 4 */}
@@ -319,19 +337,6 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                 {hayRg90GridColFiltrosActivos && (
                   <button onClick={limpiarRg90GridColFiltros} style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px' }}>
                     Limpiar filtros
-                  </button>
-                )}
-                {/* Solo se muestra si se detectaron saltos DENTRO de la RG90 misma — a
-                    diferencia del botón del Paso 2, que siempre está visible. */}
-                {saltosRgRows.length > 0 && (
-                  <button
-                    onClick={() => setSaltosRgModalOpen(true)}
-                    style={{
-                      background: '#ffffff', border: '1px solid #e2e0da', color: '#5c6470',
-                      borderRadius: '7px', padding: '7px 12px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-                    }}
-                  >
-                    Saltos ({saltosRgRows.length})
                   </button>
                 )}
                 <input
@@ -463,7 +468,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
         </div>
 
         {/* RG90 Summary Filter Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${rg90Cards.length}, 1fr)`, gap: '14px' }}>
           {rg90Cards.map((c: any, idx: number) => (
             <div
               key={idx}
