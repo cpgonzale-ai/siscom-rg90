@@ -313,7 +313,12 @@ export async function reconcileApi(rg90Files: File[], posRows: LibroRow[], loteI
     body: formData,
   });
 
-  if (!res.ok) throw new Error('Error al ejecutar la comparación RG90.');
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Tu sesión expiró o no iniciaste sesión. Volvé a loguearte e intentá de nuevo.');
+    let detail = '';
+    try { detail = (await res.json())?.detail || ''; } catch { /* respuesta sin JSON */ }
+    throw new Error(detail || `Error al ejecutar la comparación RG90 (HTTP ${res.status}).`);
+  }
   return await res.json();
 }
 
