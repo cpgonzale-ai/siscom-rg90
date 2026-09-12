@@ -7,7 +7,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
 import { ColumnPicker } from '../components/ColumnPicker';
-import { Modal, secondaryBtnStyle, primaryBtnStyle, dangerBtnStyle } from '../components/Modal';
+import { Modal, secondaryBtnStyle, primaryBtnStyle, dangerBtnStyle, navRowStyle, disabledBtnStyle } from '../components/Modal';
 import { TablaSaltos } from '../components/TablaSaltos';
 import type { Local, CompraRow, CompraDiffRow, CompraDiffLado } from '../services/api';
 import { ingestComprasApi, reconcileComprasApi } from '../services/api';
@@ -458,8 +458,6 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
     marginTop: '14px', backgroundColor: '#fbe9e3', border: '1px solid #eec3b5', color: '#8a3a26',
     borderRadius: '8px', padding: '12px 14px', fontSize: '12.5px',
   };
-  const navRowStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
-  const disabledBtnStyle: React.CSSProperties = { opacity: 0.5, cursor: 'not-allowed' };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>

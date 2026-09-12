@@ -2,14 +2,9 @@ import React, { useRef, useState } from 'react';
 import { UploadCloud, FileSpreadsheet, Trash2, Search, Download, RefreshCw, CheckCircle2, ArrowLeft, ArrowRight } from 'lucide-react';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
-import { Modal, primaryBtnStyle, secondaryBtnStyle } from '../components/Modal';
+import { Modal, primaryBtnStyle, secondaryBtnStyle, navRowStyle, disabledBtnStyle } from '../components/Modal';
 import { TablaSaltos } from '../components/TablaSaltos';
 import { formatGs } from '../utils/format';
-
-// Misma fila de navegación (Volver / Siguiente) que usa Libro de Compras arriba de cada
-// paso, en vez de abajo — ver el mismo criterio aplicado ahí.
-const navRowStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
-const disabledBtnStyle: React.CSSProperties = { opacity: 0.5, cursor: 'not-allowed' };
 
 interface CargaViewProps {
   wizardSteps: any[];

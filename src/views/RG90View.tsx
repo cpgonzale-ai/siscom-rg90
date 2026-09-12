@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { GitCompare, UploadCloud, RefreshCw, X, ArrowLeft, ArrowRight, FileSpreadsheet } from 'lucide-react';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
-import { Modal, primaryBtnStyle, secondaryBtnStyle } from '../components/Modal';
+import { Modal, primaryBtnStyle, secondaryBtnStyle, navRowStyle, disabledBtnStyle } from '../components/Modal';
 import { ColumnPicker } from '../components/ColumnPicker';
 import { TablaSaltos } from '../components/TablaSaltos';
 import { formatGs } from '../utils/format';
@@ -81,11 +81,6 @@ const RG90_DIFF_COLUMNAS_PICKER: { key: string; label: string }[] = [
   { key: 'dif_total', label: 'Diferencia — Total' },
   { key: 'diferencia', label: 'Diferencia / Diagnóstico' },
 ];
-
-// Misma fila de navegación (Volver / Siguiente) que usa Libro de Compras arriba de cada
-// paso, en vez de abajo.
-const navRowStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
-const disabledBtnStyle: React.CSSProperties = { opacity: 0.5, cursor: 'not-allowed' };
 
 interface RG90ViewProps {
   wizardSteps: any[];

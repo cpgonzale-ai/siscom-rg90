@@ -84,3 +84,8 @@ export const dangerBtnStyle: React.CSSProperties = {
   background: '#fff', color: '#b3402f', border: '1px solid #f0c9be', borderRadius: '7px',
   padding: '9px 16px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
 };
+
+// Fila de navegación (Volver / Siguiente) que usan los tres wizards (Libro Ventas, RG90,
+// Libro Compras) arriba de cada paso — antes vivía triplicada, definida igual en cada vista.
+export const navRowStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
+export const disabledBtnStyle: React.CSSProperties = { opacity: 0.5, cursor: 'not-allowed' };
