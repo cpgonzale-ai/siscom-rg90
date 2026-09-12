@@ -13,15 +13,21 @@ const SALTOS_COLUMNAS: { key: string; label: string; getValue: (r: any) => strin
   { key: 'cantidad', label: 'Faltantes', getValue: r => String(r.cantidad) },
 ];
 
+const COLUMNA_PROVEEDOR = { key: 'proveedor', label: 'Proveedor', getValue: (r: any) => r.proveedor || '—' };
+
 // Tabla de saltos de numeración — se usa en el modal del Paso 2 de Ventas (CargaView, solo
 // libro propio), el del Paso 3 (RG90View, solo RG90) y el del Paso 4 (RG90View, combinado
-// libro + RG90 con columna "Origen"). Maneja su propio filtro por columna: se resetea solo
-// al cerrar el modal, porque el componente se desmonta junto con él.
-export const TablaSaltos: React.FC<{ rows: any[]; conOrigen?: boolean }> = ({ rows, conOrigen }) => {
+// libro + RG90 con columna "Origen"); también en el Paso 2 de Compras (ComprasView, saltos
+// dentro de la RG de compras, con columna "Proveedor" — ahí el salto se agrupa por
+// proveedor, no tiene sentido mostrarlo sin decir de cuál es). Maneja su propio filtro por
+// columna: se resetea solo al cerrar el modal, porque el componente se desmonta junto con
+// él.
+export const TablaSaltos: React.FC<{ rows: any[]; conOrigen?: boolean; conProveedor?: boolean }> = ({ rows, conOrigen, conProveedor }) => {
   const [colFiltros, setColFiltros] = useState<Record<string, Set<string> | null>>({});
-  const columnas = conOrigen
+  let columnas = conOrigen
     ? [{ key: 'origen', label: 'Origen', getValue: (r: any) => r.__origen }, ...SALTOS_COLUMNAS]
     : SALTOS_COLUMNAS;
+  if (conProveedor) columnas = [columnas[0], COLUMNA_PROVEEDOR, ...columnas.slice(1)];
   let filteredRows = rows;
   for (const col of columnas) {
     const activo = colFiltros[col.key];
@@ -87,6 +93,9 @@ export const TablaSaltos: React.FC<{ rows: any[]; conOrigen?: boolean }> = ({ ro
                   </td>
                 )}
                 <td style={{ padding: '10px 12px', fontWeight: 600, color: '#22262b' }}>{r.local}</td>
+                {conProveedor && (
+                  <td style={{ padding: '10px 12px', color: '#5c6470' }}>{r.proveedor || '—'}</td>
+                )}
                 <td style={{ padding: '10px 12px', color: '#5c6470' }}>{r.sistema}</td>
                 <td style={{ padding: '10px 12px' }}>
                   <span

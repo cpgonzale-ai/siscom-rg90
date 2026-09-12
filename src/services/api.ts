@@ -147,6 +147,11 @@ export interface CompraReconcileResult {
   lote_id: number;
   rg_total_rows: number;
   rg_rows: CompraRow[];
+  // Saltos de numeración detectados DENTRO de la RG de compras misma (por proveedor —
+  // ver detect_sequence_gaps en engine.py), no contra el libro propio: acá no hay control
+  // de correlatividad del libro propio (no es responsabilidad del comprador que un
+  // proveedor salte numeración).
+  rg_gaps: any[];
   diffs: CompraDiffRow[];
   summary: { coinciden: number; no_en_rg: number; no_en_libro: number; diferencia_monto: number };
 }

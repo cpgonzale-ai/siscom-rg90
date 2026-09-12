@@ -7,7 +7,8 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
 import { ColumnPicker } from '../components/ColumnPicker';
-import { secondaryBtnStyle, primaryBtnStyle, dangerBtnStyle } from '../components/Modal';
+import { Modal, secondaryBtnStyle, primaryBtnStyle, dangerBtnStyle } from '../components/Modal';
+import { TablaSaltos } from '../components/TablaSaltos';
 import type { Local, CompraRow, CompraDiffRow, CompraDiffLado } from '../services/api';
 import { ingestComprasApi, reconcileComprasApi } from '../services/api';
 import { downloadExcel } from '../utils/exportExcel';
@@ -165,6 +166,10 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const [rgGridSearch, setRgGridSearch] = useState('');
   const [rgGridPage, setRgGridPage] = useState(1);
   const [rgColFiltros, setRgColFiltros] = useState<Record<string, Set<string> | null>>({});
+  // Saltos de numeración DENTRO de la RG de compras misma (agrupados por proveedor) — no
+  // hay control de correlatividad del libro propio acá (ver docstring de ComprasEngine).
+  const [rgGapsRows, setRgGapsRows] = useState<any[]>([]);
+  const [saltosRgModalOpen, setSaltosRgModalOpen] = useState(false);
 
   // ── Paso 3: resultado de la comparación ─────────────────────────────────
   const [diffs, setDiffs] = useState<CompraDiffRow[]>([]);
@@ -263,6 +268,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
     setColFiltros({});
     setRgFiles([]);
     setRgRows([]);
+    setRgGapsRows([]);
     setRgColFiltros({});
     setDiffs([]);
     setSummary(null);
@@ -286,6 +292,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const quitarRg = () => {
     setRgFiles([]);
     setRgRows([]);
+    setRgGapsRows([]);
     setRgColFiltros({});
     setDiffs([]);
     setSummary(null);
@@ -304,6 +311,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
     try {
       const res = await reconcileComprasApi(rgFiles, rows, loteId);
       setRgRows(res.rg_rows || []);
+      setRgGapsRows(res.rg_gaps || []);
       setRgGridPage(1);
       setDiffs(res.diffs || []);
       setSummary(res.summary);
@@ -697,6 +705,24 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
         {compareError && <div style={errorBoxStyle}>{compareError}</div>}
       </div>
 
+      {/* Mismo lugar que el botón de saltos del Paso 3 de Ventas (RG90View): entre la card
+          de carga y la grilla. Solo se muestra si se detectaron saltos DENTRO de la RG de
+          compras misma — no hay control de correlatividad del libro propio acá (no es
+          responsabilidad del comprador que un proveedor salte numeración). */}
+      {rgGapsRows.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            onClick={() => setSaltosRgModalOpen(true)}
+            style={{
+              background: '#ffffff', border: '1px solid #e2e0da', color: '#5c6470',
+              borderRadius: '7px', padding: '8px 14px', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            Saltos ({rgGapsRows.length})
+          </button>
+        </div>
+      )}
+
       {/* Grilla de la RG cargada — igual que la del libro propio en el paso 1, para poder
           consultar ambos lados por separado antes de ver el resultado en el paso 3 */}
       {rgRows.length > 0 && (
@@ -981,6 +1007,12 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
           onConfirm={doEliminarTodos}
           onClose={() => setConfirmEliminarTodos(false)}
         />
+      )}
+
+      {saltosRgModalOpen && (
+        <Modal title={`Saltos de numeración dentro de la RG de compras (${rgGapsRows.length})`} onClose={() => setSaltosRgModalOpen(false)} width="960px">
+          <TablaSaltos rows={rgGapsRows} conProveedor />
+        </Modal>
       )}
     </div>
   );
