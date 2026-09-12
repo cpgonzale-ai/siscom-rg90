@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import { FileSpreadsheet } from 'lucide-react';
 import { ExcelFilterHeader } from './ExcelFilterHeader';
 import { secondaryBtnStyle } from './Modal';
+import { downloadExcel } from '../utils/exportExcel';
 
 const SALTOS_COLUMNAS: { key: string; label: string; getValue: (r: any) => string }[] = [
   { key: 'local', label: 'Local / Establecimiento', getValue: r => r.local },
@@ -27,15 +29,32 @@ export const TablaSaltos: React.FC<{ rows: any[]; conOrigen?: boolean }> = ({ ro
   }
   const hayFiltrosActivos = Object.values(colFiltros).some(v => v !== null && v !== undefined);
 
+  // Excel de los saltos detectados — respeta los filtros de columna activos, igual que el
+  // resto de las descargas de la app (se descarga lo que se ve en pantalla, no el total).
+  const descargarExcel = () => {
+    if (filteredRows.length === 0) return;
+    const headers = columnas.map(col => col.label);
+    const dataRows = filteredRows.map(r => columnas.map(col => col.getValue(r)));
+    downloadExcel('Saltos_de_numeracion.xlsx', 'Saltos de numeración', headers, dataRows);
+  };
+
   return (
     <div>
-      {hayFiltrosActivos && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '8px' }}>
+        {hayFiltrosActivos && (
           <button onClick={() => setColFiltros({})} style={{ ...secondaryBtnStyle, padding: '6px 10px', fontSize: '11.5px' }}>
             Limpiar filtros
           </button>
-        </div>
-      )}
+        )}
+        <button
+          onClick={descargarExcel}
+          disabled={filteredRows.length === 0}
+          style={{ ...secondaryBtnStyle, padding: '6px 10px', fontSize: '11.5px', display: 'flex', alignItems: 'center', gap: '6px' }}
+        >
+          <FileSpreadsheet size={13} color="#5c6470" />
+          <span>Excel</span>
+        </button>
+      </div>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
           <thead>

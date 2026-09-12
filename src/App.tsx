@@ -199,7 +199,7 @@ export function App() {
   // numeración, libro + RG90), que si tiene datos. Ver rg90Summary.saltos en api.ts/main.py
   // si en algún momento se retoma esa categoría de diff.
   const rg90CardsState = [
-    { key: '', label: 'Coinciden', value: `${rg90Summary?.coinciden ?? 0}`, color: '#128752' },
+    { key: 'Coincide', label: 'Coinciden', value: `${rg90Summary?.coinciden ?? 0}`, color: '#128752' },
     { key: 'No llegó a la interfaz', label: 'No en RG90', value: `${rg90Summary?.no_en_rg90 ?? 0}`, color: '#b3402f' },
     { key: 'No en libro propio', label: 'No en libro venta', value: `${rg90Summary?.no_en_libro ?? 0}`, color: '#b3402f' },
     { key: 'Diferencia de monto', label: 'Diferencia de monto', value: `${rg90Summary?.diferencia_monto ?? 0}`, color: '#b0740f' },
@@ -620,7 +620,9 @@ export function App() {
     .filter(r => !rg90CategoryFilter || r.diferencia === rg90CategoryFilter)
     .map(r => {
       let diffStyle = 'background:#f0eee8;color:#5c6470;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px';
-      if (r.diferencia === 'No llegó a la interfaz' || r.diferencia === 'No en libro propio') {
+      if (r.diferencia === 'Coincide') {
+        diffStyle = 'background:#e8f3ec;color:#128752;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px';
+      } else if (r.diferencia === 'No llegó a la interfaz' || r.diferencia === 'No en libro propio') {
         diffStyle = 'background:#fbe9e3;color:#b3402f;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px';
       } else if (r.diferencia === 'Rechazada' || r.diferencia === 'Salto de numeración') {
         diffStyle = 'background:#fdf1de;color:#b0740f;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px';
@@ -871,8 +873,8 @@ export function App() {
               resetRg90={resetRg90}
               rg90Cards={rg90CardsState.map(c => ({
                 ...c,
-                isActive: rg90CategoryFilter === c.key && c.key !== '',
-                onClick: c.key === '' ? () => setRg90CategoryFilter('') : () => setRg90CategoryFilter(prev => (prev === c.key ? '' : c.key)),
+                isActive: rg90CategoryFilter === c.key,
+                onClick: () => setRg90CategoryFilter(prev => (prev === c.key ? '' : c.key)),
               }))}
               rg90Diff={filteredRg90Diff}
               rg90ByLocal={rg90ByLocalComputed}

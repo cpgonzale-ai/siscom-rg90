@@ -799,12 +799,12 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
           <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>3. Resultado de la comparación</h4>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
             {[
-              { key: '', label: 'Coinciden', value: summary.coinciden, color: '#128752' },
+              { key: 'Coincide', label: 'Coinciden', value: summary.coinciden, color: '#128752' },
               { key: 'No llegó a la interfaz', label: 'No en RG', value: summary.no_en_rg, color: '#b3402f' },
               { key: 'No en libro propio', label: 'No en libro compra', value: summary.no_en_libro, color: '#b3402f' },
               { key: 'Diferencia de monto', label: 'Diferencia de monto', value: summary.diferencia_monto, color: '#b0740f' },
             ].map(c => {
-              const activa = diffCategoryFilter === c.key && c.key !== '';
+              const activa = diffCategoryFilter === c.key;
               return (
                 <div
                   key={c.label}
@@ -935,8 +935,8 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                     {!diffColOcultas.has('diferencia') && (
                       <td style={{ padding: '10px 14px', borderLeft: '2px solid #f0eee8' }}>
                         <span style={{
-                          background: d.diferencia === 'Diferencia de monto' ? '#fdf1de' : '#fbe9e3',
-                          color: d.diferencia === 'Diferencia de monto' ? '#b0740f' : '#b3402f',
+                          background: d.diferencia === 'Coincide' ? '#e8f3ec' : d.diferencia === 'Diferencia de monto' ? '#fdf1de' : '#fbe9e3',
+                          color: d.diferencia === 'Coincide' ? '#128752' : d.diferencia === 'Diferencia de monto' ? '#b0740f' : '#b3402f',
                           fontSize: '11px', fontWeight: 600, padding: '4px 10px', borderRadius: '20px', whiteSpace: 'nowrap',
                         }}>
                           {d.diferencia}
