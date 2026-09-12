@@ -7,8 +7,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
 import { ColumnPicker } from '../components/ColumnPicker';
-import { Modal, secondaryBtnStyle, primaryBtnStyle, dangerBtnStyle, navRowStyle, disabledBtnStyle } from '../components/Modal';
-import { TablaSaltos } from '../components/TablaSaltos';
+import { secondaryBtnStyle, primaryBtnStyle, dangerBtnStyle, navRowStyle, disabledBtnStyle } from '../components/Modal';
 import type { Local, CompraRow, CompraDiffRow, CompraDiffLado } from '../services/api';
 import { ingestComprasApi, reconcileComprasApi } from '../services/api';
 import { downloadExcel } from '../utils/exportExcel';
@@ -142,6 +141,17 @@ const DIFF_COLUMNAS_PICKER: { key: string; label: string }[] = [
   { key: 'diferencia', label: 'Motivo de la diferencia' },
 ];
 
+// Las 4 categorías del resumen del Paso 3 — la key coincide con el "diferencia" que devuelve
+// el backend ("Coincide", "No llegó a la interfaz", etc.), el label es el texto entendible
+// que se muestra en la tarjeta y en el chip de filtro activo (antes cada uno mostraba un
+// texto distinto para la misma categoría).
+const RESUMEN_CATEGORIAS: { key: string; label: string; color: string }[] = [
+  { key: 'Coincide', label: 'Registros que coinciden', color: '#128752' },
+  { key: 'No llegó a la interfaz', label: 'Registros que no se encuentran en la RG', color: '#b3402f' },
+  { key: 'No en libro propio', label: 'Registros que no se encuentran en libro de compras', color: '#b3402f' },
+  { key: 'Diferencia de monto', label: 'Registros con diferencia de monto', color: '#b0740f' },
+];
+
 export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) => {
   const puede = (clave: string) => permisos.has(clave);
 
@@ -168,8 +178,6 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const [rgColFiltros, setRgColFiltros] = useState<Record<string, Set<string> | null>>({});
   // Saltos de numeración DENTRO de la RG de compras misma (agrupados por proveedor) — no
   // hay control de correlatividad del libro propio acá (ver docstring de ComprasEngine).
-  const [rgGapsRows, setRgGapsRows] = useState<any[]>([]);
-  const [saltosRgModalOpen, setSaltosRgModalOpen] = useState(false);
 
   // ── Paso 3: resultado de la comparación ─────────────────────────────────
   const [diffs, setDiffs] = useState<CompraDiffRow[]>([]);
@@ -177,11 +185,12 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const [diffSearch, setDiffSearch] = useState('');
   const [diffCategoryFilter, setDiffCategoryFilter] = useState<string>('');
   const [diffColFiltros, setDiffColFiltros] = useState<Record<string, Set<string> | null>>({});
-  // Por defecto se ocultan los 6 importes "Diferencia" (Libro − RG) y la Gravada 10%/5% de
-  // ambos lados (Libro y RG) — quedan todos disponibles desde el selector de columnas.
+  // Por defecto se ocultan la Gravada 10%/5% de ambos lados (Libro y RG) y sus columnas
+  // "Diferencia" — el resto de los importes "Diferencia" (IVA 10%/5%, Exenta, Total) se
+  // muestran de entrada. Todas quedan disponibles desde el selector de columnas.
   const [diffColOcultas, setDiffColOcultas] = useState<Set<string>>(new Set([
     'libro_gravada_10', 'libro_gravada_5', 'rg_gravada_10', 'rg_gravada_5',
-    'dif_gravada_10', 'dif_gravada_5', 'dif_iva_10', 'dif_iva_5', 'dif_exenta', 'dif_total',
+    'dif_gravada_10', 'dif_gravada_5',
   ]));
 
   // Cuál de los 3 pasos se muestra en pantalla (a diferencia de ventas, que separa Carga y
@@ -268,7 +277,6 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
     setColFiltros({});
     setRgFiles([]);
     setRgRows([]);
-    setRgGapsRows([]);
     setRgColFiltros({});
     setDiffs([]);
     setSummary(null);
@@ -296,7 +304,6 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const quitarRg = () => {
     setRgFiles([]);
     setRgRows([]);
-    setRgGapsRows([]);
     setRgColFiltros({});
     setDiffs([]);
     setSummary(null);
@@ -315,7 +322,6 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
     try {
       const res = await reconcileComprasApi(rgFiles, rows, loteId);
       setRgRows(res.rg_rows || []);
-      setRgGapsRows(res.rg_gaps || []);
       setRgGridPage(1);
       setDiffs(res.diffs || []);
       setSummary(res.summary);
@@ -449,6 +455,15 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const diffLibroColsVisibles = DIFF_COLUMNAS.filter(c => c.key.startsWith('libro_') && !diffColOcultas.has(c.key));
   const diffRgColsVisibles = DIFF_COLUMNAS.filter(c => c.key.startsWith('rg_') && !diffColOcultas.has(c.key));
   const diffDifColsVisibles = DIFF_COLUMNAS.filter(c => c.key.startsWith('dif_') && !diffColOcultas.has(c.key));
+
+  // Valores de las 4 tarjetas resumen del Paso 3 — separado de RESUMEN_CATEGORIAS (los
+  // rótulos, fijos) porque estos sí dependen del resultado de la comparación.
+  const resumenValores: Record<string, number> = {
+    'Coincide': summary?.coinciden ?? 0,
+    'No llegó a la interfaz': summary?.no_en_rg ?? 0,
+    'No en libro propio': summary?.no_en_libro ?? 0,
+    'Diferencia de monto': summary?.diferencia_monto ?? 0,
+  };
 
   const cardStyle: React.CSSProperties = {
     backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '12px',
@@ -713,24 +728,6 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
         {compareError && <div style={errorBoxStyle}>{compareError}</div>}
       </div>
 
-      {/* Mismo lugar que el botón de saltos del Paso 3 de Ventas (RG90View): entre la card
-          de carga y la grilla. Solo se muestra si se detectaron saltos DENTRO de la RG de
-          compras misma — no hay control de correlatividad del libro propio acá (no es
-          responsabilidad del comprador que un proveedor salte numeración). */}
-      {rgGapsRows.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button
-            onClick={() => setSaltosRgModalOpen(true)}
-            style={{
-              background: '#ffffff', border: '1px solid #e2e0da', color: '#5c6470',
-              borderRadius: '7px', padding: '8px 14px', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer',
-            }}
-          >
-            Saltos ({rgGapsRows.length})
-          </button>
-        </div>
-      )}
-
       {/* Grilla de la RG cargada — igual que la del libro propio en el paso 1, para poder
           consultar ambos lados por separado antes de ver el resultado en el paso 3 */}
       {rgRows.length > 0 && (
@@ -832,16 +829,11 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
 
           <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>3. Resultado de la comparación</h4>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
-            {[
-              { key: 'Coincide', label: 'Coinciden', value: summary.coinciden, color: '#128752' },
-              { key: 'No llegó a la interfaz', label: 'No en RG', value: summary.no_en_rg, color: '#b3402f' },
-              { key: 'No en libro propio', label: 'No en libro compra', value: summary.no_en_libro, color: '#b3402f' },
-              { key: 'Diferencia de monto', label: 'Diferencia de monto', value: summary.diferencia_monto, color: '#b0740f' },
-            ].map(c => {
+            {RESUMEN_CATEGORIAS.map(c => {
               const activa = diffCategoryFilter === c.key;
               return (
                 <div
-                  key={c.label}
+                  key={c.key}
                   onClick={() => setDiffCategoryFilter(prev => (prev === c.key ? '' : c.key))}
                   style={{
                     backgroundColor: activa ? '#e8f3ec' : '#ffffff',
@@ -852,7 +844,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                   }}
                 >
                   <div style={{ fontSize: '12px', fontWeight: 600, color: '#5c6470' }}>{c.label}</div>
-                  <div style={{ fontSize: '24px', fontWeight: 700, color: c.color, marginTop: '4px' }}>{c.value}</div>
+                  <div style={{ fontSize: '24px', fontWeight: 700, color: c.color, marginTop: '4px' }}>{resumenValores[c.key]}</div>
                 </div>
               );
             })}
@@ -864,7 +856,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                 backgroundColor: '#e8f3ec', color: '#128752', fontSize: '11px', fontWeight: 600,
                 padding: '4px 10px', borderRadius: '20px', display: 'inline-flex', alignItems: 'center', gap: '6px',
               }}>
-                Filtro: {diffCategoryFilter}
+                Filtro: {RESUMEN_CATEGORIAS.find(c => c.key === diffCategoryFilter)?.label ?? diffCategoryFilter}
                 <X size={12} style={{ cursor: 'pointer' }} onClick={() => setDiffCategoryFilter('')} />
               </span>
             </div>
@@ -1017,11 +1009,6 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
         />
       )}
 
-      {saltosRgModalOpen && (
-        <Modal title={`Saltos de numeración dentro de la RG de compras (${rgGapsRows.length})`} onClose={() => setSaltosRgModalOpen(false)} width="960px">
-          <TablaSaltos rows={rgGapsRows} conProveedor />
-        </Modal>
-      )}
     </div>
   );
 };
