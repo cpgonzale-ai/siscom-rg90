@@ -1,8 +1,8 @@
 import React, { useRef, useState } from 'react';
-import { GitCompare, UploadCloud, RefreshCw, X, ArrowLeft, ArrowRight, FileSpreadsheet } from 'lucide-react';
+import { GitCompare, UploadCloud, X, Trash2, ArrowLeft, ArrowRight, FileSpreadsheet } from 'lucide-react';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
-import { Modal, primaryBtnStyle, secondaryBtnStyle, navRowStyle, disabledBtnStyle } from '../components/Modal';
+import { Modal, primaryBtnStyle, secondaryBtnStyle, dangerBtnStyle, navRowStyle, disabledBtnStyle } from '../components/Modal';
 import { ColumnPicker } from '../components/ColumnPicker';
 import { TablaSaltos } from '../components/TablaSaltos';
 import { formatGs } from '../utils/format';
@@ -104,6 +104,7 @@ interface RG90ViewProps {
   canQuitarArchivo: boolean;
   simulateRg90: () => void;
   onRg90FileUpload: (files: FileList) => void;
+  onQuitarRg90Archivo: (index: number) => void;
   analyzeRg90: () => void;
   resetRg90: () => void;
   rg90Cards: any[];
@@ -153,6 +154,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   canQuitarArchivo,
   simulateRg90,
   onRg90FileUpload,
+  onQuitarRg90Archivo,
   analyzeRg90,
   resetRg90,
   rg90Cards,
@@ -283,25 +285,16 @@ export const RG90View: React.FC<RG90ViewProps> = ({
               )}
             </div>
 
+            {/* Misma posición y estilo en las 4 secciones de la app donde se adjuntan
+                archivos (CargaView, acá, ComprasView Paso1 y Paso2): el botón que elimina
+                todo lo adjuntado va en el header, junto al título. */}
             {rg90Loaded && canQuitarArchivo && (
               <button
                 onClick={resetRg90}
-                style={{
-                  backgroundColor: '#ffffff',
-                  border: '1px solid #e2e0da',
-                  color: '#b3402f',
-                  borderRadius: '7px',
-                  padding: '8px 14px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                }}
+                style={{ ...dangerBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}
               >
-                <RefreshCw size={14} />
-                <span>Quitar archivo RG90</span>
+                <Trash2 size={14} />
+                <span>Eliminar todos</span>
               </button>
             )}
           </div>
@@ -346,9 +339,12 @@ export const RG90View: React.FC<RG90ViewProps> = ({
           {rg90FileNames.length > 0 && (
             <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {rg90FileNames.map((name, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#fafbfa', border: '1px solid #f0eee8', borderRadius: '7px', fontSize: '12.5px', color: '#22262b' }}>
-                  <FileSpreadsheet size={14} color="#5c6470" />
-                  <span>{name}</span>
+                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 12px', background: '#fafbfa', border: '1px solid #f0eee8', borderRadius: '7px', fontSize: '12.5px', color: '#22262b' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <FileSpreadsheet size={14} color="#5c6470" />
+                    <span>{name}</span>
+                  </div>
+                  <X size={14} style={{ cursor: 'pointer', color: '#9aa1ab' }} onClick={() => onQuitarRg90Archivo(i)} />
                 </div>
               ))}
             </div>

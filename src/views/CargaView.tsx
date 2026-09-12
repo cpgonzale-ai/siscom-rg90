@@ -1,8 +1,8 @@
 import React, { useRef, useState } from 'react';
-import { UploadCloud, FileSpreadsheet, Trash2, Search, Download, RefreshCw, CheckCircle2, ArrowLeft, ArrowRight } from 'lucide-react';
+import { UploadCloud, FileSpreadsheet, Trash2, Search, Download, RefreshCw, CheckCircle2, ArrowLeft, ArrowRight, X } from 'lucide-react';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
-import { Modal, primaryBtnStyle, secondaryBtnStyle, navRowStyle, disabledBtnStyle } from '../components/Modal';
+import { Modal, primaryBtnStyle, secondaryBtnStyle, dangerBtnStyle, navRowStyle, disabledBtnStyle } from '../components/Modal';
 import { TablaSaltos } from '../components/TablaSaltos';
 import { formatGs } from '../utils/format';
 
@@ -146,6 +146,18 @@ export const CargaView: React.FC<CargaViewProps> = ({
             <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#22262b' }}>
               1. Adjuntar el libro de ventas del sistema
             </h3>
+            {/* Misma posición y estilo en las 4 secciones de la app donde se adjuntan
+                archivos (acá, RG90View Paso3, ComprasView Paso1 y Paso2): el botón que
+                elimina todo lo adjuntado va en el header, junto al título. */}
+            {uploadedFilesList.length > 0 && canEliminarTodos && (
+              <button
+                onClick={removeAllFiles}
+                style={{ ...dangerBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Trash2 size={14} />
+                <span>Eliminar todos</span>
+              </button>
+            )}
           </div>
 
           {/* Dropzone — mismo tamaño y texto que el de Libro de Compras: ya no hace falta
@@ -187,33 +199,6 @@ export const CargaView: React.FC<CargaViewProps> = ({
           {/* Uploaded Files List */}
           {uploadedFilesList.length > 0 && (
             <div style={{ marginBottom: '20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <div style={{ fontSize: '12px', fontWeight: 600, color: '#5c6470' }}>
-                  Archivos adjuntados ({uploadedFilesList.length}):
-                </div>
-                {canEliminarTodos && (
-                  <button
-                    onClick={removeAllFiles}
-                    style={{
-                      background: '#fff',
-                      border: '1px solid #e2e0da',
-                      color: '#b3402f',
-                      borderRadius: '6px',
-                      padding: '5px 10px',
-                      fontSize: '11.5px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '5px',
-                    }}
-                  >
-                    <Trash2 size={12} />
-                    <span>Eliminar todos</span>
-                  </button>
-                )}
-              </div>
-
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {uploadedFilesList.map((f) => (
                   <div
@@ -261,9 +246,7 @@ export const CargaView: React.FC<CargaViewProps> = ({
                           {f.sistemaLabel}
                         </span>
                       )}
-                      <button onClick={f.removeFile} style={parseInlineStyle(f.removeBtnStyle)}>
-                        Eliminar
-                      </button>
+                      <X size={14} style={{ cursor: 'pointer', color: '#9aa1ab' }} onClick={f.removeFile} />
                     </div>
                   </div>
                 ))}

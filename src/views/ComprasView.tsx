@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
-  UploadCloud, Trash2, FileSpreadsheet, X, GitCompare, RefreshCw, Download,
+  UploadCloud, Trash2, FileSpreadsheet, X, GitCompare, Download,
   ArrowLeft, ArrowRight,
 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -287,6 +287,10 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
     const nuevos = Array.from(files);
     setRgFiles(prev => [...prev, ...nuevos]);
     setCompareError(null);
+  };
+
+  const quitarRgArchivo = (index: number) => {
+    setRgFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const quitarRg = () => {
@@ -661,10 +665,13 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
               Clave de comparación: documento + RUC del proveedor (sin dígito verificador) — un mismo número de documento puede repetirse entre proveedores distintos.
             </p>
           </div>
+          {/* Misma posición y estilo en las 4 secciones de la app donde se adjuntan archivos
+              (CargaView, RG90View, acá y el Paso 1 de esta misma vista): el botón que elimina
+              todo lo adjuntado va en el header, junto al título. */}
           {rgFiles.length > 0 && puede('boton:compras.quitar_archivo') && (
-            <button onClick={quitarRg} style={{ ...secondaryBtnStyle, color: '#b3402f', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <RefreshCw size={14} />
-              <span>Quitar archivo RG</span>
+            <button onClick={quitarRg} style={{ ...dangerBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Trash2 size={14} />
+              <span>Eliminar todos</span>
             </button>
           )}
         </div>
@@ -692,9 +699,12 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
         {rgFiles.length > 0 && (
           <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
             {rgFiles.map((f, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#fafbfa', border: '1px solid #f0eee8', borderRadius: '7px', fontSize: '12.5px', color: '#22262b' }}>
-                <FileSpreadsheet size={14} color="#5c6470" />
-                <span>{f.name}</span>
+              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 12px', background: '#fafbfa', border: '1px solid #f0eee8', borderRadius: '7px', fontSize: '12.5px', color: '#22262b' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FileSpreadsheet size={14} color="#5c6470" />
+                  <span>{f.name}</span>
+                </div>
+                <X size={14} style={{ cursor: 'pointer', color: '#9aa1ab' }} onClick={() => quitarRgArchivo(i)} />
               </div>
             ))}
           </div>

@@ -328,6 +328,14 @@ export function App() {
     }
   };
 
+  const quitarRg90Archivo = (index: number) => {
+    setRg90Files(prev => {
+      const next = prev.filter((_, i) => i !== index);
+      if (next.length === 0) setRg90Attached(false);
+      return next;
+    });
+  };
+
   const analyzeRg90 = async () => {
     if (!rg90Attached || rg90Files.length === 0) return;
 
@@ -691,7 +699,6 @@ export function App() {
                 ...f,
                 sistemaLabel: f.sistemaLabel || 'Detectando…',
                 removeFile: () => setUploadedFiles(prev => prev.filter(x => x.id !== f.id)),
-                removeBtnStyle: 'background:#fff;border:1px solid #e2e0da;color:#b3402f;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer',
               }))}
               removeAllFiles={removeAllFiles}
               canEliminarTodos={puede('boton:carga.eliminar_todos')}
@@ -869,6 +876,7 @@ export function App() {
               canQuitarArchivo={puede('boton:rg90.quitar_archivo')}
               simulateRg90={simulateRg90Upload}
               onRg90FileUpload={handleRg90FileUpload}
+              onQuitarRg90Archivo={quitarRg90Archivo}
               analyzeRg90={analyzeRg90}
               resetRg90={resetRg90}
               rg90Cards={rg90CardsState.map(c => ({
