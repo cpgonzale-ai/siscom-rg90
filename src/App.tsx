@@ -412,18 +412,22 @@ export function App() {
   // archivo de referencia del cliente (Libro Ventas Mes de Mayo 2026 ACDG v2.xlsx): fila
   // TOTAL pegada al final de los datos, y m\u00E1s abajo un bloque RESUMEN con el total de
   // Factura, el de Nota de Cr\u00E9dito, el NETO (suma de ambos) y un Check de redondeo.
-  const downloadLimpio = () => {
+  // Recibe las filas a exportar en vez de leer libroRows directo: CargaView (Paso 2) pasa
+  // filteredLibro y LibroCompletoView pasa su propia lista (filteredLibro + la búsqueda de
+  // esa pantalla) — cada una "lo que se ve en su grilla" en ese momento. Si no hay ningún
+  // filtro activo, esas listas ya son iguales a libroRows completo.
+  const downloadLimpio = (rows: LibroRow[]) => {
     const headers = ['Proyecto', 'Factura', 'Tipo Doc.', 'Fecha', 'Ruc', 'Nombre', 'Gravadas 10%', 'IVA 10%', 'Gravadas 5%', 'IVA 5%', 'Exentas', 'Total Neto', 'Estado'];
     // Los importes van con el mismo texto ya formateado que se ve en la grilla (r.gravadas,
     // no r.gravadas_num) — así el Excel descargado coincide con la pantalla tal cual, sin
     // arriesgar que se invierta coma y punto al re-formatear un number.
-    const dataRows = libroRows.map(r => [
+    const dataRows = rows.map(r => [
       r.local, r.doc, r.tipo_doc ?? 'Factura', r.fecha, r.ruc, r.nombre,
       r.gravadas, r.iva, r.gravadas_5 ?? '0,00', r.iva_5 ?? '0,00', r.exentas, r.total, r.estado,
     ]);
 
     const sumFields = (pred: (r: LibroRow) => boolean) => {
-      const subset = libroRows.filter(pred);
+      const subset = rows.filter(pred);
       const sum = (f: (r: LibroRow) => number | undefined) => subset.reduce((acc, r) => acc + (f(r) ?? 0), 0);
       return {
         gravada10: sum(r => r.gravadas_num), iva10: sum(r => r.iva_num),
@@ -542,6 +546,14 @@ export function App() {
     const q = searchGeneral.trim().toLowerCase();
     filteredLibro = filteredLibro.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
   }
+
+  // Pantalla "Ver todos" (libroCompleto): mismos filtros de arriba (filteredLibro) más su
+  // propio buscador — se usa tanto para lo que se lista como para lo que se descarga, así
+  // el Excel siempre coincide con lo que esa pantalla está mostrando.
+  const libroCompletoFiltrado = filteredLibro.filter(r =>
+    !libroCompletoSearch.trim() ||
+    Object.values(r).some(v => String(v).toLowerCase().includes(libroCompletoSearch.trim().toLowerCase()))
+  );
 
   const libroColumnFilters = LIBRO_COLUMNAS.map(col => ({
     key: col.key,
@@ -729,7 +741,7 @@ export function App() {
               goToRg90={() => setScreen('rg90')}
               saltosRows={correlatividadRows}
               deleteLibro={deleteLibro}
-              downloadLimpio={downloadLimpio}
+              downloadLimpio={() => downloadLimpio(filteredLibro)}
               pagedLibro={pagedLibro}
               libroColumnFilters={libroColumnFilters}
               hayLibroColFiltrosActivos={hayLibroColFiltrosActivos}
@@ -769,17 +781,12 @@ export function App() {
 
           {screen === 'libroCompleto' && (
             <LibroCompletoView
-              rows={
-                filteredLibro.filter(r =>
-                  !libroCompletoSearch.trim() ||
-                  Object.values(r).some(v => String(v).toLowerCase().includes(libroCompletoSearch.trim().toLowerCase()))
-                )
-              }
+              rows={libroCompletoFiltrado}
               totalSinFiltrar={libroRows.length}
               search={libroCompletoSearch}
               onSearch={(e) => setLibroCompletoSearch(e.target.value)}
               onVolver={() => { setLibroCompletoSearch(''); setScreen('carga'); }}
-              onDownload={downloadLimpio}
+              onDownload={() => downloadLimpio(libroCompletoFiltrado)}
             />
           )}
 
@@ -892,7 +899,7 @@ export function App() {
               rg90CategoryFilter={rg90CategoryFilter}
               clearRg90Category={() => setRg90CategoryFilter('')}
               rg90GridRows={pagedRg90Rows}
-              rg90GridAllRows={rg90Rows}
+              rg90GridExportRows={filteredRg90Rows}
               rg90GridTotalCount={rg90Rows.length}
               rg90GridFilteredCount={filteredRg90Rows.length}
               rg90GridColumnFilters={rg90GridColumnFilters}

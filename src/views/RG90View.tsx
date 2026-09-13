@@ -117,7 +117,10 @@ interface RG90ViewProps {
   clearRg90Category: () => void;
   // Grilla del Paso 3 (registros de la RG90 tal como se parsearon)
   rg90GridRows: any[];
-  rg90GridAllRows: any[];
+  // Filtrada por columna/búsqueda igual que rg90GridRows (ver App.tsx/filteredRg90Rows),
+  // sin paginar — es la base del Excel descargado: "lo que se ve en la grilla" cuando hay
+  // un filtro activo, o todo cuando no lo hay.
+  rg90GridExportRows: any[];
   rg90GridTotalCount: number;
   rg90GridFilteredCount: number;
   rg90GridColumnFilters: { key: string; label: string; allValues: string[]; active: Set<string> | null; onChange: (next: Set<string> | null) => void }[];
@@ -165,7 +168,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   rg90CategoryFilter,
   clearRg90Category,
   rg90GridRows,
-  rg90GridAllRows,
+  rg90GridExportRows,
   rg90GridTotalCount,
   rg90GridFilteredCount,
   rg90GridColumnFilters,
@@ -184,11 +187,11 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const descargarRg90Excel = () => {
-    if (rg90GridAllRows.length === 0) return;
+    if (rg90GridExportRows.length === 0) return;
     const headers = ['Documento', 'Tipo', 'Sistema', 'Local', 'Fecha', 'RUC', 'Nombre', 'Gravadas 10%', 'IVA 10%', 'Gravadas 5%', 'IVA 5%', 'Exentas', 'Total', 'Estado'];
     // Importes con el mismo texto ya formateado de la grilla — no un number — para que el
     // Excel descargado coincida con la pantalla tal cual.
-    const dataRows = rg90GridAllRows.map((r: any) => [
+    const dataRows = rg90GridExportRows.map((r: any) => [
       r.doc, r.tipo_doc || 'Factura', r.sistema, r.local, r.fecha, r.ruc, r.nombre,
       r.gravadas, r.iva, r.gravadas_5 ?? '0,00', r.iva_5 ?? '0,00', r.exentas, r.total, r.estado,
     ]);

@@ -337,13 +337,16 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
     }
   };
 
+  // Si hay filtro de columna o búsqueda activo, se descarga solo lo que queda filtrado en
+  // la grilla (filteredRows/filteredRgRows, definidas más abajo); sin filtros, ambas son
+  // iguales a la lista completa, así que esto también cubre "descargar todo".
   const descargarExcel = () => {
-    if (rows.length === 0) return;
+    if (filteredRows.length === 0) return;
     const headers = ['Documento', 'Local', 'Fecha', 'RUC Proveedor', 'Proveedor', 'Tipo', 'Condición', 'Timbrado', 'Gravada 10%', 'IVA 10%', 'Gravada 5%', 'IVA 5%', 'Exenta', 'Total', 'Estado'];
     // Importes con el mismo texto ya formateado de la grilla (r.gravadas, no un number) —
     // el Excel descargado coincide con la pantalla tal cual, sin riesgo de que se invierta
     // coma y punto al abrirlo.
-    const dataRows = rows.map(r => [
+    const dataRows = filteredRows.map(r => [
       r.doc, r.local, r.fecha, `${r.ruc_proveedor}-${r.dv_proveedor}`, r.proveedor, r.tipo_doc, r.condicion, r.timbrado,
       r.gravadas, r.iva, r.gravadas_5, r.iva_5, r.exentas, r.total, r.estado,
     ]);
@@ -351,9 +354,9 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   };
 
   const descargarRgExcel = () => {
-    if (rgRows.length === 0) return;
+    if (filteredRgRows.length === 0) return;
     const headers = ['Documento', 'Local', 'Fecha', 'RUC Proveedor', 'Proveedor', 'Tipo', 'Condición', 'Timbrado', 'Gravada 10%', 'IVA 10%', 'Gravada 5%', 'IVA 5%', 'Exenta', 'Total'];
-    const dataRows = rgRows.map(r => [
+    const dataRows = filteredRgRows.map(r => [
       r.doc, r.local, r.fecha, r.dv_proveedor ? `${r.ruc_proveedor}-${r.dv_proveedor}` : r.ruc_proveedor, r.proveedor, r.tipo_doc, r.condicion, r.timbrado,
       r.gravadas, r.iva, r.gravadas_5, r.iva_5, r.exentas, r.total,
     ]);
