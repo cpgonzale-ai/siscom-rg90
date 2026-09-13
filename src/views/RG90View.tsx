@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { GitCompare, UploadCloud, X, Trash2, ArrowLeft, ArrowRight, FileSpreadsheet } from 'lucide-react';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
-import { Modal, primaryBtnStyle, secondaryBtnStyle, dangerBtnStyle, navRowStyle, disabledBtnStyle } from '../components/Modal';
+import { Modal, primaryBtnStyle, secondaryBtnStyle, dangerBtnStyle, navRowStyle, disabledBtnStyle, stickyTheadStyle, scrollableGridStyle } from '../components/Modal';
 import { ColumnPicker } from '../components/ColumnPicker';
 import { TablaSaltos } from '../components/TablaSaltos';
 import { formatGs } from '../utils/format';
@@ -32,8 +32,14 @@ const CAMPOS_DIFF_VENTAS: (keyof RG90DiffLado)[] = ['gravada_10', 'gravada_5', '
 
 // Mismas columnas/estilo que la grilla de resultado de Libro de Compras (Documento,
 // Sistema/Local, desglose Libro/RG90 por tasa, Diferencia por tasa, Motivo).
+// Alto real (medido) de la primera fila del encabezado de la grilla de resultado — mismo
+// valor que ComprasView (idéntico padding/tamaño de fuente): la segunda fila necesita este
+// valor como su propio `top` sticky para quedar pegada justo debajo de la primera.
+const DIFF_THEAD_ROW1_HEIGHT = 41;
+
 const RG90_DIFF_COLUMNAS: { key: string; label: string; getValue: (d: RG90DiffRow) => string }[] = [
   { key: 'doc', label: 'Documento', getValue: d => d.doc },
+  { key: 'tipo_doc', label: 'Tipo', getValue: d => d.tipo_doc },
   { key: 'sistema', label: 'Sistema', getValue: d => d.sistema },
   { key: 'local', label: 'Local', getValue: d => d.local },
   { key: 'libro_gravada_10', label: 'Gravada 10%', getValue: d => valorCeldaDiffVentas(d, 'libro', 'gravada_10') },
@@ -59,6 +65,7 @@ const RG90_DIFF_COLUMNAS: { key: string; label: string; getValue: (d: RG90DiffRo
 
 const RG90_DIFF_COLUMNAS_PICKER: { key: string; label: string }[] = [
   { key: 'doc', label: 'Documento' },
+  { key: 'tipo_doc', label: 'Tipo' },
   { key: 'sistema', label: 'Sistema' },
   { key: 'local', label: 'Local' },
   { key: 'libro_gravada_10', label: 'Libro — Gravada 10%' },
@@ -208,7 +215,9 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   // columnas que Libro de Compras (ComprasView), acá local a la vista porque el filtro de
   // texto general y el de categoría (las cards) ya se resuelven en App.tsx.
   const [diffColFiltros, setDiffColFiltros] = useState<Record<string, Set<string> | null>>({});
-  const [diffColOcultas, setDiffColOcultas] = useState<Set<string>>(new Set(['dif_gravada_10', 'dif_gravada_5', 'dif_iva_10', 'dif_iva_5', 'dif_exenta', 'dif_total']));
+  // Por defecto se muestra el apartado "Diferencia" completo (IVA 10%/5%, Exenta, Total) —
+  // solo quedan ocultas Gravada 10%/5%, igual que en Libro de Compras (ComprasView).
+  const [diffColOcultas, setDiffColOcultas] = useState<Set<string>>(new Set(['dif_gravada_10', 'dif_gravada_5']));
   let filteredRg90DiffCols = rg90Diff as RG90DiffRow[];
   for (const col of RG90_DIFF_COLUMNAS) {
     const activo = diffColFiltros[col.key];
@@ -414,14 +423,14 @@ export const RG90View: React.FC<RG90ViewProps> = ({
               </div>
             </div>
 
-            <div style={{ overflowX: 'auto' }}>
+            <div style={scrollableGridStyle}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#fafbfa', borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
                     {rg90GridColumnFilters.map(col => {
                       const esImporte = ['gravadas', 'iva', 'gravadas_5', 'iva_5', 'exentas', 'total'].includes(col.key);
                       return (
-                        <th key={col.key} style={{ padding: '12px 14px', fontWeight: 600, textAlign: esImporte ? 'right' : 'left' }}>
+                        <th key={col.key} style={{ ...stickyTheadStyle, backgroundColor: '#fafbfa', padding: '12px 14px', fontWeight: 600, textAlign: esImporte ? 'right' : 'left' }}>
                           <ExcelFilterHeader label={col.label} allValues={col.allValues} active={col.active} onChange={col.onChange} align={esImporte ? 'right' : 'left'} />
                         </th>
                       );
@@ -614,12 +623,12 @@ export const RG90View: React.FC<RG90ViewProps> = ({
             </div>
           </div>
 
-          <div style={{ overflowX: 'auto' }}>
+          <div style={scrollableGridStyle}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-                {RG90_DIFF_COLUMNAS.filter(c => ['doc', 'sistema', 'local'].includes(c.key) && !diffColOcultas.has(c.key)).map(col => (
-                  <th key={col.key} rowSpan={2} style={{ padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom' }}>
+                {RG90_DIFF_COLUMNAS.filter(c => ['doc', 'tipo_doc', 'sistema', 'local'].includes(c.key) && !diffColOcultas.has(c.key)).map(col => (
+                  <th key={col.key} rowSpan={2} style={{ ...stickyTheadStyle, padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom' }}>
                     <ExcelFilterHeader
                       label={col.label}
                       allValues={rg90Diff.map(col.getValue)}
@@ -629,16 +638,16 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                   </th>
                 ))}
                 {diffLibroColsVisibles.length > 0 && (
-                  <th colSpan={diffLibroColsVisibles.length} style={{ padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>Libro de Ventas</th>
+                  <th colSpan={diffLibroColsVisibles.length} style={{ ...stickyTheadStyle, padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>Libro de Ventas</th>
                 )}
                 {diffRgColsVisibles.length > 0 && (
-                  <th colSpan={diffRgColsVisibles.length} style={{ padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>RG90 (SET)</th>
+                  <th colSpan={diffRgColsVisibles.length} style={{ ...stickyTheadStyle, padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>RG90 (SET)</th>
                 )}
                 {diffDifColsVisibles.length > 0 && (
-                  <th colSpan={diffDifColsVisibles.length} style={{ padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>Diferencia (Libro − RG90)</th>
+                  <th colSpan={diffDifColsVisibles.length} style={{ ...stickyTheadStyle, padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>Diferencia (Libro − RG90)</th>
                 )}
                 {!diffColOcultas.has('diferencia') && (
-                  <th rowSpan={2} style={{ padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom', borderLeft: '2px solid #e2e0da' }}>
+                  <th rowSpan={2} style={{ ...stickyTheadStyle, padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom', borderLeft: '2px solid #e2e0da' }}>
                     {(() => {
                       const col = RG90_DIFF_COLUMNAS.find(c => c.key === 'diferencia')!;
                       return (
@@ -655,7 +664,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
               </tr>
               <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
                 {[diffLibroColsVisibles, diffRgColsVisibles, diffDifColsVisibles].flatMap(grupo => grupo.map((col, i) => (
-                  <th key={col.key} style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right', ...(i === 0 ? { borderLeft: '2px solid #e2e0da' } : {}) }}>
+                  <th key={col.key} style={{ ...stickyTheadStyle, top: DIFF_THEAD_ROW1_HEIGHT, padding: '8px 14px', fontWeight: 600, textAlign: 'right', ...(i === 0 ? { borderLeft: '2px solid #e2e0da' } : {}) }}>
                     <ExcelFilterHeader
                       label={col.label}
                       allValues={rg90Diff.map(col.getValue)}
@@ -671,6 +680,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
               {filteredRg90DiffCols.map((r: any, i: number) => (
                 <tr key={i} style={{ borderBottom: '1px solid #f0eee8' }}>
                   {!diffColOcultas.has('doc') && <td style={{ padding: '10px 14px', fontWeight: 600, color: '#22262b' }}>{r.doc}</td>}
+                  {!diffColOcultas.has('tipo_doc') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.tipo_doc}</td>}
                   {!diffColOcultas.has('sistema') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.sistema}</td>}
                   {!diffColOcultas.has('local') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.local}</td>}
                   {[diffLibroColsVisibles, diffRgColsVisibles, diffDifColsVisibles].flatMap(grupo => grupo.map((col, i) => (
@@ -695,7 +705,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
             </tbody>
             <tfoot>
               <tr style={{ borderTop: '2px solid #e2e0da', backgroundColor: '#fafbfa', fontWeight: 700, color: '#22262b' }}>
-                <td colSpan={['doc', 'sistema', 'local'].filter(k => !diffColOcultas.has(k)).length} style={{ padding: '10px 14px' }}>Total ({filteredRg90DiffCols.length.toLocaleString('es-PY')} filas)</td>
+                <td colSpan={['doc', 'tipo_doc', 'sistema', 'local'].filter(k => !diffColOcultas.has(k)).length} style={{ padding: '10px 14px' }}>Total ({filteredRg90DiffCols.length.toLocaleString('es-PY')} filas)</td>
                 {diffLibroColsVisibles.map((col, i) => (
                   <td key={col.key} style={{ padding: '10px 14px', textAlign: 'right', ...(i === 0 ? { borderLeft: '2px solid #e2e0da' } : {}) }}>
                     {formatGs(diffTotalesVentas.libro[col.key.replace('libro_', '')])}
@@ -729,11 +739,11 @@ export const RG90View: React.FC<RG90ViewProps> = ({
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Local</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Sistema</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'center' }}>Comprobantes</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'center' }}>Diferencias</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'center' }}>Saltos</th>
+                <th style={{ ...stickyTheadStyle, padding: '12px 16px', fontWeight: 600 }}>Local</th>
+                <th style={{ ...stickyTheadStyle, padding: '12px 16px', fontWeight: 600 }}>Sistema</th>
+                <th style={{ ...stickyTheadStyle, padding: '12px 16px', fontWeight: 600, textAlign: 'center' }}>Comprobantes</th>
+                <th style={{ ...stickyTheadStyle, padding: '12px 16px', fontWeight: 600, textAlign: 'center' }}>Diferencias</th>
+                <th style={{ ...stickyTheadStyle, padding: '12px 16px', fontWeight: 600, textAlign: 'center' }}>Saltos</th>
               </tr>
             </thead>
             <tbody>

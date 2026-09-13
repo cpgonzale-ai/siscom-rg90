@@ -73,6 +73,7 @@ export interface RG90DiffLado {
 
 export interface RG90DiffRow {
   doc: string;
+  tipo_doc: string;
   sistema: string;
   local: string;
   libro: RG90DiffLado;

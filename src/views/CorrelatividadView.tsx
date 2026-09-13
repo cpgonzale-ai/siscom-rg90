@@ -1,5 +1,6 @@
 import React from 'react';
 import { ListTree } from 'lucide-react';
+import { stickyTheadStyle, scrollableGridStyle } from '../components/Modal';
 
 interface CorrelatividadViewProps {
   correlatividad: any[];
@@ -63,16 +64,17 @@ export const CorrelatividadView: React.FC<CorrelatividadViewProps> = ({
 
       {/* Correlatividad Table */}
       <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', overflow: 'hidden' }}>
+        <div style={scrollableGridStyle}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
           <thead>
             <tr style={{ backgroundColor: '#fafbfa', borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-              <th style={{ padding: '14px 16px', fontWeight: 600 }}>Local / Establecimiento</th>
-              <th style={{ padding: '14px 16px', fontWeight: 600 }}>Sistema</th>
-              <th style={{ padding: '14px 16px', fontWeight: 600 }}>Tipo</th>
-              <th style={{ padding: '14px 16px', fontWeight: 600 }}>Último N° Procesado</th>
-              <th style={{ padding: '14px 16px', fontWeight: 600 }}>Salto Detectado</th>
-              <th style={{ padding: '14px 16px', fontWeight: 600, textAlign: 'center' }}>Faltantes</th>
-              <th style={{ padding: '14px 16px', fontWeight: 600 }}>Estado</th>
+              <th style={{ ...stickyTheadStyle, backgroundColor: '#fafbfa', padding: '14px 16px', fontWeight: 600 }}>Local / Establecimiento</th>
+              <th style={{ ...stickyTheadStyle, backgroundColor: '#fafbfa', padding: '14px 16px', fontWeight: 600 }}>Sistema</th>
+              <th style={{ ...stickyTheadStyle, backgroundColor: '#fafbfa', padding: '14px 16px', fontWeight: 600 }}>Tipo</th>
+              <th style={{ ...stickyTheadStyle, backgroundColor: '#fafbfa', padding: '14px 16px', fontWeight: 600 }}>Último N° Procesado</th>
+              <th style={{ ...stickyTheadStyle, backgroundColor: '#fafbfa', padding: '14px 16px', fontWeight: 600 }}>Salto Detectado</th>
+              <th style={{ ...stickyTheadStyle, backgroundColor: '#fafbfa', padding: '14px 16px', fontWeight: 600, textAlign: 'center' }}>Faltantes</th>
+              <th style={{ ...stickyTheadStyle, backgroundColor: '#fafbfa', padding: '14px 16px', fontWeight: 600 }}>Estado</th>
             </tr>
           </thead>
           <tbody>
@@ -119,6 +121,7 @@ export const CorrelatividadView: React.FC<CorrelatividadViewProps> = ({
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

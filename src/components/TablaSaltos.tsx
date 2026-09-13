@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { FileSpreadsheet } from 'lucide-react';
 import { ExcelFilterHeader } from './ExcelFilterHeader';
-import { secondaryBtnStyle } from './Modal';
+import { secondaryBtnStyle, stickyTheadStyle, scrollableGridStyle } from './Modal';
 import { downloadExcel } from '../utils/exportExcel';
 
 const SALTOS_COLUMNAS: { key: string; label: string; getValue: (r: any) => string }[] = [
@@ -61,12 +61,12 @@ export const TablaSaltos: React.FC<{ rows: any[]; conOrigen?: boolean; conProvee
           <span>Excel</span>
         </button>
       </div>
-      <div style={{ overflowX: 'auto' }}>
+      <div style={scrollableGridStyle}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
               {columnas.map(col => (
-                <th key={col.key} style={{ padding: '10px 12px', fontWeight: 600, textAlign: col.key === 'cantidad' ? 'center' : 'left' }}>
+                <th key={col.key} style={{ ...stickyTheadStyle, padding: '10px 12px', fontWeight: 600, textAlign: col.key === 'cantidad' ? 'center' : 'left' }}>
                   <ExcelFilterHeader
                     label={col.label}
                     allValues={rows.map(col.getValue)}

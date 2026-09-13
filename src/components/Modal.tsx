@@ -89,3 +89,20 @@ export const dangerBtnStyle: React.CSSProperties = {
 // Libro Compras) arriba de cada paso — antes vivía triplicada, definida igual en cada vista.
 export const navRowStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
 export const disabledBtnStyle: React.CSSProperties = { opacity: 0.5, cursor: 'not-allowed' };
+
+// Encabezado de columna fijo: usado en todas las grillas de Ventas y Compras (Libro, RG,
+// resultado, correlatividad, saltos) para que el título de cada columna siga visible al
+// scrollear una grilla con muchas filas — sin esto, en una grilla de miles de filas hay que
+// volver arriba para acordarse a qué columna corresponde cada dato. El fondo blanco es
+// necesario: sin él, las filas de abajo se transparentan a través del encabezado al
+// scrollear. Para encabezados de dos filas (grupo + campo), la segunda fila necesita su
+// propio `top` igual a la altura ya ocupada por la primera (ver ComprasView/RG90View).
+export const stickyTheadStyle: React.CSSProperties = { position: 'sticky', top: 0, zIndex: 2, backgroundColor: '#ffffff' };
+
+// Contenedor con scroll propio para las grillas que usan stickyTheadStyle — imprescindible
+// para que el encabezado realmente se quede fijo: la tarjeta que envuelve cada grilla usa
+// overflow:hidden SOLO para redondear las esquinas, pero como no tiene un alto acotado nunca
+// llega a scrollear por su cuenta — y sin scroll propio, "position: sticky" no tiene nada
+// contra qué pegarse (queda igual que position:static). Este div sí tiene un alto máximo
+// real: es el que efectivamente scrollea, y por lo tanto el que ancla el sticky.
+export const scrollableGridStyle: React.CSSProperties = { maxHeight: '60vh', overflow: 'auto' };

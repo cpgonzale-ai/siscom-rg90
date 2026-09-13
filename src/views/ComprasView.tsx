@@ -7,7 +7,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
 import { ColumnPicker } from '../components/ColumnPicker';
-import { secondaryBtnStyle, primaryBtnStyle, dangerBtnStyle, navRowStyle, disabledBtnStyle } from '../components/Modal';
+import { secondaryBtnStyle, primaryBtnStyle, dangerBtnStyle, navRowStyle, disabledBtnStyle, stickyTheadStyle, scrollableGridStyle } from '../components/Modal';
 import type { Local, CompraRow, CompraDiffRow, CompraDiffLado } from '../services/api';
 import { ingestComprasApi, reconcileComprasApi } from '../services/api';
 import { downloadExcel } from '../utils/exportExcel';
@@ -89,6 +89,11 @@ const diferenciaCampo = (d: CompraDiffRow, campo: keyof CompraDiffLado): string 
 
 // Columnas de la grilla de resultado (paso 3), texto e importes — estos últimos con el
 // mismo valor que se ve en cada celda (post v()/valorCeldaDiff), no el crudo del backend.
+// Alto real (medido) de la primera fila del encabezado de la grilla de resultado — la
+// segunda fila (Gravada/IVA/Exenta/Total de cada grupo) necesita este valor como su propio
+// `top` sticky para quedar pegada justo debajo de la primera, no tapada por ella.
+const DIFF_THEAD_ROW1_HEIGHT = 41;
+
 const DIFF_COLUMNAS: { key: string; label: string; getValue: (d: CompraDiffRow) => string }[] = [
   { key: 'doc', label: 'Documento', getValue: d => d.doc },
   { key: 'tipo_doc', label: 'Tipo', getValue: d => d.tipo_doc },
@@ -581,14 +586,14 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
             </div>
           </div>
 
-          <div style={{ overflowX: 'auto' }}>
+          <div style={scrollableGridStyle}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
                   {LIBRO_COLUMNAS.map(col => {
                     const esImporte = ['gravadas', 'iva', 'gravadas_5', 'iva_5', 'exentas', 'total'].includes(col.key);
                     return (
-                      <th key={col.key} style={{ padding: '10px 14px', fontWeight: 600, textAlign: esImporte ? 'right' : 'left' }}>
+                      <th key={col.key} style={{ ...stickyTheadStyle, padding: '10px 14px', fontWeight: 600, textAlign: esImporte ? 'right' : 'left' }}>
                         <ExcelFilterHeader
                           label={col.label}
                           allValues={rows.map(col.getValue)}
@@ -756,14 +761,14 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
             </div>
           </div>
 
-          <div style={{ overflowX: 'auto' }}>
+          <div style={scrollableGridStyle}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
                   {RG_COLUMNAS.map(col => {
                     const esImporte = ['gravadas', 'iva', 'gravadas_5', 'iva_5', 'exentas', 'total'].includes(col.key);
                     return (
-                      <th key={col.key} style={{ padding: '10px 14px', fontWeight: 600, textAlign: esImporte ? 'right' : 'left' }}>
+                      <th key={col.key} style={{ ...stickyTheadStyle, padding: '10px 14px', fontWeight: 600, textAlign: esImporte ? 'right' : 'left' }}>
                         <ExcelFilterHeader
                           label={col.label}
                           allValues={rgRows.map(col.getValue)}
@@ -892,12 +897,12 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                 />
               </div>
             </div>
-            <div style={{ overflowX: 'auto' }}>
+            <div style={scrollableGridStyle}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
                   {DIFF_COLUMNAS.filter(c => ['doc', 'tipo_doc', 'proveedor', 'local'].includes(c.key) && !diffColOcultas.has(c.key)).map(col => (
-                    <th key={col.key} rowSpan={2} style={{ padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom' }}>
+                    <th key={col.key} rowSpan={2} style={{ ...stickyTheadStyle, padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom' }}>
                       <ExcelFilterHeader
                         label={col.label}
                         allValues={diffs.map(col.getValue)}
@@ -907,16 +912,16 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                     </th>
                   ))}
                   {diffLibroColsVisibles.length > 0 && (
-                    <th colSpan={diffLibroColsVisibles.length} style={{ padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>Libro de Compras</th>
+                    <th colSpan={diffLibroColsVisibles.length} style={{ ...stickyTheadStyle, padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>Libro de Compras</th>
                   )}
                   {diffRgColsVisibles.length > 0 && (
-                    <th colSpan={diffRgColsVisibles.length} style={{ padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>RG (SET)</th>
+                    <th colSpan={diffRgColsVisibles.length} style={{ ...stickyTheadStyle, padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>RG (SET)</th>
                   )}
                   {diffDifColsVisibles.length > 0 && (
-                    <th colSpan={diffDifColsVisibles.length} style={{ padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>Diferencia (Libro − RG)</th>
+                    <th colSpan={diffDifColsVisibles.length} style={{ ...stickyTheadStyle, padding: '8px 14px', fontWeight: 700, textAlign: 'center', borderLeft: '2px solid #e2e0da', color: '#22262b' }}>Diferencia (Libro − RG)</th>
                   )}
                   {!diffColOcultas.has('diferencia') && (
-                    <th rowSpan={2} style={{ padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom', borderLeft: '2px solid #e2e0da' }}>
+                    <th rowSpan={2} style={{ ...stickyTheadStyle, padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom', borderLeft: '2px solid #e2e0da' }}>
                       {(() => {
                         const col = DIFF_COLUMNAS.find(c => c.key === 'diferencia')!;
                         return (
@@ -933,7 +938,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                 </tr>
                 <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
                   {[diffLibroColsVisibles, diffRgColsVisibles, diffDifColsVisibles].flatMap(grupo => grupo.map((col, i) => (
-                    <th key={col.key} style={{ padding: '8px 14px', fontWeight: 600, textAlign: 'right', ...(i === 0 ? { borderLeft: '2px solid #e2e0da' } : {}) }}>
+                    <th key={col.key} style={{ ...stickyTheadStyle, top: DIFF_THEAD_ROW1_HEIGHT, padding: '8px 14px', fontWeight: 600, textAlign: 'right', ...(i === 0 ? { borderLeft: '2px solid #e2e0da' } : {}) }}>
                       <ExcelFilterHeader
                         label={col.label}
                         allValues={diffs.map(col.getValue)}
