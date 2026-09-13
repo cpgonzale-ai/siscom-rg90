@@ -133,6 +133,7 @@ export interface CompraDiffLado {
 
 export interface CompraDiffRow {
   doc: string;
+  tipo_doc: string;
   proveedor: string;
   sistema: string;
   local: string;

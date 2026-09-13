@@ -91,6 +91,7 @@ const diferenciaCampo = (d: CompraDiffRow, campo: keyof CompraDiffLado): string 
 // mismo valor que se ve en cada celda (post v()/valorCeldaDiff), no el crudo del backend.
 const DIFF_COLUMNAS: { key: string; label: string; getValue: (d: CompraDiffRow) => string }[] = [
   { key: 'doc', label: 'Documento', getValue: d => d.doc },
+  { key: 'tipo_doc', label: 'Tipo', getValue: d => d.tipo_doc },
   { key: 'proveedor', label: 'Proveedor', getValue: d => d.proveedor },
   { key: 'local', label: 'Local', getValue: d => d.local },
   { key: 'libro_gravada_10', label: 'Gravada 10%', getValue: d => valorCeldaDiff(d, 'libro', 'gravada_10') },
@@ -118,6 +119,7 @@ const DIFF_COLUMNAS: { key: string; label: string; getValue: (d: CompraDiffRow) 
 // key que DIFF_COLUMNAS, con label sin repetir "Gravada 10%" tres veces sin contexto.
 const DIFF_COLUMNAS_PICKER: { key: string; label: string }[] = [
   { key: 'doc', label: 'Documento' },
+  { key: 'tipo_doc', label: 'Tipo' },
   { key: 'proveedor', label: 'Proveedor' },
   { key: 'local', label: 'Local' },
   { key: 'libro_gravada_10', label: 'Libro — Gravada 10%' },
@@ -894,7 +896,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-                  {DIFF_COLUMNAS.filter(c => ['doc', 'proveedor', 'local'].includes(c.key) && !diffColOcultas.has(c.key)).map(col => (
+                  {DIFF_COLUMNAS.filter(c => ['doc', 'tipo_doc', 'proveedor', 'local'].includes(c.key) && !diffColOcultas.has(c.key)).map(col => (
                     <th key={col.key} rowSpan={2} style={{ padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom' }}>
                       <ExcelFilterHeader
                         label={col.label}
@@ -947,6 +949,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                 {filteredDiffs.map((d, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid #f0eee8' }}>
                     {!diffColOcultas.has('doc') && <td style={{ padding: '10px 14px', fontWeight: 600, color: '#22262b' }}>{d.doc}</td>}
+                    {!diffColOcultas.has('tipo_doc') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{d.tipo_doc}</td>}
                     {!diffColOcultas.has('proveedor') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{d.proveedor}</td>}
                     {!diffColOcultas.has('local') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{d.local}</td>}
                     {[diffLibroColsVisibles, diffRgColsVisibles, diffDifColsVisibles].flatMap(grupo => grupo.map((col, i) => (
@@ -978,7 +981,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
               </tbody>
               <tfoot>
                 <tr style={{ borderTop: '2px solid #e2e0da', backgroundColor: '#fafbfa', fontWeight: 700, color: '#22262b' }}>
-                  <td colSpan={['doc', 'proveedor', 'local'].filter(k => !diffColOcultas.has(k)).length} style={{ padding: '10px 14px' }}>Total ({filteredDiffs.length.toLocaleString('es-PY')} filas)</td>
+                  <td colSpan={['doc', 'tipo_doc', 'proveedor', 'local'].filter(k => !diffColOcultas.has(k)).length} style={{ padding: '10px 14px' }}>Total ({filteredDiffs.length.toLocaleString('es-PY')} filas)</td>
                   {diffLibroColsVisibles.map((col, i) => (
                     <td key={col.key} style={{ padding: '10px 14px', textAlign: 'right', ...(i === 0 ? { borderLeft: '2px solid #e2e0da' } : {}) }}>
                       {formatGs(diffTotales.libro[col.key.replace('libro_', '')])}
