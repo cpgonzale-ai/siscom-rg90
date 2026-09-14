@@ -932,10 +932,26 @@ export function App() {
       )}
 
       {/* Overlay bloqueante mientras el sistema está procesando — ingesta/conversión del
-          libro de ventas (Paso 1→2) o comparación contra la RG90 (Paso 3→4) — para que no se
-          pueda interactuar con nada hasta que termine. */}
-      {(converting || rg90Analyzing) && (
-        <ProcessingModal message={converting ? 'Analizando y convirtiendo el libro de ventas…' : 'Comparando contra la RG90…'} />
+          libro de ventas (Paso 1→2) — para que no se pueda interactuar con nada hasta que
+          termine. Si termina en error (ej. archivo con formato incorrecto), el mismo modal
+          pasa a mostrarlo en vez de desaparecer silenciosamente: convertError ya viene
+          limpio a null apenas arranca un intento nuevo (ver doConvert), así que solo queda
+          en pie acá cuando la conversión ya terminó y falló. */}
+      {(converting || convertError) && (
+        <ProcessingModal
+          message="Analizando y convirtiendo el libro de ventas…"
+          error={converting ? null : convertError}
+          onClose={() => setConvertError(null)}
+        />
+      )}
+
+      {/* Mismo criterio para la comparación contra la RG90 (Paso 3→4). */}
+      {(rg90Analyzing || rg90Error) && (
+        <ProcessingModal
+          message="Comparando contra la RG90…"
+          error={rg90Analyzing ? null : rg90Error}
+          onClose={() => setRg90Error(null)}
+        />
       )}
     </div>
   );
