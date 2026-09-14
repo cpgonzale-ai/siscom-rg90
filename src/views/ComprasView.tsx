@@ -4,6 +4,7 @@ import {
   ArrowLeft, ArrowRight,
 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { ProcessingModal } from '../components/ProcessingModal';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
 import { ColumnPicker } from '../components/ColumnPicker';
@@ -1020,6 +1021,12 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
         />
       )}
 
+      {/* Overlay bloqueante mientras el sistema está procesando — ingesta/conversión del
+          libro de compras (Paso 1) o comparación contra la RG (Paso 2) — para que no se
+          pueda interactuar con nada hasta que termine. */}
+      {(converting || comparing) && (
+        <ProcessingModal message={converting ? 'Analizando y convirtiendo el libro de compras…' : 'Comparando contra la RG…'} />
+      )}
     </div>
   );
 };

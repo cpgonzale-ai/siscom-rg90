@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { ConfirmModal } from './components/ConfirmModal';
+import { ProcessingModal } from './components/ProcessingModal';
 
 import { DashboardView } from './views/DashboardView';
 import { CargaView } from './views/CargaView';
@@ -928,6 +929,13 @@ export function App() {
           }}
           onClose={() => setConfirmModal(null)}
         />
+      )}
+
+      {/* Overlay bloqueante mientras el sistema está procesando — ingesta/conversión del
+          libro de ventas (Paso 1→2) o comparación contra la RG90 (Paso 3→4) — para que no se
+          pueda interactuar con nada hasta que termine. */}
+      {(converting || rg90Analyzing) && (
+        <ProcessingModal message={converting ? 'Analizando y convirtiendo el libro de ventas…' : 'Comparando contra la RG90…'} />
       )}
     </div>
   );
