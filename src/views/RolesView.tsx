@@ -50,6 +50,14 @@ export const RolesView: React.FC<RolesViewProps> = ({ roles, permisos, loading, 
   const [busqueda, setBusqueda] = useState('');
   const [filtrosColumna, setFiltrosColumna] = useState<Record<string, Set<string> | null>>({});
 
+  // Mismo criterio que rg90GridAllValuesPorColumna en App.tsx (ver hallazgo F1 de
+  // /auditoria/05-performance.md) — volumen bajo acá, pero mismo patrón, para que
+  // ExcelFilterHeader reciba una referencia estable.
+  const rolesAllValuesPorColumna = useMemo(
+    () => Object.fromEntries(COLUMNAS.map(col => [col.key, roles.map(col.getValue)])),
+    [roles]
+  );
+
   const rolesFiltrados = useMemo(() => {
     let lista = roles;
     for (const col of COLUMNAS) {
@@ -196,7 +204,7 @@ export const RolesView: React.FC<RolesViewProps> = ({ roles, permisos, loading, 
                 <th key={col.key} style={{ padding: '12px 16px', fontWeight: 600 }}>
                   <ExcelFilterHeader
                     label={col.label}
-                    allValues={roles.map(col.getValue)}
+                    allValues={rolesAllValuesPorColumna[col.key]}
                     active={filtrosColumna[col.key] ?? null}
                     onChange={(next) => setFiltrosColumna(prev => ({ ...prev, [col.key]: next }))}
                   />
