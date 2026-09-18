@@ -190,7 +190,7 @@ export const CargaView: React.FC<CargaViewProps> = ({
               ref={fileInputRef}
               type="file"
               multiple
-              accept=".xls,.xlsx,.csv"
+              accept=".xls,.xlsx"
               style={{ display: 'none' }}
               onChange={(e) => { if (e.target.files && e.target.files.length > 0) onFileUpload(e.target.files); e.target.value = ''; }}
             />
