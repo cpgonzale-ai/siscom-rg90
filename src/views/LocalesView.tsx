@@ -51,6 +51,14 @@ export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, erro
   const [busqueda, setBusqueda] = useState('');
   const [filtrosColumna, setFiltrosColumna] = useState<Record<string, Set<string> | null>>({});
 
+  // Mismo criterio que rg90GridAllValuesPorColumna en App.tsx (ver hallazgo F1 de
+  // /auditoria/05-performance.md) — volumen bajo acá, pero mismo patrón, para que
+  // ExcelFilterHeader reciba una referencia estable.
+  const localesAllValuesPorColumna = useMemo(
+    () => Object.fromEntries(COLUMNAS.map(col => [col.key, locales.map(col.getValue)])),
+    [locales]
+  );
+
   const localesFiltrados = useMemo(() => {
     let lista = locales;
     for (const col of COLUMNAS) {
@@ -200,7 +208,7 @@ export const LocalesView: React.FC<LocalesViewProps> = ({ locales, loading, erro
                 <th key={col.key} style={{ padding: '12px 16px', fontWeight: 600 }}>
                   <ExcelFilterHeader
                     label={col.label}
-                    allValues={locales.map(col.getValue)}
+                    allValues={localesAllValuesPorColumna[col.key]}
                     active={filtrosColumna[col.key] ?? null}
                     onChange={(next) => setFiltrosColumna(prev => ({ ...prev, [col.key]: next }))}
                   />
