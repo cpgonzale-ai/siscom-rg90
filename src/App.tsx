@@ -556,10 +556,22 @@ export function App() {
     Object.values(r).some(v => String(v).toLowerCase().includes(libroCompletoSearch.trim().toLowerCase()))
   );
 
+  // Mismo criterio que rg90GridAllValuesPorColumna más abajo (ver hallazgo F1 de
+  // /auditoria/05-performance.md): allValues memoizado por separado, dependiendo solo de
+  // libroRows — evita recalcular el Set+sort de valores únicos de las 14 columnas en cada
+  // render (tipear en cualquier buscador de la pantalla, abrir un dropdown, etc.), y le da
+  // a ExcelFilterHeader una referencia de array estable para que su propio useMemo interno
+  // funcione de verdad. Este es el Paso 1/2 (Libro de Ventas) — mismo volumen que la
+  // grilla de RG90 ya corregida, y es el primer paso del flujo, así que se usa siempre.
+  const libroAllValuesPorColumna = useMemo(
+    () => Object.fromEntries(LIBRO_COLUMNAS.map(col => [col.key, libroRows.map(col.getValue)])),
+    [libroRows]
+  );
+
   const libroColumnFilters = LIBRO_COLUMNAS.map(col => ({
     key: col.key,
     label: col.label,
-    allValues: libroRows.map(col.getValue),
+    allValues: libroAllValuesPorColumna[col.key],
     active: libroColFiltros[col.key] ?? null,
     onChange: (next: Set<string> | null) => { setLibroColFiltros(prev => ({ ...prev, [col.key]: next })); setPage(1); },
   }));
