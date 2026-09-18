@@ -371,6 +371,26 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
     downloadExcel('RG_Compras.xlsx', 'RG (SET) — Compras', headers, dataRows);
   };
 
+  // allValues por columna para cada uno de los 3 desplegables de filtro (Libro, RG,
+  // Diferencias) — memoizado por separado de filteredRows/filteredRgRows/filteredDiffs de
+  // abajo, con dependencia SOLO en el array fuente correspondiente. Mismo criterio que
+  // rg90GridAllValuesPorColumna en App.tsx (ver hallazgo F1 de /auditoria/05-performance.md):
+  // sin esto, ExcelFilterHeader recibía un array nuevo en cada render y su propio useMemo
+  // interno quedaba inefectivo. LIBRO_COLUMNAS/RG_COLUMNAS/DIFF_COLUMNAS son constantes de
+  // módulo (getValue estables entre renders).
+  const rowsAllValuesPorColumna = useMemo(
+    () => Object.fromEntries(LIBRO_COLUMNAS.map(col => [col.key, rows.map(col.getValue)])),
+    [rows]
+  );
+  const rgRowsAllValuesPorColumna = useMemo(
+    () => Object.fromEntries(RG_COLUMNAS.map(col => [col.key, rgRows.map(col.getValue)])),
+    [rgRows]
+  );
+  const diffsAllValuesPorColumna = useMemo(
+    () => Object.fromEntries(DIFF_COLUMNAS.map(col => [col.key, diffs.map(col.getValue)])),
+    [diffs]
+  );
+
   const filteredRows = useMemo(() => {
     let lista = rows;
     for (const col of LIBRO_COLUMNAS) {
@@ -597,7 +617,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                       <th key={col.key} style={{ ...stickyTheadStyle, padding: '10px 14px', fontWeight: 600, textAlign: esImporte ? 'right' : 'left' }}>
                         <ExcelFilterHeader
                           label={col.label}
-                          allValues={rows.map(col.getValue)}
+                          allValues={rowsAllValuesPorColumna[col.key]}
                           active={colFiltros[col.key] ?? null}
                           onChange={(next) => { setColFiltros(prev => ({ ...prev, [col.key]: next })); setPage(1); }}
                           align={esImporte ? 'right' : 'left'}
@@ -772,7 +792,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                       <th key={col.key} style={{ ...stickyTheadStyle, padding: '10px 14px', fontWeight: 600, textAlign: esImporte ? 'right' : 'left' }}>
                         <ExcelFilterHeader
                           label={col.label}
-                          allValues={rgRows.map(col.getValue)}
+                          allValues={rgRowsAllValuesPorColumna[col.key]}
                           active={rgColFiltros[col.key] ?? null}
                           onChange={(next) => { setRgColFiltros(prev => ({ ...prev, [col.key]: next })); setRgGridPage(1); }}
                           align={esImporte ? 'right' : 'left'}
@@ -906,7 +926,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                     <th key={col.key} rowSpan={2} style={{ ...stickyTheadStyle, padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom' }}>
                       <ExcelFilterHeader
                         label={col.label}
-                        allValues={diffs.map(col.getValue)}
+                        allValues={diffsAllValuesPorColumna[col.key]}
                         active={diffColFiltros[col.key] ?? null}
                         onChange={(next) => setDiffColFiltros(prev => ({ ...prev, [col.key]: next }))}
                       />
@@ -928,7 +948,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                         return (
                           <ExcelFilterHeader
                             label={col.label}
-                            allValues={diffs.map(col.getValue)}
+                            allValues={diffsAllValuesPorColumna[col.key]}
                             active={diffColFiltros[col.key] ?? null}
                             onChange={(next) => setDiffColFiltros(prev => ({ ...prev, [col.key]: next }))}
                           />
@@ -942,7 +962,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                     <th key={col.key} style={{ ...stickyTheadStyle, top: DIFF_THEAD_ROW1_HEIGHT, padding: '8px 14px', fontWeight: 600, textAlign: 'right', ...(i === 0 ? { borderLeft: '2px solid #e2e0da' } : {}) }}>
                       <ExcelFilterHeader
                         label={col.label}
-                        allValues={diffs.map(col.getValue)}
+                        allValues={diffsAllValuesPorColumna[col.key]}
                         active={diffColFiltros[col.key] ?? null}
                         onChange={(next) => setDiffColFiltros(prev => ({ ...prev, [col.key]: next }))}
                         align="right"
