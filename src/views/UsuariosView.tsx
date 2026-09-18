@@ -52,6 +52,14 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
   const [busqueda, setBusqueda] = useState('');
   const [filtrosColumna, setFiltrosColumna] = useState<Record<string, Set<string> | null>>({});
 
+  // Mismo criterio que rg90GridAllValuesPorColumna en App.tsx (ver hallazgo F1 de
+  // /auditoria/05-performance.md) — volumen bajo acá (docenas de usuarios), pero mismo
+  // patrón, para que ExcelFilterHeader reciba una referencia estable.
+  const usuariosAllValuesPorColumna = useMemo(
+    () => Object.fromEntries(COLUMNAS.map(col => [col.key, usuarios.map(col.getValue)])),
+    [usuarios]
+  );
+
   const usuariosFiltrados = useMemo(() => {
     let lista = usuarios;
     for (const col of COLUMNAS) {
@@ -181,7 +189,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
                 <th key={col.key} style={{ padding: '12px 16px', fontWeight: 600 }}>
                   <ExcelFilterHeader
                     label={col.label}
-                    allValues={usuarios.map(col.getValue)}
+                    allValues={usuariosAllValuesPorColumna[col.key]}
                     active={filtrosColumna[col.key] ?? null}
                     onChange={(next) => setFiltrosColumna(prev => ({ ...prev, [col.key]: next }))}
                   />
