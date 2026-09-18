@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useDeferredValue } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { ConfirmModal } from './components/ConfirmModal';
@@ -602,13 +602,22 @@ export function App() {
     [rg90Rows]
   );
 
+  // Buscador del Paso 3: useDeferredValue en vez de debounce manual — la tecla en sí (el
+  // <input value={rg90GridSearch}>, sin cambios, en RG90View.tsx) sigue actualizándose al
+  // instante; el filtrado de abajo (que usa este valor diferido) se aplica un toque
+  // después, en un render de baja prioridad que no bloquea el repintado del input mientras
+  // se tipea. Ver hallazgo F2 en /auditoria/05-performance.md — antes, cada tecla disparaba
+  // el filtro sobre las 97.851 filas de forma síncrona (344 ms medidos por sí solo, sumado
+  // al costo de F1 arriba).
+  const rg90GridSearchDeferred = useDeferredValue(rg90GridSearch);
+
   let filteredRg90Rows = rg90Rows;
   for (const col of LIBRO_COLUMNAS) {
     const activo = rg90GridColFiltros[col.key];
     if (activo) filteredRg90Rows = filteredRg90Rows.filter(r => activo.has(col.getValue(r)));
   }
-  if (rg90GridSearch.trim()) {
-    const q = rg90GridSearch.trim().toLowerCase();
+  if (rg90GridSearchDeferred.trim()) {
+    const q = rg90GridSearchDeferred.trim().toLowerCase();
     filteredRg90Rows = filteredRg90Rows.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
   }
   const rg90GridColumnFilters = LIBRO_COLUMNAS.map(col => ({
