@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { ConfirmModal } from './components/ConfirmModal';
@@ -586,6 +586,22 @@ export function App() {
 
   // Grilla del Paso 3 (Adjuntar RG90) — mismos filtros/columnas/totalizador que la del
   // Paso 2, reutilizando LIBRO_COLUMNAS porque rg90Rows tiene la misma forma (LibroRow[]).
+  //
+  // allValues por columna, memoizado por SEPARADO del resto (dependencia: solo rg90Rows,
+  // que es lo único de lo que depende el valor en sí) — ver /auditoria/05-performance.md,
+  // hallazgo de frontend F1. Antes, `rg90Rows.map(col.getValue)` se recalculaba inline en
+  // cada render, lo que le pasaba un array nuevo a ExcelFilterHeader en cada vuelta; su
+  // useMemo interno (dependencia [allValues]) nunca encontraba una dependencia "igual" por
+  // referencia y terminaba recalculando el Set+sort de valores únicos igual, en las 14
+  // columnas, en cada render — 4 segundos medidos con 97.851 filas. Memoizando acá, con
+  // rg90Rows como única dependencia real, ExcelFilterHeader vuelve a recibir la MISMA
+  // referencia de array entre renders mientras rg90Rows no cambie, y su propio useMemo
+  // empieza a funcionar de verdad (no hizo falta tocar ese componente).
+  const rg90GridAllValuesPorColumna = useMemo(
+    () => Object.fromEntries(LIBRO_COLUMNAS.map(col => [col.key, rg90Rows.map(col.getValue)])),
+    [rg90Rows]
+  );
+
   let filteredRg90Rows = rg90Rows;
   for (const col of LIBRO_COLUMNAS) {
     const activo = rg90GridColFiltros[col.key];
@@ -598,7 +614,7 @@ export function App() {
   const rg90GridColumnFilters = LIBRO_COLUMNAS.map(col => ({
     key: col.key,
     label: col.label,
-    allValues: rg90Rows.map(col.getValue),
+    allValues: rg90GridAllValuesPorColumna[col.key],
     active: rg90GridColFiltros[col.key] ?? null,
     onChange: (next: Set<string> | null) => { setRg90GridColFiltros(prev => ({ ...prev, [col.key]: next })); setRg90GridPage(1); },
   }));
