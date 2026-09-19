@@ -623,15 +623,25 @@ export function App() {
   // al costo de F1 arriba).
   const rg90GridSearchDeferred = useDeferredValue(rg90GridSearch);
 
-  let filteredRg90Rows = rg90Rows;
-  for (const col of LIBRO_COLUMNAS) {
-    const activo = rg90GridColFiltros[col.key];
-    if (activo) filteredRg90Rows = filteredRg90Rows.filter(r => activo.has(col.getValue(r)));
-  }
-  if (rg90GridSearchDeferred.trim()) {
-    const q = rg90GridSearchDeferred.trim().toLowerCase();
-    filteredRg90Rows = filteredRg90Rows.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
-  }
+  // Hallazgo F4 de /auditoria/05-performance.md: filteredRg90Rows en sí no estaba en la
+  // lista de cálculos a corregir, pero rg90GridTotales (sí listado) depende de él — si
+  // filteredRg90Rows sigue siendo un array nuevo en cada render, memoizar rg90GridTotales
+  // por separado no serviría de nada (mismo problema de referencia inestable que F1).
+  // Dependencias: rg90Rows (estado), rg90GridColFiltros (estado), rg90GridSearchDeferred
+  // (ya es un valor estable, diferido con useDeferredValue desde F2) — las tres cambian de
+  // referencia solo cuando realmente cambia lo que representan, no en cada render.
+  const filteredRg90Rows = useMemo(() => {
+    let lista = rg90Rows;
+    for (const col of LIBRO_COLUMNAS) {
+      const activo = rg90GridColFiltros[col.key];
+      if (activo) lista = lista.filter(r => activo.has(col.getValue(r)));
+    }
+    if (rg90GridSearchDeferred.trim()) {
+      const q = rg90GridSearchDeferred.trim().toLowerCase();
+      lista = lista.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
+    }
+    return lista;
+  }, [rg90Rows, rg90GridColFiltros, rg90GridSearchDeferred]);
   const rg90GridColumnFilters = LIBRO_COLUMNAS.map(col => ({
     key: col.key,
     label: col.label,
@@ -641,14 +651,16 @@ export function App() {
   }));
   const hayRg90GridColFiltrosActivos = Object.values(rg90GridColFiltros).some(v => v !== null && v !== undefined);
   const limpiarRg90GridColFiltros = () => { setRg90GridColFiltros({}); setRg90GridPage(1); };
-  const rg90GridTotales = {
+  // Hallazgo F4, punto 3 (/auditoria/05-performance.md) — 6 pasadas de reduce() sin
+  // memoizar, sobre filteredRg90Rows (ya memoizado arriba).
+  const rg90GridTotales = useMemo(() => ({
     gravadas: filteredRg90Rows.reduce((s, r) => s + (r.gravadas_num || 0), 0),
     iva: filteredRg90Rows.reduce((s, r) => s + (r.iva_num || 0), 0),
     gravadas_5: filteredRg90Rows.reduce((s, r) => s + (r.gravadas_5_num || 0), 0),
     iva_5: filteredRg90Rows.reduce((s, r) => s + (r.iva_5_num || 0), 0),
     exentas: filteredRg90Rows.reduce((s, r) => s + (r.exentas_num || 0), 0),
     total: filteredRg90Rows.reduce((s, r) => s + (r.total_num || 0), 0),
-  };
+  }), [filteredRg90Rows]);
   const rg90GridTotalPages = Math.max(1, Math.ceil(filteredRg90Rows.length / pageSize));
   const rg90GridCurrentPage = Math.min(Math.max(1, rg90GridPage), rg90GridTotalPages);
   const pagedRg90Rows = filteredRg90Rows.slice((rg90GridCurrentPage - 1) * pageSize, rg90GridCurrentPage * pageSize);
@@ -673,7 +685,11 @@ export function App() {
     };
   });
 
-  const filteredRg90Diff = rg90DiffRows
+  // Hallazgo F4, punto 4 (/auditoria/05-performance.md) — filter+filter+map armando un
+  // string de estilo por fila, sin memoizar. Dependencias: las tres son estado directo
+  // (rg90DiffRows, rg90Search, rg90CategoryFilter), sin ningún valor derivado inestable de
+  // por medio.
+  const filteredRg90Diff = useMemo(() => rg90DiffRows
     .filter(r => !rg90Search || Object.values(r).some(v => String(v).toLowerCase().includes(rg90Search.toLowerCase())))
     .filter(r => !rg90CategoryFilter || r.diferencia === rg90CategoryFilter)
     .map(r => {
@@ -688,17 +704,25 @@ export function App() {
         diffStyle = 'background:#f1eef8;color:#5b3aa8;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px';
       }
       return { ...r, diffChipStyle: diffStyle };
-    });
+    }), [rg90DiffRows, rg90Search, rg90CategoryFilter]);
 
+  // Hallazgo F4, punto 2 (/auditoria/05-performance.md) — el más cercano a lo que se
+  // sospechaba: O(locales × n), un find() + 3 filter() por cada local distinto, sin
+  // memoizar. Dependencias: libroRows, rg90DiffRows, correlatividadRows son las tres
+  // estado directo.
+  //
   // Cobertura por local: calculada de los datos reales del libro, la correlatividad y el
   // resultado de la comparación RG90 — no un listado fijo de locales de muestra.
-  const rg90ByLocalComputed = Array.from(new Set(libroRows.map(r => r.local))).map(local => ({
-    local,
-    sistema: libroRows.find(r => r.local === local)?.sistema || '',
-    comprobantes: libroRows.filter(r => r.local === local).length,
-    diferencias: rg90DiffRows.filter(d => d.local === local && d.diferencia !== 'Anulada').length,
-    saltos: correlatividadRows.filter(r => r.local === local).length,
-  }));
+  const rg90ByLocalComputed = useMemo(
+    () => Array.from(new Set(libroRows.map(r => r.local))).map(local => ({
+      local,
+      sistema: libroRows.find(r => r.local === local)?.sistema || '',
+      comprobantes: libroRows.filter(r => r.local === local).length,
+      diferencias: rg90DiffRows.filter(d => d.local === local && d.diferencia !== 'Anulada').length,
+      saltos: correlatividadRows.filter(r => r.local === local).length,
+    })),
+    [libroRows, rg90DiffRows, correlatividadRows]
+  );
 
   const [title, subtitle] = TITLES[screen];
 
