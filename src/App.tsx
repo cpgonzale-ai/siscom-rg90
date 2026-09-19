@@ -685,12 +685,25 @@ export function App() {
     };
   });
 
+  // Mismo patrón F2 (/auditoria/05-performance.md, ya usado en rg90GridSearchDeferred del
+  // Paso 3) — la tecla en sí (el <input value={rg90Search}>, sin cambios, en RG90View.tsx)
+  // sigue actualizándose al instante; el filtrado de abajo se aplica en un render de baja
+  // prioridad que no bloquea el repintado del input mientras se tipea.
+  //
+  // Corregido en /auditoria/08-analisis-memoria-lag-global-200k.md: sin esto, cada tecla
+  // recalculaba filteredRg90Diff de forma síncrona y bloqueante sobre las 200.000 filas
+  // completas (Object.values().some() + spread de hasta 200.000 objetos), y esa nueva
+  // referencia de array además invalidaba en cascada filteredRg90DiffCols/diffTotalesVentas
+  // en RG90View.tsx — medido: 56-64 segundos de bloqueo del hilo principal por una sola
+  // tecla.
+  const rg90SearchDeferred = useDeferredValue(rg90Search);
+
   // Hallazgo F4, punto 4 (/auditoria/05-performance.md) — filter+filter+map armando un
   // string de estilo por fila, sin memoizar. Dependencias: las tres son estado directo
-  // (rg90DiffRows, rg90Search, rg90CategoryFilter), sin ningún valor derivado inestable de
-  // por medio.
+  // (rg90DiffRows, rg90SearchDeferred, rg90CategoryFilter), sin ningún valor derivado
+  // inestable de por medio.
   const filteredRg90Diff = useMemo(() => rg90DiffRows
-    .filter(r => !rg90Search || Object.values(r).some(v => String(v).toLowerCase().includes(rg90Search.toLowerCase())))
+    .filter(r => !rg90SearchDeferred || Object.values(r).some(v => String(v).toLowerCase().includes(rg90SearchDeferred.toLowerCase())))
     .filter(r => !rg90CategoryFilter || r.diferencia === rg90CategoryFilter)
     .map(r => {
       let diffStyle = 'background:#f0eee8;color:#5c6470;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px';
@@ -704,7 +717,7 @@ export function App() {
         diffStyle = 'background:#f1eef8;color:#5b3aa8;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px';
       }
       return { ...r, diffChipStyle: diffStyle };
-    }), [rg90DiffRows, rg90Search, rg90CategoryFilter]);
+    }), [rg90DiffRows, rg90SearchDeferred, rg90CategoryFilter]);
 
   const [title, subtitle] = TITLES[screen];
 
@@ -936,6 +949,7 @@ export function App() {
                 onClick: () => setRg90CategoryFilter(prev => (prev === c.key ? '' : c.key)),
               }))}
               rg90Diff={filteredRg90Diff}
+              rg90DiffAll={rg90DiffRows}
               rg90Search={rg90Search}
               onRg90Search={(e) => setRg90Search(e.target.value)}
               clearRg90Search={() => setRg90Search('')}

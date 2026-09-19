@@ -117,6 +117,12 @@ interface RG90ViewProps {
   resetRg90: () => void;
   rg90Cards: any[];
   rg90Diff: any[];
+  // Fuente SIN filtrar por búsqueda/categoría, para los desplegables de filtro tipo Excel
+  // del encabezado (diffAllValuesPorColumna) — ver /auditoria/08-analisis-memoria-lag-global-200k.md:
+  // antes esos desplegables se recalculaban sobre rg90Diff (que SÍ cambia de referencia en
+  // cada tecla del buscador), 4,2 millones de llamadas a getValue por tecla. rg90DiffAll
+  // solo cambia cuando se carga o recompara un lote de verdad.
+  rg90DiffAll: any[];
   rg90Search: string;
   onRg90Search: (e: React.ChangeEvent<HTMLInputElement>) => void;
   clearRg90Search: () => void;
@@ -169,6 +175,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   resetRg90,
   rg90Cards,
   rg90Diff,
+  rg90DiffAll,
   rg90Search,
   onRg90Search,
   rg90CategoryFilter,
@@ -232,12 +239,20 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   const [diffColOcultas, setDiffColOcultas] = useState<Set<string>>(new Set(['dif_gravada_10', 'dif_gravada_5']));
   // Mismo patrón F1 (/auditoria/05-performance.md) — quedó pendiente cuando esta grilla era
   // F3 ("no tocar todavía"). allValues por columna para los desplegables de filtro del
-  // encabezado, memoizado aparte, dependiendo solo de rg90Diff (la fuente completa, no
-  // filtrada — el desplegable tiene que ofrecer todos los valores posibles, no solo los que
-  // quedan visibles con el filtro actual). RG90_DIFF_COLUMNAS es una constante de módulo.
+  // encabezado, memoizado aparte, dependiendo de rg90DiffAll (la fuente SIN filtrar por
+  // búsqueda/categoría — el desplegable tiene que ofrecer todos los valores posibles, no
+  // solo los que quedan visibles con el filtro actual). RG90_DIFF_COLUMNAS es una constante
+  // de módulo.
+  //
+  // Corregido en /auditoria/08-analisis-memoria-lag-global-200k.md: antes dependía de
+  // rg90Diff (ya filtrado por búsqueda/categoría en App.tsx), que cambia de referencia en
+  // cada tecla del buscador aunque el contenido no cambie — eso disparaba 4,2 millones de
+  // llamadas a getValue (21 columnas × 200.000 filas) por tecla. rg90DiffAll solo cambia
+  // cuando se carga o recompara un lote de verdad, no al tipear ni al tocar los cards de
+  // categoría.
   const diffAllValuesPorColumna = useMemo(
-    () => Object.fromEntries(RG90_DIFF_COLUMNAS.map(col => [col.key, rg90Diff.map(col.getValue)])),
-    [rg90Diff]
+    () => Object.fromEntries(RG90_DIFF_COLUMNAS.map(col => [col.key, rg90DiffAll.map(col.getValue)])),
+    [rg90DiffAll]
   );
   // Memoizado con dependencia en rg90Diff/diffColFiltros (ambos estables: rg90Diff es una
   // prop que, después del hallazgo F4 de /auditoria/05-performance.md, viene de
@@ -598,8 +613,15 @@ export const RG90View: React.FC<RG90ViewProps> = ({
         </>
       )}
 
-      {pasoMostrado === 4 && (
-        <>
+      {/* Se mantiene siempre montado (a diferencia del Paso 3) y se oculta con display:none
+          en vez de un && condicional -- medido en /auditoria/08-analisis-memoria-lag-global-200k.md:
+          con 200.000 filas, desmontar y volver a montar este bloque le hace perder a
+          diffAllValuesPorColumna/filteredRg90DiffCols/diffTotalesVentas toda su memoización
+          (una instancia de componente nueva no tiene el cache de la anterior), costando ~21s
+          solo por navegar Paso 4 -> Paso 3 -> Paso 4 sin tocar ningún filtro. Con
+          display:none el DOM y los hooks de virtualización/memoización sobreviven la
+          navegación intactos. */}
+      <div style={{ display: pasoMostrado === 4 ? undefined : 'none' }}>
         <div style={navRowStyle}>
           <button onClick={onVolverPaso3} style={{ ...secondaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
             <ArrowLeft size={16} />
@@ -818,8 +840,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
           </table>
           </div>
         </div>
-        </>
-      )}
+      </div>
 
       {saltosRgModalOpen && (
         <Modal title={`Saltos de numeración dentro de la RG90 (${saltosRgRows.length})`} onClose={() => setSaltosRgModalOpen(false)} width="900px">
