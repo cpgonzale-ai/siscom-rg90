@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState, useTransition } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { GitCompare, UploadCloud, X, Trash2, ArrowLeft, ArrowRight, FileSpreadsheet } from 'lucide-react';
 import { WizardSteps } from '../components/WizardSteps';
@@ -213,7 +213,20 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   // Grilla de resultado (Paso 4) — mismo patrón de filtro por columna + selector de
   // columnas que Libro de Compras (ComprasView), acá local a la vista porque el filtro de
   // texto general y el de categoría (las cards) ya se resuelven en App.tsx.
-  const [diffColFiltros, setDiffColFiltros] = useState<Record<string, Set<string> | null>>({});
+  const [diffColFiltros, setDiffColFiltrosRaw] = useState<Record<string, Set<string> | null>>({});
+  // Medido con CPU profile real sobre 200.000 filas: aplicar un filtro bloquea el hilo
+  // principal ~900ms (filteredRg90DiffCols + diffTotalesVentas recalculando sobre el
+  // dataset completo). No se puede evitar ese trabajo — el usuario necesita ver el
+  // resultado filtrado completo, no una aproximación — pero sí se puede evitar que la UI
+  // se sienta trabada mientras tanto: envolver el setState en una transición (React 18) le
+  // dice a React que esta actualización no es urgente, así puede seguir pintando
+  // interacciones (cerrar el desplegable, hover, scroll) mientras el filtrado corre de
+  // fondo, y exponer isFiltrando para mostrar una señal de carga en vez de una UI congelada
+  // sin feedback.
+  const [isFiltrando, startFiltroTransition] = useTransition();
+  const setDiffColFiltros = (updater: Record<string, Set<string> | null> | ((prev: Record<string, Set<string> | null>) => Record<string, Set<string> | null>)) => {
+    startFiltroTransition(() => setDiffColFiltrosRaw(updater));
+  };
   // Por defecto se muestra el apartado "Diferencia" completo (IVA 10%/5%, Exenta, Total) —
   // solo quedan ocultas Gravada 10%/5%, igual que en Libro de Compras (ComprasView).
   const [diffColOcultas, setDiffColOcultas] = useState<Set<string>>(new Set(['dif_gravada_10', 'dif_gravada_5']));
@@ -253,9 +266,24 @@ export const RG90View: React.FC<RG90ViewProps> = ({
     }
     return acc;
   }, [filteredRg90DiffCols]);
-  const diffLibroColsVisibles = RG90_DIFF_COLUMNAS.filter(c => c.key.startsWith('libro_') && !diffColOcultas.has(c.key));
-  const diffRgColsVisibles = RG90_DIFF_COLUMNAS.filter(c => c.key.startsWith('rg_') && !diffColOcultas.has(c.key));
-  const diffDifColsVisibles = RG90_DIFF_COLUMNAS.filter(c => c.key.startsWith('dif_') && !diffColOcultas.has(c.key));
+  // Memoizadas por diffColOcultas: DiffRow (más abajo) está envuelta en React.memo para no
+  // recalcular col.getValue/parseInlineStyle de cada fila visible en cada re-render que
+  // dispara el virtualizador durante el scroll (medido con CPU profile + trace real sobre
+  // 200.000 filas: sin esto, estos 3 arrays eran objetos nuevos en cada render y React.memo
+  // nunca hubiera podido saltarse el recálculo de ninguna fila, con o sin scroll de por
+  // medio).
+  const diffLibroColsVisibles = useMemo(
+    () => RG90_DIFF_COLUMNAS.filter(c => c.key.startsWith('libro_') && !diffColOcultas.has(c.key)),
+    [diffColOcultas]
+  );
+  const diffRgColsVisibles = useMemo(
+    () => RG90_DIFF_COLUMNAS.filter(c => c.key.startsWith('rg_') && !diffColOcultas.has(c.key)),
+    [diffColOcultas]
+  );
+  const diffDifColsVisibles = useMemo(
+    () => RG90_DIFF_COLUMNAS.filter(c => c.key.startsWith('dif_') && !diffColOcultas.has(c.key)),
+    [diffColOcultas]
+  );
 
   // Virtualización de la grilla de Discrepancias (hallazgo F3 de /auditoria/05-performance.md
   // y 07-performance-analisis-post-limpieza.md — cuello de botella real, confirmado con CPU
@@ -282,8 +310,16 @@ export const RG90View: React.FC<RG90ViewProps> = ({
     // esta grilla — DIFF_THEAD_ROW1_HEIGHT, 41px, es el alto de una fila del ENCABEZADO, no
     // de una fila de datos; usarlo acá daba un desfasaje real: con la estimación en 41px, el
     // scroll nunca llegaba a montar la última fila aunque el usuario llegara al final físico
-    // del scroll — confirmado con Playwright antes de este ajuste). measureElement corrige
-    // en tiempo real si el alto real difiriera (ej. una celda que envuelve texto).
+    // del scroll — confirmado con Playwright antes de este ajuste).
+    //
+    // Altura fija, SIN measureElement: todas las celdas de esta fila son de una sola línea
+    // (documento, importes, chip de diagnóstico corto — nada envuelve a dos líneas), así que
+    // no hace falta remedir cada fila con un ResizeObserver. Confirmado con un trace real de
+    // Chrome durante scroll continuo sobre 200.000 filas: con measureElement puesto,
+    // Document::UpdateStyleAndLayout se disparaba 1.391 veces en ~4s de scroll (el patrón de
+    // "forced reflow" típico de leer getBoundingClientRect en cada fila que se monta/desmonta
+    // por el ResizeObserver interno). Sacando el ref, ese layout forzado desaparece — sin
+    // ninguna fila real que pierda su alto, porque 93px ya es exacto, no una estimación.
     estimateSize: () => 93,
     overscan: 15,
   });
@@ -632,6 +668,9 @@ export const RG90View: React.FC<RG90ViewProps> = ({
               <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>
                 Detalle de Discrepancias e Inconsistencias ({filteredRg90DiffCols.length.toLocaleString('es-PY')} de {rg90Diff.length.toLocaleString('es-PY')})
               </h4>
+              {isFiltrando && (
+                <span style={{ fontSize: '11px', color: '#9aa1ab', fontStyle: 'italic' }}>Filtrando…</span>
+              )}
               {rg90CategoryFilter && (
                 <span
                   style={{
@@ -740,34 +779,17 @@ export const RG90View: React.FC<RG90ViewProps> = ({
               {diffPaddingTop > 0 && (
                 <tr><td colSpan={DIFF_COLSPAN_ESPACIADOR} style={{ height: diffPaddingTop, padding: 0, border: 'none' }} /></tr>
               )}
-              {diffVirtualItems.map(vi => {
-                const r: any = filteredRg90DiffCols[vi.index];
-                return (
-                  <tr key={vi.key} data-index={vi.index} ref={diffRowVirtualizer.measureElement} style={{ borderBottom: '1px solid #f0eee8' }}>
-                    {!diffColOcultas.has('doc') && <td style={{ padding: '10px 14px', fontWeight: 600, color: '#22262b' }}>{r.doc}</td>}
-                    {!diffColOcultas.has('tipo_doc') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.tipo_doc}</td>}
-                    {!diffColOcultas.has('sistema') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.sistema}</td>}
-                    {!diffColOcultas.has('local') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.local}</td>}
-                    {[diffLibroColsVisibles, diffRgColsVisibles, diffDifColsVisibles].flatMap(grupo => grupo.map((col, i) => (
-                      <td
-                        key={col.key}
-                        style={{
-                          padding: '10px 14px', textAlign: 'right', color: '#5c6470',
-                          ...(i === 0 ? { borderLeft: '2px solid #f0eee8' } : {}),
-                          ...(col.key.endsWith('_total') ? { fontWeight: 600, color: '#22262b' } : {}),
-                        }}
-                      >
-                        {col.getValue(r)}
-                      </td>
-                    )))}
-                    {!diffColOcultas.has('diferencia') && (
-                      <td style={{ padding: '10px 14px', borderLeft: '2px solid #f0eee8' }}>
-                        <span style={parseInlineStyle(r.diffChipStyle)}>{r.diferencia}</span>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
+              {diffVirtualItems.map(vi => (
+                <DiffRow
+                  key={vi.key}
+                  index={vi.index}
+                  r={filteredRg90DiffCols[vi.index] as any}
+                  diffColOcultas={diffColOcultas}
+                  diffLibroColsVisibles={diffLibroColsVisibles}
+                  diffRgColsVisibles={diffRgColsVisibles}
+                  diffDifColsVisibles={diffDifColsVisibles}
+                />
+              ))}
               {diffPaddingBottom > 0 && (
                 <tr><td colSpan={DIFF_COLSPAN_ESPACIADOR} style={{ height: diffPaddingBottom, padding: 0, border: 'none' }} /></tr>
               )}
@@ -830,3 +852,47 @@ function parseInlineStyle(styleStr: string): React.CSSProperties {
   });
   return styles;
 }
+
+// Fila de la grilla de Detalle de Discrepancias, envuelta en React.memo. Medido con CPU
+// profile + trace de Chrome real sobre 200.000 filas: el virtualizador dispara un re-render
+// de RG90View en cada frame de scroll (cambia qué índices están montados), y sin este memo
+// las ~20-35 filas visibles + overscan recalculaban col.getValue (con su parseGs/formatGs
+// vía Intl.NumberFormat) y parseInlineStyle en CADA uno de esos re-renders, incluso para
+// filas cuyos datos no cambiaron entre un frame y el siguiente. Con React.memo, una fila
+// solo se vuelve a calcular si su propia fila (r), las columnas visibles o diffColOcultas
+// cambiaron — durante un scroll común, la enorme mayoría de las filas montadas siguen siendo
+// las mismas de un frame al otro.
+const DiffRow = React.memo(function DiffRow({ index, r, diffColOcultas, diffLibroColsVisibles, diffRgColsVisibles, diffDifColsVisibles }: {
+  index: number;
+  r: RG90DiffRow;
+  diffColOcultas: Set<string>;
+  diffLibroColsVisibles: typeof RG90_DIFF_COLUMNAS;
+  diffRgColsVisibles: typeof RG90_DIFF_COLUMNAS;
+  diffDifColsVisibles: typeof RG90_DIFF_COLUMNAS;
+}) {
+  return (
+    <tr data-index={index} style={{ borderBottom: '1px solid #f0eee8' }}>
+      {!diffColOcultas.has('doc') && <td style={{ padding: '10px 14px', fontWeight: 600, color: '#22262b' }}>{r.doc}</td>}
+      {!diffColOcultas.has('tipo_doc') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.tipo_doc}</td>}
+      {!diffColOcultas.has('sistema') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.sistema}</td>}
+      {!diffColOcultas.has('local') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.local}</td>}
+      {[diffLibroColsVisibles, diffRgColsVisibles, diffDifColsVisibles].flatMap(grupo => grupo.map((col, i) => (
+        <td
+          key={col.key}
+          style={{
+            padding: '10px 14px', textAlign: 'right', color: '#5c6470',
+            ...(i === 0 ? { borderLeft: '2px solid #f0eee8' } : {}),
+            ...(col.key.endsWith('_total') ? { fontWeight: 600, color: '#22262b' } : {}),
+          }}
+        >
+          {col.getValue(r)}
+        </td>
+      )))}
+      {!diffColOcultas.has('diferencia') && (
+        <td style={{ padding: '10px 14px', borderLeft: '2px solid #f0eee8' }}>
+          <span style={parseInlineStyle((r as any).diffChipStyle)}>{r.diferencia}</span>
+        </td>
+      )}
+    </tr>
+  );
+});
