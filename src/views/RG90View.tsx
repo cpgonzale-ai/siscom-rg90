@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { GitCompare, UploadCloud, X, Trash2, ArrowLeft, ArrowRight, FileSpreadsheet } from 'lucide-react';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
@@ -218,13 +218,25 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   // Por defecto se muestra el apartado "Diferencia" completo (IVA 10%/5%, Exenta, Total) —
   // solo quedan ocultas Gravada 10%/5%, igual que en Libro de Compras (ComprasView).
   const [diffColOcultas, setDiffColOcultas] = useState<Set<string>>(new Set(['dif_gravada_10', 'dif_gravada_5']));
-  let filteredRg90DiffCols = rg90Diff as RG90DiffRow[];
-  for (const col of RG90_DIFF_COLUMNAS) {
-    const activo = diffColFiltros[col.key];
-    if (activo) filteredRg90DiffCols = filteredRg90DiffCols.filter(d => activo.has(col.getValue(d)));
-  }
+  // Memoizado con dependencia en rg90Diff/diffColFiltros (ambos estables: rg90Diff es una
+  // prop que, después del hallazgo F4 de /auditoria/05-performance.md, viene de
+  // filteredRg90Diff ya memoizado en App.tsx; diffColFiltros es un Record de estado propio
+  // de este componente) — antes se recalculaba en cada render, sin importar si rg90Diff o
+  // los filtros habían cambiado.
+  const filteredRg90DiffCols = useMemo(() => {
+    let lista = rg90Diff as RG90DiffRow[];
+    for (const col of RG90_DIFF_COLUMNAS) {
+      const activo = diffColFiltros[col.key];
+      if (activo) lista = lista.filter(d => activo.has(col.getValue(d)));
+    }
+    return lista;
+  }, [rg90Diff, diffColFiltros]);
   const hayDiffColFiltrosActivos = Object.values(diffColFiltros).some(v => v !== null && v !== undefined);
-  const diffTotalesVentas = (() => {
+  // Hallazgo F4 (el más caro medido: 930 ms de JS puro con 107.000 diffs) — dependía de
+  // filteredRg90DiffCols, que antes era un array nuevo en cada render (mismo problema de
+  // referencia inestable que F1); memoizado arriba, este useMemo ahora sí evita recalcular
+  // 12 pasadas de reduce() + parseGs() cuando nada relevante cambió.
+  const diffTotalesVentas = useMemo(() => {
     const acc = { libro: {} as Record<string, number>, rg: {} as Record<string, number>, dif: {} as Record<string, number> };
     for (const campo of CAMPOS_DIFF_VENTAS) {
       acc.libro[campo] = filteredRg90DiffCols.reduce((s, d) => s + parseGs(valorCeldaDiffVentas(d, 'libro', campo)), 0);
@@ -232,7 +244,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
       acc.dif[campo] = acc.libro[campo] - acc.rg[campo];
     }
     return acc;
-  })();
+  }, [filteredRg90DiffCols]);
   const diffLibroColsVisibles = RG90_DIFF_COLUMNAS.filter(c => c.key.startsWith('libro_') && !diffColOcultas.has(c.key));
   const diffRgColsVisibles = RG90_DIFF_COLUMNAS.filter(c => c.key.startsWith('rg_') && !diffColOcultas.has(c.key));
   const diffDifColsVisibles = RG90_DIFF_COLUMNAS.filter(c => c.key.startsWith('dif_') && !diffColOcultas.has(c.key));
