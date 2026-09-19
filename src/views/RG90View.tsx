@@ -116,7 +116,6 @@ interface RG90ViewProps {
   resetRg90: () => void;
   rg90Cards: any[];
   rg90Diff: any[];
-  rg90ByLocal: any[];
   rg90Search: string;
   onRg90Search: (e: React.ChangeEvent<HTMLInputElement>) => void;
   clearRg90Search: () => void;
@@ -169,7 +168,6 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   resetRg90,
   rg90Cards,
   rg90Diff,
-  rg90ByLocal,
   rg90Search,
   onRg90Search,
   rg90CategoryFilter,
@@ -738,42 +736,6 @@ export const RG90View: React.FC<RG90ViewProps> = ({
             </tfoot>
           </table>
           </div>
-        </div>
-
-        {/* Breakdown per Local Table */}
-        <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e0da', backgroundColor: '#fafbfa' }}>
-            <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>
-              Resumen de Cobertura y Discrepancias por Local
-            </h4>
-          </div>
-
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-                <th style={{ ...stickyTheadStyle, padding: '12px 16px', fontWeight: 600 }}>Local</th>
-                <th style={{ ...stickyTheadStyle, padding: '12px 16px', fontWeight: 600 }}>Sistema</th>
-                <th style={{ ...stickyTheadStyle, padding: '12px 16px', fontWeight: 600, textAlign: 'center' }}>Comprobantes</th>
-                <th style={{ ...stickyTheadStyle, padding: '12px 16px', fontWeight: 600, textAlign: 'center' }}>Diferencias</th>
-                <th style={{ ...stickyTheadStyle, padding: '12px 16px', fontWeight: 600, textAlign: 'center' }}>Saltos</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rg90ByLocal.map((r: any, i: number) => (
-                <tr key={i} style={{ borderBottom: '1px solid #f0eee8' }}>
-                  <td style={{ padding: '12px 16px', fontWeight: 600, color: '#22262b' }}>{r.local}</td>
-                  <td style={{ padding: '12px 16px', color: '#5c6470' }}>{r.sistema}</td>
-                  <td style={{ padding: '12px 16px', textAlign: 'center', color: '#5c6470' }}>{r.comprobantes}</td>
-                  <td style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 700, color: r.diferencias > 0 ? '#b3402f' : '#128752' }}>
-                    {r.diferencias}
-                  </td>
-                  <td style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 700, color: r.saltos > 0 ? '#b0740f' : '#128752' }}>
-                    {r.saltos}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
         </>
       )}

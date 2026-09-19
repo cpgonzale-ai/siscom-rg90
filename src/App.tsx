@@ -706,24 +706,6 @@ export function App() {
       return { ...r, diffChipStyle: diffStyle };
     }), [rg90DiffRows, rg90Search, rg90CategoryFilter]);
 
-  // Hallazgo F4, punto 2 (/auditoria/05-performance.md) — el más cercano a lo que se
-  // sospechaba: O(locales × n), un find() + 3 filter() por cada local distinto, sin
-  // memoizar. Dependencias: libroRows, rg90DiffRows, correlatividadRows son las tres
-  // estado directo.
-  //
-  // Cobertura por local: calculada de los datos reales del libro, la correlatividad y el
-  // resultado de la comparación RG90 — no un listado fijo de locales de muestra.
-  const rg90ByLocalComputed = useMemo(
-    () => Array.from(new Set(libroRows.map(r => r.local))).map(local => ({
-      local,
-      sistema: libroRows.find(r => r.local === local)?.sistema || '',
-      comprobantes: libroRows.filter(r => r.local === local).length,
-      diferencias: rg90DiffRows.filter(d => d.local === local && d.diferencia !== 'Anulada').length,
-      saltos: correlatividadRows.filter(r => r.local === local).length,
-    })),
-    [libroRows, rg90DiffRows, correlatividadRows]
-  );
-
   const [title, subtitle] = TITLES[screen];
 
   if (!authed) {
@@ -954,7 +936,6 @@ export function App() {
                 onClick: () => setRg90CategoryFilter(prev => (prev === c.key ? '' : c.key)),
               }))}
               rg90Diff={filteredRg90Diff}
-              rg90ByLocal={rg90ByLocalComputed}
               rg90Search={rg90Search}
               onRg90Search={(e) => setRg90Search(e.target.value)}
               clearRg90Search={() => setRg90Search('')}
