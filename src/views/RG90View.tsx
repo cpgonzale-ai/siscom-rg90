@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { GitCompare, UploadCloud, X, Trash2, ArrowLeft, ArrowRight, FileSpreadsheet } from 'lucide-react';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
@@ -216,6 +217,15 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   // Por defecto se muestra el apartado "Diferencia" completo (IVA 10%/5%, Exenta, Total) —
   // solo quedan ocultas Gravada 10%/5%, igual que en Libro de Compras (ComprasView).
   const [diffColOcultas, setDiffColOcultas] = useState<Set<string>>(new Set(['dif_gravada_10', 'dif_gravada_5']));
+  // Mismo patrón F1 (/auditoria/05-performance.md) — quedó pendiente cuando esta grilla era
+  // F3 ("no tocar todavía"). allValues por columna para los desplegables de filtro del
+  // encabezado, memoizado aparte, dependiendo solo de rg90Diff (la fuente completa, no
+  // filtrada — el desplegable tiene que ofrecer todos los valores posibles, no solo los que
+  // quedan visibles con el filtro actual). RG90_DIFF_COLUMNAS es una constante de módulo.
+  const diffAllValuesPorColumna = useMemo(
+    () => Object.fromEntries(RG90_DIFF_COLUMNAS.map(col => [col.key, rg90Diff.map(col.getValue)])),
+    [rg90Diff]
+  );
   // Memoizado con dependencia en rg90Diff/diffColFiltros (ambos estables: rg90Diff es una
   // prop que, después del hallazgo F4 de /auditoria/05-performance.md, viene de
   // filteredRg90Diff ya memoizado en App.tsx; diffColFiltros es un Record de estado propio
@@ -246,6 +256,46 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   const diffLibroColsVisibles = RG90_DIFF_COLUMNAS.filter(c => c.key.startsWith('libro_') && !diffColOcultas.has(c.key));
   const diffRgColsVisibles = RG90_DIFF_COLUMNAS.filter(c => c.key.startsWith('rg_') && !diffColOcultas.has(c.key));
   const diffDifColsVisibles = RG90_DIFF_COLUMNAS.filter(c => c.key.startsWith('dif_') && !diffColOcultas.has(c.key));
+
+  // Virtualización de la grilla de Discrepancias (hallazgo F3 de /auditoria/05-performance.md
+  // y 07-performance-analisis-post-limpieza.md — cuello de botella real, confirmado con CPU
+  // profile real y curva de escala: a 25.000 filas el navegador llegaba a crashear).
+  // Objetivo: soportar 200.000 filas sin insertar esa cantidad de nodos <tr> reales al DOM.
+  //
+  // Se usa la técnica de "filas espaciadoras" (padding-top/padding-bottom en vez de
+  // position:absolute) porque los hijos de <tbody> no respetan position:absolute de forma
+  // confiable en todos los navegadores — con filas <tr> espaciadoras el layout de la
+  // <table> real (incluido el <thead> sticky de dos filas y el <tfoot> con los totales) no
+  // se toca para nada, solo cambia qué filas de datos están montadas en un momento dado.
+  //
+  // col.getValue(r) para las columnas de Libro/RG90/Diferencia sigue llamándose una vez por
+  // celda igual que antes — lo que cambia es que ahora "r" recorre únicamente
+  // diffVirtualItems (las filas visibles + el colchón de overscan), no las 200.000 filas de
+  // filteredRg90DiffCols completo. Los totales (diffTotalesVentas, arriba) y el Excel
+  // (descargarDiffVentasExcel, abajo) siguen usando filteredRg90DiffCols completo sin
+  // cambios — necesitan las filas filtradas enteras, no solo las visibles en pantalla.
+  const diffScrollRef = useRef<HTMLDivElement>(null);
+  const diffRowVirtualizer = useVirtualizer({
+    count: filteredRg90DiffCols.length,
+    getScrollElement: () => diffScrollRef.current,
+    // 93px medido en el navegador real (getBoundingClientRect().height de un <tr> real de
+    // esta grilla — DIFF_THEAD_ROW1_HEIGHT, 41px, es el alto de una fila del ENCABEZADO, no
+    // de una fila de datos; usarlo acá daba un desfasaje real: con la estimación en 41px, el
+    // scroll nunca llegaba a montar la última fila aunque el usuario llegara al final físico
+    // del scroll — confirmado con Playwright antes de este ajuste). measureElement corrige
+    // en tiempo real si el alto real difiriera (ej. una celda que envuelve texto).
+    estimateSize: () => 93,
+    overscan: 15,
+  });
+  const diffVirtualItems = diffRowVirtualizer.getVirtualItems();
+  const diffPaddingTop = diffVirtualItems.length > 0 ? diffVirtualItems[0].start : 0;
+  const diffPaddingBottom = diffVirtualItems.length > 0
+    ? diffRowVirtualizer.getTotalSize() - diffVirtualItems[diffVirtualItems.length - 1].end
+    : 0;
+  // colSpan holgado para las filas espaciadoras — HTML tolera un colSpan mayor a la
+  // cantidad real de columnas sin ningún efecto visual, no hace falta calcularlo exacto
+  // según diffColOcultas.
+  const DIFF_COLSPAN_ESPACIADOR = 30;
 
   // Excel de la grilla de resultado (Paso 4) — mismos labels del selector de columnas
   // (más descriptivos que los de la cabecera agrupada) y solo las filas que quedan tras
@@ -633,7 +683,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
             </div>
           </div>
 
-          <div style={scrollableGridStyle}>
+          <div style={scrollableGridStyle} ref={diffScrollRef}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
@@ -641,7 +691,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                   <th key={col.key} rowSpan={2} style={{ ...stickyTheadStyle, padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom' }}>
                     <ExcelFilterHeader
                       label={col.label}
-                      allValues={rg90Diff.map(col.getValue)}
+                      allValues={diffAllValuesPorColumna[col.key]}
                       active={diffColFiltros[col.key] ?? null}
                       onChange={(next) => setDiffColFiltros(prev => ({ ...prev, [col.key]: next }))}
                     />
@@ -663,7 +713,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                       return (
                         <ExcelFilterHeader
                           label={col.label}
-                          allValues={rg90Diff.map(col.getValue)}
+                          allValues={diffAllValuesPorColumna[col.key]}
                           active={diffColFiltros[col.key] ?? null}
                           onChange={(next) => setDiffColFiltros(prev => ({ ...prev, [col.key]: next }))}
                         />
@@ -677,7 +727,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                   <th key={col.key} style={{ ...stickyTheadStyle, top: DIFF_THEAD_ROW1_HEIGHT, padding: '8px 14px', fontWeight: 600, textAlign: 'right', ...(i === 0 ? { borderLeft: '2px solid #e2e0da' } : {}) }}>
                     <ExcelFilterHeader
                       label={col.label}
-                      allValues={rg90Diff.map(col.getValue)}
+                      allValues={diffAllValuesPorColumna[col.key]}
                       active={diffColFiltros[col.key] ?? null}
                       onChange={(next) => setDiffColFiltros(prev => ({ ...prev, [col.key]: next }))}
                       align="right"
@@ -687,31 +737,40 @@ export const RG90View: React.FC<RG90ViewProps> = ({
               </tr>
             </thead>
             <tbody>
-              {filteredRg90DiffCols.map((r: any, i: number) => (
-                <tr key={i} style={{ borderBottom: '1px solid #f0eee8' }}>
-                  {!diffColOcultas.has('doc') && <td style={{ padding: '10px 14px', fontWeight: 600, color: '#22262b' }}>{r.doc}</td>}
-                  {!diffColOcultas.has('tipo_doc') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.tipo_doc}</td>}
-                  {!diffColOcultas.has('sistema') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.sistema}</td>}
-                  {!diffColOcultas.has('local') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.local}</td>}
-                  {[diffLibroColsVisibles, diffRgColsVisibles, diffDifColsVisibles].flatMap(grupo => grupo.map((col, i) => (
-                    <td
-                      key={col.key}
-                      style={{
-                        padding: '10px 14px', textAlign: 'right', color: '#5c6470',
-                        ...(i === 0 ? { borderLeft: '2px solid #f0eee8' } : {}),
-                        ...(col.key.endsWith('_total') ? { fontWeight: 600, color: '#22262b' } : {}),
-                      }}
-                    >
-                      {col.getValue(r)}
-                    </td>
-                  )))}
-                  {!diffColOcultas.has('diferencia') && (
-                    <td style={{ padding: '10px 14px', borderLeft: '2px solid #f0eee8' }}>
-                      <span style={parseInlineStyle(r.diffChipStyle)}>{r.diferencia}</span>
-                    </td>
-                  )}
-                </tr>
-              ))}
+              {diffPaddingTop > 0 && (
+                <tr><td colSpan={DIFF_COLSPAN_ESPACIADOR} style={{ height: diffPaddingTop, padding: 0, border: 'none' }} /></tr>
+              )}
+              {diffVirtualItems.map(vi => {
+                const r: any = filteredRg90DiffCols[vi.index];
+                return (
+                  <tr key={vi.key} data-index={vi.index} ref={diffRowVirtualizer.measureElement} style={{ borderBottom: '1px solid #f0eee8' }}>
+                    {!diffColOcultas.has('doc') && <td style={{ padding: '10px 14px', fontWeight: 600, color: '#22262b' }}>{r.doc}</td>}
+                    {!diffColOcultas.has('tipo_doc') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.tipo_doc}</td>}
+                    {!diffColOcultas.has('sistema') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.sistema}</td>}
+                    {!diffColOcultas.has('local') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.local}</td>}
+                    {[diffLibroColsVisibles, diffRgColsVisibles, diffDifColsVisibles].flatMap(grupo => grupo.map((col, i) => (
+                      <td
+                        key={col.key}
+                        style={{
+                          padding: '10px 14px', textAlign: 'right', color: '#5c6470',
+                          ...(i === 0 ? { borderLeft: '2px solid #f0eee8' } : {}),
+                          ...(col.key.endsWith('_total') ? { fontWeight: 600, color: '#22262b' } : {}),
+                        }}
+                      >
+                        {col.getValue(r)}
+                      </td>
+                    )))}
+                    {!diffColOcultas.has('diferencia') && (
+                      <td style={{ padding: '10px 14px', borderLeft: '2px solid #f0eee8' }}>
+                        <span style={parseInlineStyle(r.diffChipStyle)}>{r.diferencia}</span>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+              {diffPaddingBottom > 0 && (
+                <tr><td colSpan={DIFF_COLSPAN_ESPACIADOR} style={{ height: diffPaddingBottom, padding: 0, border: 'none' }} /></tr>
+              )}
             </tbody>
             <tfoot>
               <tr style={{ borderTop: '2px solid #e2e0da', backgroundColor: '#fafbfa', fontWeight: 700, color: '#22262b' }}>
