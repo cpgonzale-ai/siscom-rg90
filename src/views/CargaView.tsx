@@ -143,9 +143,17 @@ export const CargaView: React.FC<CargaViewProps> = ({
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#22262b' }}>
-              1. Adjuntar el libro de ventas del sistema
-            </h3>
+            <div>
+              <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#22262b' }}>
+                1. Adjuntar el libro de ventas del sistema
+              </h3>
+              {/* Mismo lugar que rg90StatusText en RG90View Paso3: texto de ayuda bajo el
+                  título, no junto al botón (que se movió arriba, al lado del dropzone) —
+                  así el botón no se corre de lugar aunque este texto cambie de largo. */}
+              <p style={{ fontSize: '12.5px', color: '#5c6470', marginTop: '2px' }}>
+                {!canConvertir ? 'No tenés permiso para convertir reportes.' : converting ? 'Procesando archivos en el servidor…' : convertHelpText}
+              </p>
+            </div>
             {/* Misma posición y estilo en las 4 secciones de la app donde se adjuntan
                 archivos (acá, RG90View Paso3, ComprasView Paso1 y Paso2): el botón que
                 elimina todo lo adjuntado va en el header, junto al título. */}
@@ -160,41 +168,53 @@ export const CargaView: React.FC<CargaViewProps> = ({
             )}
           </div>
 
-          {/* Dropzone — mismo tamaño y texto que el de Libro de Compras: ya no hace falta
-              elegir el sistema antes de adjuntar, se detecta automáticamente por archivo al
-              analizar (ver el campo "Sistema" apagado en el listado de abajo). */}
-          <label
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              border: '2px dashed #e2e0da',
-              borderRadius: '9px',
-              padding: '18px',
-              textAlign: 'center',
-              cursor: 'pointer',
-              fontSize: '13px',
-              color: '#5c6470',
-              backgroundColor: '#fafbfa',
-              marginBottom: '20px',
-            }}
-          >
-            <UploadCloud size={18} color="#128752" />
-            <span>
-              {uploadedFilesList.length > 0
-                ? `${uploadedFilesList.length} archivo(s) adjuntado(s) — click para agregar más`
-                : 'Click para adjuntar el archivo (.xls, .xlsx)'}
-            </span>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept=".xls,.xlsx"
-              style={{ display: 'none' }}
-              onChange={(e) => { if (e.target.files && e.target.files.length > 0) onFileUpload(e.target.files); e.target.value = ''; }}
-            />
-          </label>
+          {/* Dropzone + botón "Analizar y convertir" en la misma fila, igual que el Paso 3
+              (RG90View, adjuntar RG90) — así el botón queda siempre arriba, sin importar
+              cuántos archivos se vayan adjuntando y agregando a la lista de abajo. */}
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '20px' }}>
+            <label
+              style={{
+                display: 'flex',
+                flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                border: '2px dashed #e2e0da',
+                borderRadius: '9px',
+                padding: '18px',
+                textAlign: 'center',
+                cursor: 'pointer',
+                fontSize: '13px',
+                color: '#5c6470',
+                backgroundColor: '#fafbfa',
+              }}
+            >
+              <UploadCloud size={18} color="#128752" />
+              <span>
+                {uploadedFilesList.length > 0
+                  ? `${uploadedFilesList.length} archivo(s) adjuntado(s) — click para agregar más`
+                  : 'Click para adjuntar el archivo (.xls, .xlsx)'}
+              </span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept=".xls,.xlsx"
+                style={{ display: 'none' }}
+                onChange={(e) => { if (e.target.files && e.target.files.length > 0) onFileUpload(e.target.files); e.target.value = ''; }}
+              />
+            </label>
+
+            {canConvertir && (
+              <button
+                onClick={doConvert}
+                disabled={converting}
+                style={{ ...parseInlineStyle(convertBtnStyle), opacity: converting ? 0.7 : 1, cursor: converting ? 'wait' : parseInlineStyle(convertBtnStyle).cursor }}
+              >
+                {converting ? 'Analizando…' : 'Analizar y convertir'}
+              </button>
+            )}
+          </div>
 
           {/* Uploaded Files List */}
           {uploadedFilesList.length > 0 && (
@@ -271,31 +291,6 @@ export const CargaView: React.FC<CargaViewProps> = ({
               {convertError}
             </div>
           )}
-
-          {/* Convert Action Bar */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              paddingTop: '16px',
-              borderTop: '1px solid #f0eee8',
-            }}
-          >
-            <div style={{ fontSize: '12px', color: '#5c6470', flex: 1 }}>
-              {!canConvertir ? 'No tenés permiso para convertir reportes.' : converting ? 'Procesando archivos en el servidor…' : convertHelpText}
-            </div>
-
-            {canConvertir && (
-              <button
-                onClick={doConvert}
-                disabled={converting}
-                style={{ ...parseInlineStyle(convertBtnStyle), opacity: converting ? 0.7 : 1, cursor: converting ? 'wait' : parseInlineStyle(convertBtnStyle).cursor }}
-              >
-                {converting ? 'Analizando…' : 'Analizar y convertir'}
-              </button>
-            )}
-          </div>
         </div>
         </>
       )}
