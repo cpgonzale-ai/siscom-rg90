@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ArrowRight, ShieldCheck } from 'lucide-react';
+import { Modal } from '../components/Modal';
+import { TablaSaltos } from '../components/TablaSaltos';
 
 interface DashboardViewProps {
   steps: any[];
@@ -14,7 +16,6 @@ interface DashboardViewProps {
   kpiLocales: string;
   kpiComprobantes: string;
   kpiSaltos: string;
-  onNavigate: (screen: 'dashboard' | 'carga' | 'correl' | 'rg90') => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -27,9 +28,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   kpiLocales,
   kpiComprobantes,
   kpiSaltos,
-  onNavigate,
 }) => {
+  // Modal de "Ver saltos" por sistema (Aloha/Hiopos/Universal) -- mismo patrón que el modal
+  // de saltos de Libro Ventas/Compras (RG90View/ComprasView), en vez de navegar a la
+  // pantalla de Correlatividad.
+  const [saltosModalSistema, setSaltosModalSistema] = useState<string | null>(null);
+  const filaModal = importStatus.find((r: any) => r.sistema === saltosModalSistema);
+
   return (
+    <>
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Guidance Banner */}
       <div
@@ -199,7 +206,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   </td>
                   <td style={{ padding: '14px 12px' }}>
                     <button
-                      onClick={() => onNavigate('correl')}
+                      onClick={() => setSaltosModalSistema(r.sistema)}
+                      disabled={!converted || r.saltos === 0}
                       style={{
                         backgroundColor: '#ffffff',
                         border: '1px solid #e2e0da',
@@ -209,6 +217,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         fontSize: '11.5px',
                         fontWeight: 600,
                         cursor: 'pointer',
+                        ...(!converted || r.saltos === 0 ? { opacity: 0.5, cursor: 'not-allowed' } : {}),
                       }}
                     >
                       Ver saltos
@@ -221,6 +230,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
     </div>
+
+    {saltosModalSistema && filaModal && (
+      <Modal
+        title={`Saltos de numeración — ${filaModal.sistema} (${filaModal.saltosRows.length})`}
+        onClose={() => setSaltosModalSistema(null)}
+        width="900px"
+      >
+        <TablaSaltos rows={filaModal.saltosRows} />
+      </Modal>
+    )}
+    </>
   );
 };
 

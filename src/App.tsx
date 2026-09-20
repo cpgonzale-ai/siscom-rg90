@@ -682,6 +682,9 @@ export function App() {
       estado: archivosSistema.length > 0 ? 'Cargado' : 'Pendiente',
       ultimaCarga: archivosSistema.length > 0 ? archivosSistema[archivosSistema.length - 1].uploadedAt : '—',
       saltos: saltosSistema.length,
+      // Filas detalladas (no solo el conteo) para el modal "Ver saltos" del Panel general
+      // — mismo patrón que el modal de saltos de Libro Ventas/Compras (RG90View/ComprasView).
+      saltosRows: saltosSistema,
     };
   });
 
@@ -752,7 +755,6 @@ export function App() {
               kpiLocales={converted ? `${new Set(libroRows.map(r => r.local)).size}` : '0'}
               kpiComprobantes={converted ? `${libroRows.length}` : '0'}
               kpiSaltos={converted ? `${correlatividadRows.length}` : '—'}
-              onNavigate={(sc) => setScreen(sc)}
             />
           )}
 
