@@ -65,6 +65,14 @@ button, input, select {
   to { transform: rotate(360deg); }
 }
 
+/* Edge/Chromium agrega su propio ícono de "mostrar contraseña" (::-ms-reveal) apenas se
+   empieza a tipear en un <input type="password">, que se solapa con el ojito propio del
+   login (LoginView.tsx) -- se oculta el nativo del navegador para que quede un solo ojito. */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
 /* Custom Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
