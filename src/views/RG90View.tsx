@@ -7,29 +7,17 @@ import { Modal, primaryBtnStyle, secondaryBtnStyle, dangerBtnStyle, navRowStyle,
 import { ColumnPicker } from '../components/ColumnPicker';
 import { TablaSaltos } from '../components/TablaSaltos';
 import { formatGs } from '../utils/format';
-import { downloadExcel } from '../utils/exportExcel';
-import type { RG90DiffRow, RG90DiffLado } from '../services/api';
+import { exportarTablaExcelApi, exportarDiffVentasExcelApi } from '../services/api';
+import type { RG90DiffRow } from '../services/api';
+import {
+  RG90_DIFF_COLUMNAS, RG90_DIFF_COLUMNAS_PICKER, CAMPOS_DIFF_VENTAS,
+  valorCeldaDiffVentas, diferenciaCampoVentas, parseGs,
+} from '../utils/diffVentasColumns';
 
-// Suma de importes formateados como los devuelve el backend ("18.891.429,00") — se
-// necesita volver a número para poder sumar/restar entre filas antes de re-formatear.
-const parseGs = (s: string): number => {
-  const n = parseFloat(String(s ?? '').replace(/\./g, '').replace(',', '.'));
-  return isNaN(n) ? 0 : n;
-};
-
-// Mismo criterio que en Compras: si la fila es "Diferencia de monto", el campo que no está
-// en diferencias_detalle (no difiere) se muestra en 0 — solo quedan visibles los importes
-// que realmente causan la diferencia.
-const valorCeldaDiffVentas = (d: RG90DiffRow, lado: 'libro' | 'rg90', campo: keyof RG90DiffLado): string => {
-  const valor = d[lado][campo];
-  if (d.diferencia !== 'Diferencia de monto' || valor === '—') return valor;
-  return d.diferencias_detalle && campo in d.diferencias_detalle ? valor : '0,00';
-};
-
-const diferenciaCampoVentas = (d: RG90DiffRow, campo: keyof RG90DiffLado): string =>
-  formatGs(parseGs(valorCeldaDiffVentas(d, 'libro', campo)) - parseGs(valorCeldaDiffVentas(d, 'rg90', campo)));
-
-const CAMPOS_DIFF_VENTAS: (keyof RG90DiffLado)[] = ['gravada_10', 'gravada_5', 'iva_10', 'iva_5', 'exenta', 'total'];
+// parseGs/valorCeldaDiffVentas/diferenciaCampoVentas/RG90_DIFF_COLUMNAS/_PICKER/CAMPOS_DIFF_VENTAS
+// se movieron a utils/diffVentasColumns.ts para que diffExportWorker.ts (Web Worker del
+// export a Excel) pueda usar la MISMA lógica de negocio sin duplicarla — ver
+// auditoria/13-export-excel-wysiwyg.md.
 
 // Mismas columnas/estilo que la grilla de resultado de Libro de Compras (Documento,
 // Sistema/Local, desglose Libro/RG90 por tasa, Diferencia por tasa, Motivo).
@@ -37,58 +25,6 @@ const CAMPOS_DIFF_VENTAS: (keyof RG90DiffLado)[] = ['gravada_10', 'gravada_5', '
 // valor que ComprasView (idéntico padding/tamaño de fuente): la segunda fila necesita este
 // valor como su propio `top` sticky para quedar pegada justo debajo de la primera.
 const DIFF_THEAD_ROW1_HEIGHT = 41;
-
-const RG90_DIFF_COLUMNAS: { key: string; label: string; getValue: (d: RG90DiffRow) => string }[] = [
-  { key: 'doc', label: 'Documento', getValue: d => d.doc },
-  { key: 'tipo_doc', label: 'Tipo', getValue: d => d.tipo_doc },
-  { key: 'sistema', label: 'Sistema', getValue: d => d.sistema },
-  { key: 'local', label: 'Local', getValue: d => d.local },
-  { key: 'libro_gravada_10', label: 'Gravada 10%', getValue: d => valorCeldaDiffVentas(d, 'libro', 'gravada_10') },
-  { key: 'libro_gravada_5', label: 'Gravada 5%', getValue: d => valorCeldaDiffVentas(d, 'libro', 'gravada_5') },
-  { key: 'libro_iva_10', label: 'IVA 10%', getValue: d => valorCeldaDiffVentas(d, 'libro', 'iva_10') },
-  { key: 'libro_iva_5', label: 'IVA 5%', getValue: d => valorCeldaDiffVentas(d, 'libro', 'iva_5') },
-  { key: 'libro_exenta', label: 'Exenta', getValue: d => valorCeldaDiffVentas(d, 'libro', 'exenta') },
-  { key: 'libro_total', label: 'Total', getValue: d => valorCeldaDiffVentas(d, 'libro', 'total') },
-  { key: 'rg_gravada_10', label: 'Gravada 10%', getValue: d => valorCeldaDiffVentas(d, 'rg90', 'gravada_10') },
-  { key: 'rg_gravada_5', label: 'Gravada 5%', getValue: d => valorCeldaDiffVentas(d, 'rg90', 'gravada_5') },
-  { key: 'rg_iva_10', label: 'IVA 10%', getValue: d => valorCeldaDiffVentas(d, 'rg90', 'iva_10') },
-  { key: 'rg_iva_5', label: 'IVA 5%', getValue: d => valorCeldaDiffVentas(d, 'rg90', 'iva_5') },
-  { key: 'rg_exenta', label: 'Exenta', getValue: d => valorCeldaDiffVentas(d, 'rg90', 'exenta') },
-  { key: 'rg_total', label: 'Total', getValue: d => valorCeldaDiffVentas(d, 'rg90', 'total') },
-  { key: 'dif_gravada_10', label: 'Gravada 10%', getValue: d => diferenciaCampoVentas(d, 'gravada_10') },
-  { key: 'dif_gravada_5', label: 'Gravada 5%', getValue: d => diferenciaCampoVentas(d, 'gravada_5') },
-  { key: 'dif_iva_10', label: 'IVA 10%', getValue: d => diferenciaCampoVentas(d, 'iva_10') },
-  { key: 'dif_iva_5', label: 'IVA 5%', getValue: d => diferenciaCampoVentas(d, 'iva_5') },
-  { key: 'dif_exenta', label: 'Exenta', getValue: d => diferenciaCampoVentas(d, 'exenta') },
-  { key: 'dif_total', label: 'Total', getValue: d => diferenciaCampoVentas(d, 'total') },
-  { key: 'diferencia', label: 'Diferencia / Diagnóstico', getValue: d => d.diferencia },
-];
-
-const RG90_DIFF_COLUMNAS_PICKER: { key: string; label: string }[] = [
-  { key: 'doc', label: 'Documento' },
-  { key: 'tipo_doc', label: 'Tipo' },
-  { key: 'sistema', label: 'Sistema' },
-  { key: 'local', label: 'Local' },
-  { key: 'libro_gravada_10', label: 'Libro — Gravada 10%' },
-  { key: 'libro_gravada_5', label: 'Libro — Gravada 5%' },
-  { key: 'libro_iva_10', label: 'Libro — IVA 10%' },
-  { key: 'libro_iva_5', label: 'Libro — IVA 5%' },
-  { key: 'libro_exenta', label: 'Libro — Exenta' },
-  { key: 'libro_total', label: 'Libro — Total' },
-  { key: 'rg_gravada_10', label: 'RG90 — Gravada 10%' },
-  { key: 'rg_gravada_5', label: 'RG90 — Gravada 5%' },
-  { key: 'rg_iva_10', label: 'RG90 — IVA 10%' },
-  { key: 'rg_iva_5', label: 'RG90 — IVA 5%' },
-  { key: 'rg_exenta', label: 'RG90 — Exenta' },
-  { key: 'rg_total', label: 'RG90 — Total' },
-  { key: 'dif_gravada_10', label: 'Diferencia — Gravada 10%' },
-  { key: 'dif_gravada_5', label: 'Diferencia — Gravada 5%' },
-  { key: 'dif_iva_10', label: 'Diferencia — IVA 10%' },
-  { key: 'dif_iva_5', label: 'Diferencia — IVA 5%' },
-  { key: 'dif_exenta', label: 'Diferencia — Exenta' },
-  { key: 'dif_total', label: 'Diferencia — Total' },
-  { key: 'diferencia', label: 'Diferencia / Diagnóstico' },
-];
 
 interface RG90ViewProps {
   wizardSteps: any[];
@@ -198,9 +134,16 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   saltosRgRows,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Estado de "Generando Excel…" para los dos botones de export de esta vista (Paso 3 y
+  // Paso 4) — ambos pueden llegar a 200.000 filas, y el backend tarda un rato real en armar
+  // el archivo a ese volumen (~100s medido con 200.000 filas, ver
+  // auditoria/13-export-excel-wysiwyg.md); sin este estado, un usuario impaciente podría
+  // click-ear varias veces y disparar varios pedidos a la vez.
+  const [exportandoRg90, setExportandoRg90] = useState(false);
+  const [exportandoDiff, setExportandoDiff] = useState(false);
 
-  const descargarRg90Excel = () => {
-    if (rg90GridExportRows.length === 0) return;
+  const descargarRg90Excel = async () => {
+    if (rg90GridExportRows.length === 0 || exportandoRg90) return;
     const headers = ['Documento', 'Tipo', 'Sistema', 'Local', 'Fecha', 'RUC', 'Nombre', 'Gravadas 10%', 'IVA 10%', 'Gravadas 5%', 'IVA 5%', 'Exentas', 'Total', 'Estado'];
     // Importes con el mismo texto ya formateado de la grilla — no un number — para que el
     // Excel descargado coincida con la pantalla tal cual.
@@ -208,7 +151,12 @@ export const RG90View: React.FC<RG90ViewProps> = ({
       r.doc, r.tipo_doc || 'Factura', r.sistema, r.local, r.fecha, r.ruc, r.nombre,
       r.gravadas, r.iva, r.gravadas_5 ?? '0,00', r.iva_5 ?? '0,00', r.exentas, r.total, r.estado,
     ]);
-    downloadExcel('RG90_Ventas.xlsx', 'RG90 (SET) — Ventas', headers, dataRows);
+    setExportandoRg90(true);
+    try {
+      await exportarTablaExcelApi('RG90_Ventas.xlsx', 'RG90 (SET) — Ventas', headers, dataRows);
+    } finally {
+      setExportandoRg90(false);
+    }
   };
   const [saltosRgModalOpen, setSaltosRgModalOpen] = useState(false);
   const [saltosTotalModalOpen, setSaltosTotalModalOpen] = useState(false);
@@ -348,17 +296,35 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   // según diffColOcultas.
   const DIFF_COLSPAN_ESPACIADOR = 30;
 
-  // Excel de la grilla de resultado (Paso 4) — mismos labels del selector de columnas
-  // (más descriptivos que los de la cabecera agrupada) y solo las filas que quedan tras
-  // los filtros de columna + categoría + búsqueda (filteredRg90DiffCols ya viene con todo
-  // eso aplicado, ver App.tsx/filteredRg90Diff y el filtro por columna de acá arriba).
-  const descargarDiffVentasExcel = () => {
-    if (filteredRg90DiffCols.length === 0) return;
-    const headers = RG90_DIFF_COLUMNAS_PICKER.map(c => c.label);
-    const dataRows = filteredRg90DiffCols.map(d =>
-      RG90_DIFF_COLUMNAS.map(col => col.getValue(d))
-    );
-    downloadExcel('Resultado_Comparacion_Ventas_RG90.xlsx', 'Resultado — Ventas vs RG90', headers, dataRows);
+  // Excel de la grilla de resultado (Paso 4) — WYSIWYG con lo que se ve en pantalla:
+  // - Filas: solo las que quedan tras los filtros de columna + categoría + búsqueda
+  //   (filteredRg90DiffCols ya viene con todo eso aplicado, ver App.tsx/filteredRg90Diff y
+  //   el filtro por columna de acá arriba).
+  // - Columnas: antes se exportaban TODAS (RG90_DIFF_COLUMNAS/_PICKER completos), ignorando
+  //   diffColOcultas -- una columna que el usuario ocultó en la grilla igual aparecía en el
+  //   Excel. Se filtra acá por lo mismo que decide qué <td> se renderiza.
+  // - Orden: esta grilla no tiene una columna "activa" para ordenar (no hay esa función en
+  //   la UI, solo filtro por columna) -- no hay nada que respetar ahí.
+  //
+  // Se arma en el BACKEND (exportarDiffVentasExcelApi), no en el navegador -- ver
+  // auditoria/13-export-excel-wysiwyg.md: se probó primero un Web Worker (mueve el trabajo
+  // fuera del hilo principal, pero sigue corriendo en el navegador) y con 200.000 filas la
+  // librería xlsx igual revienta con "JavaScript heap out of memory" (2GB+ de heap) — no es
+  // un problema de que bloquee la interfaz, es que arma todo el .xlsx comprimido en memoria
+  // de una sola vez. El backend usa openpyxl en modo streaming (write_only), que escribe
+  // fila por fila sin mantener el sheet completo en memoria — medido: 200.000 filas, ~105s,
+  // sin problemas de memoria. Se manda filteredRg90DiffCols CRUDO (sin mapear) + las keys de
+  // columnas visibles; el cálculo por celda (mismo criterio que RG90_DIFF_COLUMNAS acá
+  // arriba) se repite del lado del servidor (ver app/api/export.py).
+  const columnasVisiblesKeys = RG90_DIFF_COLUMNAS_PICKER.filter(c => !diffColOcultas.has(c.key)).map(c => c.key);
+  const descargarDiffVentasExcel = async () => {
+    if (filteredRg90DiffCols.length === 0 || exportandoDiff) return;
+    setExportandoDiff(true);
+    try {
+      await exportarDiffVentasExcelApi(filteredRg90DiffCols as RG90DiffRow[], columnasVisiblesKeys);
+    } finally {
+      setExportandoDiff(false);
+    }
   };
 
   return (
@@ -523,8 +489,12 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                     Limpiar filtros
                   </button>
                 )}
-                <button onClick={descargarRg90Excel} style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px' }}>
-                  Excel
+                <button
+                  onClick={descargarRg90Excel}
+                  disabled={exportandoRg90}
+                  style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px', ...(exportandoRg90 ? { opacity: 0.7, cursor: 'wait' } : {}) }}
+                >
+                  {exportandoRg90 ? 'Generando Excel…' : 'Excel'}
                 </button>
                 <input
                   type="text" placeholder="Buscar..." value={rg90GridSearch}
@@ -722,11 +692,11 @@ export const RG90View: React.FC<RG90ViewProps> = ({
               <ColumnPicker columnas={RG90_DIFF_COLUMNAS_PICKER} ocultas={diffColOcultas} onChange={setDiffColOcultas} />
               <button
                 onClick={descargarDiffVentasExcel}
-                disabled={filteredRg90DiffCols.length === 0}
-                style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                disabled={filteredRg90DiffCols.length === 0 || exportandoDiff}
+                style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', ...(exportandoDiff ? { opacity: 0.7, cursor: 'wait' } : {}) }}
               >
                 <FileSpreadsheet size={14} color="#5c6470" />
-                <span>Excel</span>
+                <span>{exportandoDiff ? 'Generando Excel…' : 'Excel'}</span>
               </button>
               <input
                 type="text"

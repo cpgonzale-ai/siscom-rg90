@@ -311,7 +311,13 @@ export async function ingestFilesApi(files: File[], systemKey: string, localName
 export async function reconcileApi(rg90Files: File[], posRows: LibroRow[], loteId?: number) {
   const formData = new FormData();
   rg90Files.forEach(f => formData.append('rg90_files', f));
-  formData.append('pos_data_json', JSON.stringify(posRows));
+  // Se manda como archivo (Blob), no como campo de texto plano: un campo de texto llega al
+  // backend ya reconstruido entero en memoria (FastAPI/Starlette lo bufferean como un solo
+  // string), mientras que un archivo se puede leer del lado del servidor en streaming desde
+  // el spool en disco — necesario para que /api/reconcile pueda parsear esto con ijson sin
+  // volver a levantar las 200.000 filas enteras en RAM (ver auditoria/12, hallazgo de OOM:
+  // un pedido de ese tamaño hacía que un worker pasara de 130MB a 1,83GB de RSS y muriera).
+  formData.append('pos_data_json', new Blob([JSON.stringify(posRows)], { type: 'application/json' }), 'pos_data.json');
   if (loteId !== undefined) formData.append('lote_id', String(loteId));
 
   const res = await fetch(`${API_BASE}/reconcile`, {
@@ -419,6 +425,48 @@ export async function reconcileComprasApi(rgFiles: File[], comprasRows: CompraRo
     throw new Error(detail || `Error al comparar contra la RG (HTTP ${res.status}).`);
   }
   return await res.json();
+}
+
+// ── Export a Excel (server-side) ────────────────────────────────────────────
+// Ver auditoria/13-export-excel-wysiwyg.md: armar el .xlsx en el navegador (librería xlsx)
+// revienta con "JavaScript heap out of memory" arriba de ~100-150 mil filas, sin importar si
+// corre en el hilo principal o en un Web Worker -- para grillas que pueden llegar a 200.000
+// filas (Detalle de Discrepancias, RG90 (SET) — Ventas) el archivo se arma en el backend
+// (openpyxl en modo streaming) y acá solo se dispara la descarga del blob que devuelve.
+
+function triggerBlobDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function postParaDescarga(path: string, body: unknown, filename: string, fallback: string): Promise<void> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) return throwApiError(res, fallback);
+  const blob = await res.blob();
+  triggerBlobDownload(blob, filename);
+}
+
+export function exportarTablaExcelApi(filename: string, sheetName: string, headers: string[], rows: (string | number)[][]): Promise<void> {
+  return postParaDescarga('/export/tabla-excel', { filename, sheet_name: sheetName, headers, rows }, filename, 'Error al generar el Excel');
+}
+
+export function exportarDiffVentasExcelApi(rows: RG90DiffRow[], visibleColumns: string[]): Promise<void> {
+  return postParaDescarga(
+    '/export/diff-ventas-excel',
+    { rows, visible_columns: visibleColumns },
+    'Resultado_Comparacion_Ventas_RG90.xlsx',
+    'Error al generar el Excel',
+  );
 }
 
 // ── Auditoría ─────────────────────────────────────────────────────────────
