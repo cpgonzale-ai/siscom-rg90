@@ -11,7 +11,7 @@ import { exportarTablaExcelApi, exportarDiffVentasExcelApi } from '../services/a
 import type { RG90DiffRow } from '../services/api';
 import {
   RG90_DIFF_COLUMNAS, RG90_DIFF_COLUMNAS_PICKER, CAMPOS_DIFF_VENTAS,
-  valorCeldaDiffVentas, diferenciaCampoVentas, parseGs,
+  valorCeldaDiffVentas, parseGs,
 } from '../utils/diffVentasColumns';
 
 // parseGs/valorCeldaDiffVentas/diferenciaCampoVentas/RG90_DIFF_COLUMNAS/_PICKER/CAMPOS_DIFF_VENTAS

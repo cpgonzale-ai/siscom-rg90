@@ -199,11 +199,15 @@ export function App() {
   // 0) — quedaba confundible con el botón "Saltos" nuevo (total real de huecos de
   // numeración, libro + RG90), que si tiene datos. Ver rg90Summary.saltos en api.ts/main.py
   // si en algún momento se retoma esa categoría de diff.
+  // Mismo patrón de redacción que RESUMEN_CATEGORIAS en ComprasView.tsx (antes estas
+  // decían "Coinciden" / "No en RG90" / "No en libro venta" — mucho más cortas y crípticas
+  // que las de Compras, pese a ser la misma idea) — alineadas acá para que ambas pantallas
+  // usen el mismo criterio de claridad.
   const rg90CardsState = [
-    { key: 'Coincide', label: 'Coinciden', value: `${rg90Summary?.coinciden ?? 0}`, color: '#128752' },
-    { key: 'No llegó a la interfaz', label: 'No en RG90', value: `${rg90Summary?.no_en_rg90 ?? 0}`, color: '#b3402f' },
-    { key: 'No en libro propio', label: 'No en libro venta', value: `${rg90Summary?.no_en_libro ?? 0}`, color: '#b3402f' },
-    { key: 'Diferencia de monto', label: 'Diferencia de monto', value: `${rg90Summary?.diferencia_monto ?? 0}`, color: '#b0740f' },
+    { key: 'Coincide', label: 'Registros que coinciden', value: `${rg90Summary?.coinciden ?? 0}`, color: '#128752' },
+    { key: 'No llegó a la interfaz', label: 'Registros que no se encuentran en la RG90', value: `${rg90Summary?.no_en_rg90 ?? 0}`, color: '#b3402f' },
+    { key: 'No en libro propio', label: 'Registros que no se encuentran en libro de ventas', value: `${rg90Summary?.no_en_libro ?? 0}`, color: '#b3402f' },
+    { key: 'Diferencia de monto', label: 'Registros con diferencia de monto', value: `${rg90Summary?.diferencia_monto ?? 0}`, color: '#b0740f' },
   ];
 
   const hasAnyUpload = uploadedFiles.length > 0;
