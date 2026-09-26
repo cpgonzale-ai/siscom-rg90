@@ -314,6 +314,11 @@ export function App() {
           // convertido guardado, mostrar directo el Paso 2 en vez del uploader vacío.
           if (saved.converted) setCargaUploaderOpen(false);
         }
+      } catch {
+        // idbGet ya atrapa sus propios errores internamente (ver persistStore.ts) y nunca
+        // debería rechazar — este catch es solo una red de seguridad si ese contrato
+        // cambia. No hay nada que mostrarle al usuario: simplemente arranca sin datos
+        // restaurados en vez de dejar una rejection sin manejar en el arranque de la app.
       } finally {
         ventasHydratedRef.current = true;
         setVentasHydrated(true);

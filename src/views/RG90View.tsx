@@ -176,6 +176,11 @@ export const RG90View: React.FC<RG90ViewProps> = ({
     setExportandoRg90(true);
     try {
       await exportarTablaExcelApi('RG90_Ventas.xlsx', 'RG90 (SET) — Ventas', headers, dataRows);
+    } catch (e) {
+      // Sin este catch, un fallo de red/timeout acá quedaba como una promesa rechazada sin
+      // manejar: el botón se reactivaba igual (por el finally) pero sin ningún aviso — para
+      // el usuario "no pasó nada", indistinguible de un cuelgue.
+      console.error('Error al exportar RG90 a Excel:', e);
     } finally {
       setExportandoRg90(false);
     }
@@ -350,6 +355,8 @@ export const RG90View: React.FC<RG90ViewProps> = ({
     setExportandoDiff(true);
     try {
       await exportarDiffVentasExcelApi(filteredRg90DiffCols as RG90DiffRow[], columnasVisiblesKeys);
+    } catch (e) {
+      console.error('Error al exportar el detalle de discrepancias a Excel:', e);
     } finally {
       setExportandoDiff(false);
     }

@@ -275,6 +275,9 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
           // donde quedó" que ya tenía antes de este cambio.
           if ((saved.pasoMostrado ?? 1) !== 1) setPasoMostrado(saved.pasoMostrado ?? 1);
         }
+      } catch {
+        // idbGet ya atrapa sus propios errores internamente (ver persistStore.ts) y nunca
+        // debería rechazar — este catch es solo una red de seguridad si ese contrato cambia.
       } finally {
         comprasHydratedRef.current = true;
         setComprasHydrated(true);
