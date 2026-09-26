@@ -990,7 +990,7 @@ export function App() {
             />
           )} />
 
-          <Route path="/panel" element={puede('pantalla:dashboard') ? (
+          <Route path="/panel" element={!meInfoLoaded ? null : puede('pantalla:dashboard') ? (
             <DashboardView
               steps={dashboardSteps}
               isFreshStart={isFreshStart}
@@ -1011,7 +1011,7 @@ export function App() {
             />
           ) : <Navigate to="/" replace />} />
 
-          <Route path="/ventas/carga" element={puede('pantalla:carga') ? (
+          <Route path="/ventas/carga" element={!meInfoLoaded ? null : puede('pantalla:carga') ? (
             <CargaView
               wizardSteps={wizardSteps}
               systemOptions={SYSTEMS_META}
@@ -1091,7 +1091,7 @@ export function App() {
             />
           ) : <Navigate to="/" replace />} />
 
-          <Route path="/ventas/libro-completo" element={puede('pantalla:carga') ? (
+          <Route path="/ventas/libro-completo" element={!meInfoLoaded ? null : puede('pantalla:carga') ? (
             <LibroCompletoView
               rows={libroCompletoFiltrado}
               totalSinFiltrar={libroRows.length}
@@ -1102,7 +1102,7 @@ export function App() {
             />
           ) : <Navigate to="/" replace />} />
 
-          <Route path="/ventas/correlatividad" element={puede('pantalla:carga') ? (
+          <Route path="/ventas/correlatividad" element={!meInfoLoaded ? null : puede('pantalla:carga') ? (
             <CorrelatividadView
               correlatividad={filteredCorrel}
               correlFiltro={correlFiltro}
@@ -1115,12 +1115,12 @@ export function App() {
             />
           ) : <Navigate to="/" replace />} />
 
-          <Route path="/compras/:paso" element={puede('pantalla:compras') ? (
+          <Route path="/compras/:paso" element={!meInfoLoaded ? null : puede('pantalla:compras') ? (
             <ComprasView locales={locales} permisos={permisos} />
           ) : <Navigate to="/" replace />} />
           <Route path="/compras" element={<Navigate to="/compras/carga" replace />} />
 
-          <Route path="/locales" element={puede('pantalla:locales') ? (
+          <Route path="/locales" element={!meInfoLoaded ? null : puede('pantalla:locales') ? (
             <LocalesView
               locales={locales}
               loading={localesLoading}
@@ -1132,7 +1132,7 @@ export function App() {
             />
           ) : <Navigate to="/" replace />} />
 
-          <Route path="/usuarios" element={puede('pantalla:usuarios') ? (
+          <Route path="/usuarios" element={!meInfoLoaded ? null : puede('pantalla:usuarios') ? (
             <UsuariosView
               usuarios={usuariosAdmin}
               roles={rolesAdmin.length > 0 ? rolesAdmin : []}
@@ -1146,7 +1146,7 @@ export function App() {
             />
           ) : <Navigate to="/" replace />} />
 
-          <Route path="/roles" element={puede('pantalla:roles') ? (
+          <Route path="/roles" element={!meInfoLoaded ? null : puede('pantalla:roles') ? (
             <RolesView
               roles={rolesAdmin}
               permisos={permisosCatalogo}
@@ -1160,7 +1160,7 @@ export function App() {
           ) : <Navigate to="/" replace />} />
 
           <Route path="/ventas/rg90" element={<Navigate to="/ventas/rg90/adjuntar" replace />} />
-          <Route path="/ventas/rg90/:paso" element={puede('pantalla:carga') ? (
+          <Route path="/ventas/rg90/:paso" element={!meInfoLoaded ? null : puede('pantalla:carga') ? (
             <RG90View
               wizardSteps={wizardSteps}
               pasoMostrado={rg90PasoMostrado}
