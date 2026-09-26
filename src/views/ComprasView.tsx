@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   UploadCloud, Trash2, FileSpreadsheet, X, GitCompare, Download,
@@ -561,6 +562,12 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
     total: filteredRgRows.reduce((s, r) => s + (r.total_num || 0), 0),
   }), [filteredRgRows]);
 
+  // useDeferredValue en vez de filtrar con cada tecla directamente — mismo criterio que
+  // rg90SearchDeferred en App.tsx/RG90View (Ventas): con miles de discrepancias, filtrar en
+  // el mismo render que la tecla bloqueaba el input mientras se recalculaba filteredDiffs
+  // completo. React usa este valor diferido para el filtro pesado y prioriza que el input
+  // siga respondiendo al tipeo.
+  const diffSearchDeferred = useDeferredValue(diffSearch);
   const filteredDiffs = useMemo(() => {
     let list = diffs;
     for (const col of DIFF_COLUMNAS) {
@@ -568,12 +575,12 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
       if (activo) list = list.filter(d => activo.has(col.getValue(d)));
     }
     if (diffCategoryFilter) list = list.filter(d => d.diferencia === diffCategoryFilter);
-    if (diffSearch.trim()) {
-      const q = diffSearch.trim().toLowerCase();
+    if (diffSearchDeferred.trim()) {
+      const q = diffSearchDeferred.trim().toLowerCase();
       list = list.filter(d => Object.values(d).some(v => typeof v !== 'object' && String(v).toLowerCase().includes(q)));
     }
     return list;
-  }, [diffs, diffSearch, diffCategoryFilter, diffColFiltros]);
+  }, [diffs, diffSearchDeferred, diffCategoryFilter, diffColFiltros]);
   const hayDiffColFiltrosActivos = Object.values(diffColFiltros).some(v => v !== null && v !== undefined);
 
   // Excel de la grilla de resultado (Paso 3) — mismos labels del selector de columnas y
@@ -604,6 +611,33 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
   const diffLibroColsVisibles = DIFF_COLUMNAS.filter(c => c.key.startsWith('libro_') && !diffColOcultas.has(c.key));
   const diffRgColsVisibles = DIFF_COLUMNAS.filter(c => c.key.startsWith('rg_') && !diffColOcultas.has(c.key));
   const diffDifColsVisibles = DIFF_COLUMNAS.filter(c => c.key.startsWith('dif_') && !diffColOcultas.has(c.key));
+
+  // Virtualización de la grilla de Discrepancias — mismo criterio y misma técnica que ya
+  // usa la equivalente de Ventas (RG90View.tsx, ver el comentario ahí sobre el hallazgo de
+  // performance real con 200.000 filas): esta tabla vive en un Modal que antes renderizaba
+  // TODAS las filas filtradas con .map() de una sola vez — con miles de comprobantes
+  // comparados, eso creaba miles de nodos <tr> en el mismo render que abre el modal,
+  // bloqueando el hilo principal justo en ese instante. Filas espaciadoras
+  // (padding-top/bottom) en vez de position:absolute, por lo mismo que en RG90View: los
+  // hijos de <tbody> no respetan position:absolute de forma confiable, y así el layout de
+  // la tabla real (thead de dos filas sticky, tfoot con totales) no se toca.
+  const diffScrollRef = useRef<HTMLDivElement>(null);
+  const diffRowVirtualizer = useVirtualizer({
+    count: filteredDiffs.length,
+    getScrollElement: () => diffScrollRef.current,
+    // 58px medido en el navegador real (getBoundingClientRect().height de un <tr> real de
+    // esta tabla) — mismo criterio que RG90View.tsx: la fila es de una sola línea (importes
+    // y el chip de diagnóstico no envuelven a dos líneas), así que un valor fijo exacto
+    // evita el desfasaje de estimar de más/de menos.
+    estimateSize: () => 58,
+    overscan: 15,
+  });
+  const diffVirtualItems = diffRowVirtualizer.getVirtualItems();
+  const diffPaddingTop = diffVirtualItems.length > 0 ? diffVirtualItems[0].start : 0;
+  const diffPaddingBottom = diffVirtualItems.length > 0
+    ? diffRowVirtualizer.getTotalSize() - diffVirtualItems[diffVirtualItems.length - 1].end
+    : 0;
+  const DIFF_COLSPAN_ESPACIADOR = 30;
 
   // Valores de las 4 tarjetas resumen del Paso 3 — separado de RESUMEN_CATEGORIAS (los
   // rótulos, fijos) porque estos sí dependen del resultado de la comparación.
@@ -1167,7 +1201,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
                 </div>
               </div>
 
-            <div style={{ ...scrollableGridStyle, border: '1px solid #e2e0da', borderRadius: '8px', maxHeight: '60vh' }}>
+            <div ref={diffScrollRef} style={{ ...scrollableGridStyle, border: '1px solid #e2e0da', borderRadius: '8px', maxHeight: '60vh' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
@@ -1221,8 +1255,13 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
                 </tr>
               </thead>
               <tbody>
-                {filteredDiffs.map((d, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid #f0eee8' }}>
+                {diffPaddingTop > 0 && (
+                  <tr><td colSpan={DIFF_COLSPAN_ESPACIADOR} style={{ height: diffPaddingTop, padding: 0, border: 'none' }} /></tr>
+                )}
+                {diffVirtualItems.map(vi => {
+                  const d = filteredDiffs[vi.index];
+                  return (
+                  <tr key={vi.key} style={{ borderBottom: '1px solid #f0eee8' }}>
                     {!diffColOcultas.has('doc') && <td style={{ padding: '10px 14px', fontWeight: 600, color: '#22262b' }}>{d.doc}</td>}
                     {!diffColOcultas.has('tipo_doc') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{d.tipo_doc}</td>}
                     {!diffColOcultas.has('proveedor') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{d.proveedor}</td>}
@@ -1252,7 +1291,11 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
                       </td>
                     )}
                   </tr>
-                ))}
+                  );
+                })}
+                {diffPaddingBottom > 0 && (
+                  <tr><td colSpan={DIFF_COLSPAN_ESPACIADOR} style={{ height: diffPaddingBottom, padding: 0, border: 'none' }} /></tr>
+                )}
               </tbody>
               <tfoot>
                 <tr style={{ borderTop: '2px solid #e2e0da', backgroundColor: '#fafbfa', fontWeight: 700, color: '#22262b' }}>
