@@ -314,7 +314,11 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
     { n: 3 as const, label: 'Ver resultado' },
   ].map(st => {
     const active = st.n === pasoMostrado;
-    const done = st.n < pasoActual;
+    // !active primero: sin esto, al volver a ver un paso ya completado (ej. Paso 1 recién
+    // convertido, o Paso 2 recién comparado) el círculo mostraba el ✓ verde de "completado"
+    // en vez del resaltado naranja de "acá estás parado ahora" — mismo bug ya corregido en
+    // el wizard de Ventas (App.tsx).
+    const done = !active && st.n < pasoActual;
     const reachable = st.n <= pasoActual;
     return {
       n: st.n,
@@ -628,7 +632,19 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
 
       <div style={cardStyle}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-          <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>1. Adjuntar el libro de compras del sistema</h4>
+          <div>
+            <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>1. Adjuntar el libro de compras del sistema</h4>
+            {/* Mismo criterio que convertHelpText en App.tsx (Ventas): archivos (el File
+                crudo) no sobrevive un F5 — pero si rows ya tiene datos, hubo un análisis
+                real que no se perdió, solo no queda el nombre del archivo original para
+                mostrar. Sin esto, tras recargar la pantalla parecía "vacía" aunque la
+                grilla de abajo siguiera mostrando el libro completo. */}
+            {archivos.length === 0 && rows.length > 0 && (
+              <p style={{ fontSize: '12.5px', color: '#5c6470', marginTop: '2px' }}>
+                Ya existe un análisis generado para este libro.
+              </p>
+            )}
+          </div>
           {archivos.length > 0 && puede('boton:compras.eliminar_todos') && (
             <button onClick={() => setConfirmEliminarTodos(true)} style={{ ...dangerBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Trash2 size={14} />
@@ -811,6 +827,12 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
             <p style={{ fontSize: '12.5px', color: '#5c6470', marginTop: '2px' }}>
               Clave de comparación: documento + RUC del proveedor (sin dígito verificador) — un mismo número de documento puede repetirse entre proveedores distintos.
             </p>
+            {/* Mismo criterio que el aviso equivalente del Paso 1, más arriba. */}
+            {rgFiles.length === 0 && rgRows.length > 0 && (
+              <p style={{ fontSize: '12.5px', color: '#5c6470', marginTop: '4px' }}>
+                Ya existe un análisis generado para esta RG.
+              </p>
+            )}
           </div>
           {/* Misma posición y estilo en las 4 secciones de la app donde se adjuntan archivos
               (CargaView, RG90View, acá y el Paso 1 de esta misma vista): el botón que elimina
@@ -881,6 +903,18 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
               <button onClick={descargarRgExcel} style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px' }}>
                 Excel
               </button>
+              {/* Mismo criterio que "Borrar libro" en la grilla del Paso 1: antes la única
+                  forma de sacar la RG era "Eliminar todos" en el recuadro de carga de más
+                  arriba, atado a rgFiles (el archivo crudo) — que no sobrevive un F5 ni queda
+                  restaurado por la persistencia (ver persistStore.ts). Sin este botón, una
+                  vez recargada la página no había forma de rehacer la RG aunque los datos ya
+                  procesados (rgRows) sí estuvieran ahí. */}
+              {puede('boton:compras.quitar_archivo') && (
+                <button onClick={quitarRg} style={{ ...dangerBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Trash2 size={14} />
+                  <span>Borrar RG</span>
+                </button>
+              )}
             </div>
           </div>
 
