@@ -1,9 +1,11 @@
-import { useEffect, useState, useMemo, useDeferredValue } from 'react';
+import { useEffect, useState, useMemo, useDeferredValue, useRef } from 'react';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { ConfirmModal } from './components/ConfirmModal';
 import { ProcessingModal } from './components/ProcessingModal';
 
+import { InicioView } from './views/InicioView';
 import { DashboardView } from './views/DashboardView';
 import { CargaView } from './views/CargaView';
 import { CorrelatividadView } from './views/CorrelatividadView';
@@ -16,6 +18,7 @@ import { UsuariosView } from './views/UsuariosView';
 import { RolesView } from './views/RolesView';
 import { formatGs } from './utils/format';
 import { downloadExcel } from './utils/exportExcel';
+import { idbGet, idbSet, idbDelete, VENTAS_PERSIST_KEY, COMPRAS_PERSIST_KEY } from './utils/persistStore';
 
 import {
   LibroRow,
@@ -45,13 +48,14 @@ import {
 const matchesSistema = (valor: string, filtro: string) =>
   filtro === 'Todos' || (valor || '').toLowerCase().includes(filtro.toLowerCase());
 
-type Screen = 'dashboard' | 'carga' | 'correl' | 'rg90' | 'libroCompleto' | 'compras' | 'locales' | 'usuarios' | 'roles';
+type Screen = 'inicio' | 'dashboard' | 'carga' | 'correl' | 'rg90' | 'libroCompleto' | 'compras' | 'locales' | 'usuarios' | 'roles';
 
 // Tipado por Screen (no Record<string, ...>) a propósito: si se agrega una pantalla nueva y
 // se olvida su entrada acá, TITLES[screen] da undefined y el destructuring de abajo revienta
 // en runtime sin ningún error de compilación — ya pasó una vez con 'compras'. Con este tipo,
-// TypeScript obliga a completar las 9 claves.
+// TypeScript obliga a completar las 10 claves.
 const TITLES: Record<Screen, [string, string]> = {
+  inicio: ['Inicio', 'Elegí a dónde querés ir'],
   dashboard: ['Panel general', 'Estado de la conciliación del libro de ventas'],
   carga: ['Carga y libro de ventas', 'Reportes en bruto, conversión y libro unificado'],
   correl: ['Control de correlatividad', 'Saltos de numeración detectados por local'],
@@ -62,6 +66,44 @@ const TITLES: Record<Screen, [string, string]> = {
   usuarios: ['Usuarios', 'Alta, edición y baja de usuarios del sistema'],
   roles: ['Roles y permisos', 'Qué pantallas y botones puede usar cada rol'],
 };
+
+// Mapa de URLs por pantalla (migración a React Router — antes `screen` era un string en
+// memoria, sin URL propia, así que F5 siempre volvía a Inicio). 'rg90' apunta al paso 3
+// (Adjuntar RG90) por default; el paso 4 (Resultado) tiene su propia URL — ver
+// rg90PasoMostrado más abajo, derivado de location.pathname, no de este mapa.
+const SCREEN_PATHS: Record<Screen, string> = {
+  inicio: '/',
+  dashboard: '/panel',
+  carga: '/ventas/carga',
+  correl: '/ventas/correlatividad',
+  rg90: '/ventas/rg90/adjuntar',
+  libroCompleto: '/ventas/libro-completo',
+  compras: '/compras/carga',
+  locales: '/locales',
+  usuarios: '/usuarios',
+  roles: '/roles',
+};
+
+function pathForScreen(s: Screen): string {
+  return SCREEN_PATHS[s];
+}
+
+// Inversa de SCREEN_PATHS — de una URL cualquiera a la pantalla lógica que representa
+// (para TITLES, el resaltado del Sidebar, y el efecto que carga roles/usuarios). Los
+// prefijos alcanzan: cualquier sub-ruta de /ventas/rg90 (adjuntar o resultado) sigue
+// siendo la pantalla 'rg90'; cualquier sub-ruta de /compras sigue siendo 'compras'.
+function screenForPath(pathname: string): Screen {
+  if (pathname.startsWith('/ventas/rg90')) return 'rg90';
+  if (pathname.startsWith('/ventas/correlatividad')) return 'correl';
+  if (pathname.startsWith('/ventas/libro-completo')) return 'libroCompleto';
+  if (pathname.startsWith('/ventas/carga')) return 'carga';
+  if (pathname.startsWith('/compras')) return 'compras';
+  if (pathname.startsWith('/panel')) return 'dashboard';
+  if (pathname.startsWith('/locales')) return 'locales';
+  if (pathname.startsWith('/usuarios')) return 'usuarios';
+  if (pathname.startsWith('/roles')) return 'roles';
+  return 'inicio';
+}
 
 const SYSTEMS_META = [
   { key: 'aloha', label: 'Aloha', desc: 'Sistema de punto de venta · Juan Valdez' },
@@ -94,7 +136,24 @@ const LIBRO_COLUMNAS: { key: string; label: string; getValue: (r: LibroRow) => s
 
 export function App() {
   const [authed, setAuthed] = useState<boolean>(!!getAuthToken());
-  const [screen, setScreen] = useState<Screen>('dashboard');
+  // El sidebar arranca cerrado siempre (login o recarga) — se abre a demanda con el botón
+  // hamburguesa del Header; nunca se persiste el estado entre sesiones a propósito.
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
+  // `screen` ya no es estado propio: se deriva de la URL real (React Router), así que un
+  // F5 o un link directo aterrizan en la pantalla correcta en vez de siempre "Inicio" — ver
+  // SCREEN_PATHS/screenForPath más arriba. goTo() navega a la URL de esa pantalla; el botón
+  // "Volver" del Header usa el historial real del navegador (navigate(-1)) en vez de una
+  // pila propia. No confundir con los botones "Volver" propios de cada wizard (ej. Paso 2 →
+  // Paso 1 dentro de Carga/RG90/Compras) — esos ya existen y siguen su propia lógica de
+  // pasos, sin tocar.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const screen = screenForPath(location.pathname);
+  const goTo = (next: Screen) => navigate(pathForScreen(next));
+  // Paso 3 (Adjuntar RG90) vs paso 4 (Resultado) de la pantalla 'rg90': antes vivía en un
+  // useState propio (rg90PasoMostrado); ahora es la URL misma la que lo indica — cada paso
+  // tiene su propia ruta (/ventas/rg90/adjuntar vs /ventas/rg90/resultado).
+  const rg90PasoMostrado: 3 | 4 = location.pathname === '/ventas/rg90/resultado' ? 4 : 3;
   const [selectedSystemKey, setSelectedSystemKey] = useState<string>('aloha');
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFileMeta[]>([]);
   const [converted, setConverted] = useState<boolean>(false);
@@ -108,6 +167,13 @@ export function App() {
   // rol. Se cargan una vez autenticado (junto con locales/roles/usuarios, que alimentan
   // tanto las pantallas de administración como la resolución de "local" del Paso 2).
   const [meInfo, setMeInfo] = useState<MeInfo | null>(null);
+  // Los guards de permiso por ruta (más abajo, en <Routes>) necesitan saber si YA se sabe
+  // el permiso real o si todavía no llegó la respuesta de /api/auth/me — sin esto, la
+  // primera renderización tras un F5/link directo (permisos todavía vacío, en lo que
+  // getMeApi() resuelve) hacía que puede('pantalla:x') diera false para CUALQUIER pantalla
+  // y el guard rebotara a Inicio antes de que hubiera chance real de saber el permiso —
+  // justo el bug que rompía la retención de URL que se pidió arreglar.
+  const [meInfoLoaded, setMeInfoLoaded] = useState(false);
   const permisos = new Set(meInfo?.permisos || []);
   const puede = (clave: string) => permisos.has(clave);
 
@@ -141,7 +207,7 @@ export function App() {
 
   useEffect(() => {
     if (!authed) return;
-    getMeApi().then(setMeInfo).catch(() => setMeInfo(null));
+    getMeApi().then(setMeInfo).catch(() => setMeInfo(null)).finally(() => setMeInfoLoaded(true));
     refetchLocales();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed]);
@@ -172,7 +238,7 @@ export function App() {
 
   // Paso 3 (Adjuntar RG90 y listar) vs Paso 4 (Resultado) — mismo criterio que el
   // pasoMostrado de ComprasView: se muestra un paso a la vez, no se acumula todo abajo.
-  const [rg90PasoMostrado, setRg90PasoMostrado] = useState<3 | 4>(3);
+  // (rg90PasoMostrado en sí ya se calculó más arriba, derivado de la URL — ver ahí.)
   const [rg90Rows, setRg90Rows] = useState<LibroRow[]>([]);
   const [rg90GridSearch, setRg90GridSearch] = useState<string>('');
   const [rg90GridPage, setRg90GridPage] = useState<number>(1);
@@ -189,10 +255,101 @@ export function App() {
   const [rg90Files, setRg90Files] = useState<File[]>([]);
   const [rg90Analyzing, setRg90Analyzing] = useState<boolean>(false);
   const [rg90Error, setRg90Error] = useState<string | null>(null);
-  const [rg90Summary, setRg90Summary] = useState<{ coinciden: number; no_en_rg90: number; no_en_libro: number; saltos: number; diferencia_monto: number } | null>(null);
+  const [rg90Summary, setRg90Summary] = useState<{ coinciden: number; no_en_rg90: number; no_en_libro: number; saltos: number; diferencia_monto: number; anuladas: number } | null>(null);
   const [loteId, setLoteId] = useState<number | undefined>(undefined);
   const [converting, setConverting] = useState<boolean>(false);
   const [convertError, setConvertError] = useState<string | null>(null);
+
+  // Persistencia del libro de Ventas (ver src/utils/persistStore.ts): si la página se
+  // recarga por accidente, el navegador se cuelga o se cierra, el usuario no pierde el
+  // libro ya cargado ni el resultado de la comparación contra la RG90 al volver a entrar.
+  // No se persiste uploadedFiles/rg90Files (son objetos File del navegador — no se pueden
+  // serializar, y de todos modos lo que importa recuperar es el libro YA procesado, no el
+  // archivo crudo). ventasHydratedRef evita que el efecto de guardado de abajo pise el
+  // dato guardado con el estado vacío inicial antes de que termine de cargar el propio.
+  const ventasHydratedRef = useRef(false);
+  // Mismo momento que ventasHydratedRef, pero como estado (no ref) para que el efecto de
+  // más abajo (el que redirige si la URL pide un paso que todavía no es alcanzable) se
+  // vuelva a evaluar justo cuando la hidratación termina — un ref no dispara un re-render,
+  // así que ese efecto nunca se habría vuelto a correr con los datos ya restaurados.
+  const [ventasHydrated, setVentasHydrated] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const saved = await idbGet<{
+          converted: boolean;
+          rg90Loaded: boolean;
+          libroRows: LibroRow[];
+          correlatividadRows: CorrelatividadRow[];
+          cortesRows: CorteRow[];
+          rg90Rows: LibroRow[];
+          rg90GapsRows: CorrelatividadRow[];
+          rg90DiffRows: RG90DiffRow[];
+          rg90Summary: typeof rg90Summary;
+          loteId?: number;
+          rg90PasoMostrado: 3 | 4;
+        }>(VENTAS_PERSIST_KEY);
+        if (saved) {
+          setConverted(saved.converted);
+          setRg90Loaded(saved.rg90Loaded);
+          setLibroRows(saved.libroRows ?? []);
+          setCorrelatividadRows(saved.correlatividadRows ?? []);
+          setCortesRows(saved.cortesRows ?? []);
+          setRg90Rows(saved.rg90Rows ?? []);
+          setRg90GapsRows(saved.rg90GapsRows ?? []);
+          setRg90DiffRows(saved.rg90DiffRows ?? []);
+          setRg90Summary(saved.rg90Summary ?? null);
+          setLoteId(saved.loteId);
+          // rg90PasoMostrado ya no es estado propio (se lee de la URL, ver arriba) — no
+          // hay nada que restaurar acá; si el paso guardado ya no es alcanzable con estos
+          // datos, el efecto de más abajo (el guard de reachability) se encarga de
+          // redirigir. A propósito NO se navega automáticamente hacia adelante al paso
+          // guardado como antes: esta hidratación corre en App, que está montado siempre
+          // sin importar en qué pantalla esté el usuario — navegar acá lo sacaría de
+          // cualquier pantalla en la que estuviera (ej. Inicio) para meterlo de golpe en
+          // el resultado de Ventas, que es justo el comportamiento que NO se quiere.
+          //
+          // Mismo criterio que doConvert al terminar bien: si ya había un libro
+          // convertido guardado, mostrar directo el Paso 2 en vez del uploader vacío.
+          if (saved.converted) setCargaUploaderOpen(false);
+        }
+      } finally {
+        ventasHydratedRef.current = true;
+        setVentasHydrated(true);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Guard de navegación (reemplaza a screenHistory/goBack manual): si la URL actual pide
+  // un paso de Ventas que todavía no es alcanzable con los datos reales (ej. entrar por
+  // link directo a /ventas/rg90/resultado sin haber comparado nunca, o a cualquier
+  // /ventas/rg90/* sin tener siquiera un libro convertido), se redirige al paso correcto
+  // — MISMA regla de "reachable" que ya usa la barra de pasos (wizardSteps, más abajo), no
+  // una nueva. Espera a que termine la hidratación (ventasHydrated) para no redirigir con
+  // el estado vacío inicial, antes de que la persistencia tuviera chance de restaurar el
+  // libro real.
+  useEffect(() => {
+    if (!ventasHydrated) return;
+    if (location.pathname === '/ventas/rg90/resultado' && !rg90Loaded) {
+      navigate('/ventas/rg90/adjuntar', { replace: true });
+    } else if (location.pathname.startsWith('/ventas/rg90') && !converted) {
+      navigate('/ventas/carga', { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ventasHydrated, location.pathname, converted, rg90Loaded]);
+
+  useEffect(() => {
+    if (!ventasHydratedRef.current) return;
+    const t = setTimeout(() => {
+      idbSet(VENTAS_PERSIST_KEY, {
+        converted, rg90Loaded, libroRows, correlatividadRows, cortesRows,
+        rg90Rows, rg90GapsRows, rg90DiffRows, rg90Summary, loteId, rg90PasoMostrado,
+      });
+    }, 400);
+    return () => clearTimeout(t);
+  }, [converted, rg90Loaded, libroRows, correlatividadRows, cortesRows, rg90Rows, rg90GapsRows, rg90DiffRows, rg90Summary, loteId, rg90PasoMostrado]);
 
   // Se saca la 4ª card "Saltos" que había acá: contaba diffs con diferencia ===
   // "Salto de numeración", un valor que reconcile_with_rg90() nunca asigna (siempre daba
@@ -358,6 +515,7 @@ export function App() {
         no_en_libro: res.summary?.no_en_libro ?? 0,
         saltos: res.summary?.saltos ?? 0,
         diferencia_monto: res.summary?.diferencia_monto ?? 0,
+        anuladas: res.summary?.anuladas ?? 0,
       });
       setRg90Loaded(true);
       // Se queda en el Paso 3, listando los registros de la RG90 — el usuario avanza al
@@ -383,7 +541,7 @@ export function App() {
         setRg90Rows([]);
         setRg90GapsRows([]);
         setRg90GridColFiltros({});
-        setRg90PasoMostrado(3);
+        navigate('/ventas/rg90/adjuntar');
       },
     });
   };
@@ -407,7 +565,6 @@ export function App() {
         setRg90Rows([]);
         setRg90GapsRows([]);
         setRg90GridColFiltros({});
-        setRg90PasoMostrado(3);
         setCargaUploaderOpen(true);
       },
     });
@@ -482,20 +639,20 @@ export function App() {
 
   // Guidance texts and wizard steps
   let nextCtaLabel = 'Ir a cargar reportes';
-  let nextCtaAction = () => setScreen('carga');
+  let nextCtaAction = () => navigate('/ventas/carga');
   let guidanceText = 'Todavía no cargaste ningún reporte.';
 
   if (hasAnyUpload && !converted) {
     nextCtaLabel = 'Analizar y convertir';
-    nextCtaAction = () => setScreen('carga');
+    nextCtaAction = () => navigate('/ventas/carga');
     guidanceText = 'Ya cargaste reportes. Analizalos y convertilos para generar el libro de ventas.';
   } else if (converted && !rg90Loaded) {
     nextCtaLabel = 'Cargar y comparar RG90';
-    nextCtaAction = () => { setScreen('rg90'); setRg90PasoMostrado(3); };
+    nextCtaAction = () => navigate('/ventas/rg90/adjuntar');
     guidanceText = 'El libro de ventas ya está listo. Cargá el archivo RG90 para comparar.';
   } else if (converted && rg90Loaded) {
     nextCtaLabel = 'Ver comparación';
-    nextCtaAction = () => { setScreen('rg90'); setRg90PasoMostrado(4); };
+    nextCtaAction = () => navigate('/ventas/rg90/resultado');
     guidanceText = 'Todo listo — revisá el resultado de la comparación.';
   }
 
@@ -522,20 +679,45 @@ export function App() {
     { n: 3, label: 'Adjuntar RG90' },
     { n: 4, label: 'Resultados' },
   ].map(st => {
-    const current = !converted ? 1 : screen !== 'rg90' ? 2 : !rg90Loaded ? 3 : 4;
+    // "active" (en qué paso está parado el usuario ahora mismo) sigue dependiendo de la
+    // pantalla actual — eso está bien. Pero "reachable" (si puede saltar directo a un
+    // paso haciendo click) y "done" (el ✓ verde) NO deben depender de screen/pantalla
+    // actual, solo de si esos datos ya existen — si dependieran de la pantalla actual,
+    // volver a "Cargar reportes" después de haber comparado todo hacía que los pasos 3 y
+    // 4 se vieran bloqueados de nuevo aunque ya estuvieran hechos, y el usuario no podía
+    // saltar directo a ellos sin repetir "Siguiente" paso por paso.
+    // Antes acá adentro se asumía "si ya comparaste (rg90Loaded), tenés que estar viendo
+    // el paso 4" — pero el paso 3 (Adjuntar RG90) sigue existiendo y se puede volver a
+    // visitar aunque ya haya un resultado, así que hay que mirar rg90PasoMostrado (el
+    // paso real que se está mostrando en la pantalla 'rg90') en vez de inferirlo. Sin
+    // esto, un click en "Resultados" no hacía nada (quedaba marcado "activo" aunque la
+    // grilla mostrara el paso 3) y un click en "Adjuntar RG90" dejaba la barra marcando
+    // "Resultados" mientras la grilla mostraba el paso 3 — la barra y la pantalla real
+    // podían quedar desincronizadas.
+    const current = !converted ? 1 : screen !== 'rg90' ? (cargaUploaderOpen ? 1 : 2) : rg90PasoMostrado === 3 ? 3 : 4;
     const active = st.n === current;
-    const done = st.n < current;
-    const reachable = st.n <= current;
+    // Paso 1/2 (Cargar/Datos comparados) viven en la misma pantalla (CargaView, que ya
+    // decide sola si mostrar el uploader o la grilla según converted) — siempre se puede
+    // ir ahí. Paso 3 (Adjuntar RG90) requiere tener ya un libro armado; Paso 4
+    // (Resultados) requiere que la comparación ya se haya corrido.
+    const reachable = st.n <= 2 ? true : st.n === 3 ? converted : rg90Loaded;
+    const done = !active && (st.n <= 2 ? converted : rg90Loaded);
     return {
       ...st,
       circleStyle: (done ? 'background:#128752;color:#fff' : active ? 'background:#f0a63d;color:#1a1a1a' : 'background:#e5e2da;color:#9aa1ab') + (reachable && !active ? ';cursor:pointer' : ';cursor:default'),
       labelStyle: (active ? 'color:#22262b;font-weight:700' : done ? 'color:#128752;font-weight:600' : 'color:#9aa1ab') + (reachable && !active ? ';cursor:pointer' : ''),
       mark: done ? '✓' : String(st.n),
+      // CargaView decide sola si mostrar el uploader (Paso 1) o la grilla (Paso 2) según
+      // cargaUploaderOpen, no según screen — si ya estaba convertido y cargaUploaderOpen
+      // había quedado en false (ver doConvert), un click en "1. Cargar reportes" con solo
+      // navigate('/ventas/carga') no cambiaba nada (ya estaba en esa URL) y seguía
+      // mostrando la grilla en vez del uploader. Hay que forzar el flag explícitamente en
+      // cada caso.
       goTo: !reachable || active ? undefined : () => {
-        if (st.n === 1) setScreen('carga');
-        else if (st.n === 2) setScreen('carga');
-        else if (st.n === 3) { setScreen('rg90'); setRg90PasoMostrado(3); }
-        else { setScreen('rg90'); setRg90PasoMostrado(4); }
+        if (st.n === 1) { navigate('/ventas/carga'); setCargaUploaderOpen(true); }
+        else if (st.n === 2) { navigate('/ventas/carga'); setCargaUploaderOpen(false); }
+        else if (st.n === 3) navigate('/ventas/rg90/adjuntar');
+        else navigate('/ventas/rg90/resultado');
       },
     };
   });
@@ -729,23 +911,86 @@ export function App() {
   const [title, subtitle] = TITLES[screen];
 
   if (!authed) {
+    // Sin navegación acá a propósito: la URL actual queda tal cual (ej. si el token
+    // expiró mientras el usuario estaba en /ventas/rg90/resultado), así que al loguearse
+    // de nuevo vuelve exactamente a donde estaba — la única vez que se fuerza el regreso a
+    // Inicio es al cerrar sesión explícitamente (ver handleLogout), que es el caso real
+    // donde importa no heredar la pantalla de un usuario anterior en la misma pestaña.
     return <LoginView onLoginSuccess={() => setAuthed(true)} />;
   }
 
   const handleLogout = () => {
     setAuthToken(null);
     setAuthed(false);
+    // Si después entra otro usuario en la misma pestaña, que no herede la pantalla en la
+    // que había quedado la sesión anterior.
+    navigate('/', { replace: true });
+
+    // Limpieza del libro persistido (ver src/utils/persistStore.ts): por pedido explícito,
+    // el libro cargado sobrevive a un refresh/cuelgue pero SOLO se borra acá, al cerrar
+    // sesión — nunca por otro motivo. Se resetea también el estado de Ventas en memoria
+    // (Compras no hace falta: ComprasView se desmonta solo al salir de screen==='compras',
+    // ver App.tsx más abajo, así que ya arranca vacío la próxima vez) para que si otro
+    // usuario entra después en la misma pestaña no vea ni por un instante el libro del
+    // usuario anterior antes de que la próxima carga lo pise.
+    idbDelete(VENTAS_PERSIST_KEY);
+    idbDelete(COMPRAS_PERSIST_KEY);
+    setConverted(false);
+    setRg90Loaded(false);
+    setLibroRows([]);
+    setCorrelatividadRows([]);
+    setCortesRows([]);
+    setRg90Rows([]);
+    setRg90GapsRows([]);
+    setRg90DiffRows([]);
+    setRg90Summary(null);
+    setLoteId(undefined);
+    setCargaUploaderOpen(true);
+    setUploadedFiles([]);
+    setRg90Files([]);
   };
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#faf9f5' }}>
-      <Sidebar currentScreen={screen} onNavigate={(sc) => setScreen(sc)} permisos={permisos} />
+      <Sidebar
+        currentScreen={screen}
+        onNavigate={(sc) => {
+          goTo(sc);
+          // Cerrar al navegar: en mobile evita que el menú tape la pantalla elegida; en
+          // desktop es consistente que el mismo gesto (elegir una opción) siempre cierre.
+          setSidebarOpen(false);
+        }}
+        permisos={permisos}
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
 
-      <main style={{ marginLeft: '260px', flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <Header title={title} subtitle={subtitle} onLogout={handleLogout} />
+      {/* El sidebar es siempre un overlay (position: fixed) — nunca reserva espacio propio
+          con un margin fijo en <main>, así el contenido usa el 100% del ancho disponible
+          tanto con el menú abierto como cerrado, en cualquier tamaño de pantalla. */}
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <Header
+          title={title}
+          subtitle={subtitle}
+          onLogout={handleLogout}
+          onToggleSidebar={() => setSidebarOpen(v => !v)}
+          // Nunca en Inicio — es siempre la "raíz", no tiene desde dónde volver. El resto
+          // usa el historial real del navegador (navigate(-1)) en vez de una pila propia.
+          onGoBack={screen !== 'inicio' ? () => navigate(-1) : undefined}
+          usuario={meInfo}
+        />
 
-        <div style={{ padding: '32px', flex: 1 }}>
-          {screen === 'dashboard' && (
+        <div className="app-content-pad" style={{ flex: 1, minWidth: 0 }}>
+        <Routes>
+          <Route path="/" element={(
+            <InicioView
+              nombreUsuario={meInfo?.nombre}
+              permisos={permisos}
+              onNavigate={(sc) => goTo(sc)}
+            />
+          )} />
+
+          <Route path="/panel" element={puede('pantalla:dashboard') ? (
             <DashboardView
               steps={dashboardSteps}
               isFreshStart={isFreshStart}
@@ -759,10 +1004,14 @@ export function App() {
               kpiLocales={converted ? `${new Set(libroRows.map(r => r.local)).size}` : '0'}
               kpiComprobantes={converted ? `${libroRows.length}` : '0'}
               kpiSaltos={converted ? `${correlatividadRows.length}` : '—'}
+              onGoCargaVentas={() => goTo('carga')}
+              onGoCargaCompras={() => goTo('compras')}
+              canCargaVentas={puede('pantalla:carga')}
+              canCargaCompras={puede('pantalla:compras')}
             />
-          )}
+          ) : <Navigate to="/" replace />} />
 
-          {screen === 'carga' && (
+          <Route path="/ventas/carga" element={puede('pantalla:carga') ? (
             <CargaView
               wizardSteps={wizardSteps}
               systemOptions={SYSTEMS_META}
@@ -801,7 +1050,7 @@ export function App() {
               showStep2Content={converted && !cargaUploaderOpen}
               openCargaUploader={() => setCargaUploaderOpen(true)}
               closeCargaUploader={() => setCargaUploaderOpen(false)}
-              goToRg90={() => setScreen('rg90')}
+              goToRg90={() => navigate('/ventas/rg90/adjuntar')}
               saltosRows={correlatividadRows}
               deleteLibro={deleteLibro}
               downloadLimpio={() => downloadLimpio(filteredLibro)}
@@ -833,27 +1082,27 @@ export function App() {
               }
               prevBtnStyle={`background:#fff;border:1px solid #e2e0da;color:${currentPage <= 1 ? '#c7c3ba' : '#128752'};border-radius:7px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:${currentPage <= 1 ? 'default' : 'pointer'}`}
               nextBtnStyle={`background:#fff;border:1px solid #e2e0da;color:${currentPage >= totalPages ? '#c7c3ba' : '#128752'};border-radius:7px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:${currentPage >= totalPages ? 'default' : 'pointer'}`}
-              onVerTodos={() => setScreen('libroCompleto')}
+              onVerTodos={() => navigate('/ventas/libro-completo')}
               step2Cards={[
                 { label: 'Locales', value: `${new Set(libroRows.map(r => r.local)).size}` },
                 { label: 'Comprobantes', value: `${libroRows.length}` },
                 { label: 'Saltos', value: `${correlatividadRows.length}` },
               ]}
             />
-          )}
+          ) : <Navigate to="/" replace />} />
 
-          {screen === 'libroCompleto' && (
+          <Route path="/ventas/libro-completo" element={puede('pantalla:carga') ? (
             <LibroCompletoView
               rows={libroCompletoFiltrado}
               totalSinFiltrar={libroRows.length}
               search={libroCompletoSearch}
               onSearch={(e) => setLibroCompletoSearch(e.target.value)}
-              onVolver={() => { setLibroCompletoSearch(''); setScreen('carga'); }}
+              onVolver={() => { setLibroCompletoSearch(''); navigate('/ventas/carga'); }}
               onDownload={() => downloadLimpio(libroCompletoFiltrado)}
             />
-          )}
+          ) : <Navigate to="/" replace />} />
 
-          {screen === 'correl' && (
+          <Route path="/ventas/correlatividad" element={puede('pantalla:carga') ? (
             <CorrelatividadView
               correlatividad={filteredCorrel}
               correlFiltro={correlFiltro}
@@ -864,13 +1113,14 @@ export function App() {
               setCorrelAloha={() => setCorrelFiltro('Aloha')}
               setCorrelHiopos={() => setCorrelFiltro('Hiopos')}
             />
-          )}
+          ) : <Navigate to="/" replace />} />
 
-          {screen === 'compras' && (
+          <Route path="/compras/:paso" element={puede('pantalla:compras') ? (
             <ComprasView locales={locales} permisos={permisos} />
-          )}
+          ) : <Navigate to="/" replace />} />
+          <Route path="/compras" element={<Navigate to="/compras/carga" replace />} />
 
-          {screen === 'locales' && (
+          <Route path="/locales" element={puede('pantalla:locales') ? (
             <LocalesView
               locales={locales}
               loading={localesLoading}
@@ -880,9 +1130,9 @@ export function App() {
               canEditar={puede('boton:locales.editar')}
               canEliminar={puede('boton:locales.eliminar')}
             />
-          )}
+          ) : <Navigate to="/" replace />} />
 
-          {screen === 'usuarios' && (
+          <Route path="/usuarios" element={puede('pantalla:usuarios') ? (
             <UsuariosView
               usuarios={usuariosAdmin}
               roles={rolesAdmin.length > 0 ? rolesAdmin : []}
@@ -894,9 +1144,9 @@ export function App() {
               canEditar={puede('boton:usuarios.editar')}
               canEliminar={puede('boton:usuarios.eliminar')}
             />
-          )}
+          ) : <Navigate to="/" replace />} />
 
-          {screen === 'roles' && (
+          <Route path="/roles" element={puede('pantalla:roles') ? (
             <RolesView
               roles={rolesAdmin}
               permisos={permisosCatalogo}
@@ -907,15 +1157,16 @@ export function App() {
               canEditar={puede('boton:roles.editar')}
               canEliminar={puede('boton:roles.eliminar')}
             />
-          )}
+          ) : <Navigate to="/" replace />} />
 
-          {screen === 'rg90' && (
+          <Route path="/ventas/rg90" element={<Navigate to="/ventas/rg90/adjuntar" replace />} />
+          <Route path="/ventas/rg90/:paso" element={puede('pantalla:carga') ? (
             <RG90View
               wizardSteps={wizardSteps}
               pasoMostrado={rg90PasoMostrado}
-              onVolverCarga={() => setScreen('carga')}
-              onSiguienteResultado={() => rg90Loaded && setRg90PasoMostrado(4)}
-              onVolverPaso3={() => setRg90PasoMostrado(3)}
+              onVolverCarga={() => navigate('/ventas/carga')}
+              onSiguienteResultado={() => rg90Loaded && navigate('/ventas/rg90/resultado')}
+              onVolverPaso3={() => navigate('/ventas/rg90/adjuntar')}
               saltosLibroRows={correlatividadRows}
               saltosRgRows={rg90GapsRows}
               rg90Loaded={rg90Loaded}
@@ -954,6 +1205,8 @@ export function App() {
                 isActive: rg90CategoryFilter === c.key,
                 onClick: () => setRg90CategoryFilter(prev => (prev === c.key ? '' : c.key)),
               }))}
+              anuladasCount={rg90Summary?.anuladas ?? 0}
+              totalLibroCount={libroRows.length}
               rg90Diff={filteredRg90Diff}
               rg90DiffAll={rg90DiffRows}
               rg90Search={rg90Search}
@@ -976,7 +1229,10 @@ export function App() {
               rg90GridPrevPage={() => setRg90GridPage(p => Math.max(1, p - 1))}
               rg90GridNextPage={() => setRg90GridPage(p => Math.min(rg90GridTotalPages, p + 1))}
             />
-          )}
+          ) : <Navigate to="/" replace />} />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
         </div>
       </main>
 

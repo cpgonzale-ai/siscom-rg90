@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState, useTransition } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { GitCompare, UploadCloud, X, Trash2, ArrowLeft, ArrowRight, FileSpreadsheet } from 'lucide-react';
+import { GitCompare, UploadCloud, X, Trash2, ArrowLeft, ArrowRight, FileSpreadsheet, ChevronDown } from 'lucide-react';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
 import { Modal, primaryBtnStyle, secondaryBtnStyle, dangerBtnStyle, navRowStyle, disabledBtnStyle, stickyTheadStyle, scrollableGridStyle } from '../components/Modal';
@@ -52,6 +52,14 @@ interface RG90ViewProps {
   analyzeRg90: () => void;
   resetRg90: () => void;
   rg90Cards: any[];
+  // Total de comprobantes con estado "Anulada" en la comparación (ver resumen del
+  // backend, /api/reconcile) — se muestra al lado de "Saltos" como indicador de solo
+  // lectura, sin card ni filtro propio en rg90Cards.
+  anuladasCount: number;
+  // Cantidad total de comprobantes del Libro de Ventas propio (libroRows.length en
+  // App.tsx, el mismo array que ya se manda como pos_data_json a /api/reconcile) — usado
+  // solo para el Panel de Desglose Matemático, no participa de ningún cálculo de negocio.
+  totalLibroCount: number;
   rg90Diff: any[];
   // Fuente SIN filtrar por búsqueda/categoría, para los desplegables de filtro tipo Excel
   // del encabezado (diffAllValuesPorColumna) — ver /auditoria/08-analisis-memoria-lag-global-200k.md:
@@ -110,6 +118,8 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   analyzeRg90,
   resetRg90,
   rg90Cards,
+  anuladasCount,
+  totalLibroCount,
   rg90Diff,
   rg90DiffAll,
   rg90Search,
@@ -142,6 +152,18 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   const [exportandoRg90, setExportandoRg90] = useState(false);
   const [exportandoDiff, setExportandoDiff] = useState(false);
 
+  // Visibilidad de columnas en pantalla (Paso 3, grilla "RG90 (SET) — Ventas") — igual que
+  // en el Paso 2 (CargaView): no afecta descargarRg90Excel, que arma sus headers/dataRows a
+  // mano desde rg90GridExportRows sin mirar este estado, así que el .xlsx siempre trae
+  // todas las columnas. Ocultas por defecto: Gravadas 10%, IVA 10%, Gravadas 5%, IVA 5%,
+  // Exentas.
+  const [rg90GridColOcultas, setRg90GridColOcultas] = useState<Set<string>>(
+    new Set(['gravadas', 'iva', 'gravadas_5', 'iva_5', 'exentas'])
+  );
+  const rg90GridColVisiblesKeys = new Set(rg90GridColumnFilters.filter(c => !rg90GridColOcultas.has(c.key)).map(c => c.key));
+  const rg90GridLeadingColSpan = ['doc', 'tipo_doc', 'sistema', 'local', 'fecha', 'ruc', 'nombre']
+    .filter(k => rg90GridColVisiblesKeys.has(k)).length;
+
   const descargarRg90Excel = async () => {
     if (rg90GridExportRows.length === 0 || exportandoRg90) return;
     const headers = ['Documento', 'Tipo', 'Sistema', 'Local', 'Fecha', 'RUC', 'Nombre', 'Gravadas 10%', 'IVA 10%', 'Gravadas 5%', 'IVA 5%', 'Exentas', 'Total', 'Estado'];
@@ -160,6 +182,12 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   };
   const [saltosRgModalOpen, setSaltosRgModalOpen] = useState(false);
   const [saltosTotalModalOpen, setSaltosTotalModalOpen] = useState(false);
+  // Detalle de Discrepancias colapsado por defecto: al entrar al Paso 4 solo se ve el
+  // resumen (desglose matemático + pestañas de totales), sin la grilla fila por fila. Se
+  // abre al tocar cualquier pestaña de total (ver rg90Cards.map de abajo) o el botón de
+  // desplegar del propio encabezado — la fila de encabezado (título, buscador, columnas,
+  // Excel) queda siempre visible esté abierto o cerrado.
+  const [detalleAbierto, setDetalleAbierto] = useState(false);
   const saltosTotales = [
     ...saltosLibroRows.map(r => ({ ...r, __origen: 'Libro venta' })),
     ...saltosRgRows.map(r => ({ ...r, __origen: 'RG90' })),
@@ -484,6 +512,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                 RG90 (SET) — Ventas ({rg90GridFilteredCount.toLocaleString('es-PY')} de {rg90GridTotalCount.toLocaleString('es-PY')} comprobantes)
               </h4>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <ColumnPicker columnas={rg90GridColumnFilters} ocultas={rg90GridColOcultas} onChange={setRg90GridColOcultas} />
                 {hayRg90GridColFiltrosActivos && (
                   <button onClick={limpiarRg90GridColFiltros} style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px' }}>
                     Limpiar filtros
@@ -508,7 +537,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#fafbfa', borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-                    {rg90GridColumnFilters.map(col => {
+                    {rg90GridColumnFilters.filter(col => !rg90GridColOcultas.has(col.key)).map(col => {
                       const esImporte = ['gravadas', 'iva', 'gravadas_5', 'iva_5', 'exentas', 'total'].includes(col.key);
                       return (
                         <th key={col.key} style={{ ...stickyTheadStyle, backgroundColor: '#fafbfa', padding: '12px 14px', fontWeight: 600, textAlign: esImporte ? 'right' : 'left' }}>
@@ -521,51 +550,55 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                 <tbody>
                   {rg90GridRows.map((r: any, i: number) => (
                     <tr key={i} style={{ borderBottom: '1px solid #f0eee8' }}>
-                      <td style={{ padding: '12px 14px', fontWeight: 600, color: '#22262b' }}>{r.doc}</td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <span
-                          style={{
-                            background: r.tipo_doc === 'Nota de Crédito' ? '#f1eef8' : '#eef2fb',
-                            color: r.tipo_doc === 'Nota de Crédito' ? '#5b3aa8' : '#2f5fa8',
-                            fontSize: '11px', fontWeight: 600, padding: '3px 9px', borderRadius: '20px',
-                          }}
-                        >
-                          {r.tipo_doc || 'Factura'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px 14px', color: '#5c6470' }}>{r.sistema}</td>
-                      <td style={{ padding: '12px 14px', color: '#5c6470' }}>{r.local}</td>
-                      <td style={{ padding: '12px 14px', color: '#5c6470' }}>{r.fecha}</td>
-                      <td style={{ padding: '12px 14px', color: '#5c6470' }}>{r.ruc}</td>
-                      <td style={{ padding: '12px 14px', color: '#22262b', fontWeight: 500 }}>{r.nombre}</td>
-                      <td style={{ padding: '12px 14px', textAlign: 'right', color: '#5c6470' }}>{r.gravadas}</td>
-                      <td style={{ padding: '12px 14px', textAlign: 'right', color: '#5c6470' }}>{r.iva}</td>
-                      <td style={{ padding: '12px 14px', textAlign: 'right', color: '#5c6470' }}>{r.gravadas_5 ?? '0'}</td>
-                      <td style={{ padding: '12px 14px', textAlign: 'right', color: '#5c6470' }}>{r.iva_5 ?? '0'}</td>
-                      <td style={{ padding: '12px 14px', textAlign: 'right', color: '#5c6470' }}>{r.exentas}</td>
-                      <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: '#22262b' }}>{r.total}</td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <span style={{
-                          background: r.estado === 'Anulada' ? '#fbe9e3' : '#e8f3ec',
-                          color: r.estado === 'Anulada' ? '#b3402f' : '#128752',
-                          fontSize: '11px', fontWeight: 600, padding: '4px 10px', borderRadius: '20px',
-                        }}>
-                          {r.estado}
-                        </span>
-                      </td>
+                      {!rg90GridColOcultas.has('doc') && <td style={{ padding: '12px 14px', fontWeight: 600, color: '#22262b' }}>{r.doc}</td>}
+                      {!rg90GridColOcultas.has('tipo_doc') && (
+                        <td style={{ padding: '12px 14px' }}>
+                          <span
+                            style={{
+                              background: r.tipo_doc === 'Nota de Crédito' ? '#f1eef8' : '#eef2fb',
+                              color: r.tipo_doc === 'Nota de Crédito' ? '#5b3aa8' : '#2f5fa8',
+                              fontSize: '11px', fontWeight: 600, padding: '3px 9px', borderRadius: '20px',
+                            }}
+                          >
+                            {r.tipo_doc || 'Factura'}
+                          </span>
+                        </td>
+                      )}
+                      {!rg90GridColOcultas.has('sistema') && <td style={{ padding: '12px 14px', color: '#5c6470' }}>{r.sistema}</td>}
+                      {!rg90GridColOcultas.has('local') && <td style={{ padding: '12px 14px', color: '#5c6470' }}>{r.local}</td>}
+                      {!rg90GridColOcultas.has('fecha') && <td style={{ padding: '12px 14px', color: '#5c6470' }}>{r.fecha}</td>}
+                      {!rg90GridColOcultas.has('ruc') && <td style={{ padding: '12px 14px', color: '#5c6470' }}>{r.ruc}</td>}
+                      {!rg90GridColOcultas.has('nombre') && <td style={{ padding: '12px 14px', color: '#22262b', fontWeight: 500 }}>{r.nombre}</td>}
+                      {!rg90GridColOcultas.has('gravadas') && <td style={{ padding: '12px 14px', textAlign: 'right', color: '#5c6470' }}>{r.gravadas}</td>}
+                      {!rg90GridColOcultas.has('iva') && <td style={{ padding: '12px 14px', textAlign: 'right', color: '#5c6470' }}>{r.iva}</td>}
+                      {!rg90GridColOcultas.has('gravadas_5') && <td style={{ padding: '12px 14px', textAlign: 'right', color: '#5c6470' }}>{r.gravadas_5 ?? '0'}</td>}
+                      {!rg90GridColOcultas.has('iva_5') && <td style={{ padding: '12px 14px', textAlign: 'right', color: '#5c6470' }}>{r.iva_5 ?? '0'}</td>}
+                      {!rg90GridColOcultas.has('exentas') && <td style={{ padding: '12px 14px', textAlign: 'right', color: '#5c6470' }}>{r.exentas}</td>}
+                      {!rg90GridColOcultas.has('total') && <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: '#22262b' }}>{r.total}</td>}
+                      {!rg90GridColOcultas.has('estado') && (
+                        <td style={{ padding: '12px 14px' }}>
+                          <span style={{
+                            background: r.estado === 'Anulada' ? '#fbe9e3' : '#e8f3ec',
+                            color: r.estado === 'Anulada' ? '#b3402f' : '#128752',
+                            fontSize: '11px', fontWeight: 600, padding: '4px 10px', borderRadius: '20px',
+                          }}>
+                            {r.estado}
+                          </span>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr style={{ borderTop: '2px solid #e2e0da', backgroundColor: '#fafbfa', fontWeight: 700, color: '#22262b' }}>
-                    <td colSpan={7} style={{ padding: '12px 14px' }}>Total ({rg90GridFilteredCount.toLocaleString('es-PY')} filas)</td>
-                    <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(rg90GridTotales.gravadas)}</td>
-                    <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(rg90GridTotales.iva)}</td>
-                    <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(rg90GridTotales.gravadas_5)}</td>
-                    <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(rg90GridTotales.iva_5)}</td>
-                    <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(rg90GridTotales.exentas)}</td>
-                    <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(rg90GridTotales.total)}</td>
-                    <td />
+                    <td colSpan={rg90GridLeadingColSpan} style={{ padding: '12px 14px' }}>Total ({rg90GridFilteredCount.toLocaleString('es-PY')} filas)</td>
+                    {!rg90GridColOcultas.has('gravadas') && <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(rg90GridTotales.gravadas)}</td>}
+                    {!rg90GridColOcultas.has('iva') && <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(rg90GridTotales.iva)}</td>}
+                    {!rg90GridColOcultas.has('gravadas_5') && <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(rg90GridTotales.gravadas_5)}</td>}
+                    {!rg90GridColOcultas.has('iva_5') && <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(rg90GridTotales.iva_5)}</td>}
+                    {!rg90GridColOcultas.has('exentas') && <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(rg90GridTotales.exentas)}</td>}
+                    {!rg90GridColOcultas.has('total') && <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(rg90GridTotales.total)}</td>}
+                    {!rg90GridColOcultas.has('estado') && <td />}
                   </tr>
                 </tfoot>
               </table>
@@ -591,7 +624,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
           solo por navegar Paso 4 -> Paso 3 -> Paso 4 sin tocar ningún filtro. Con
           display:none el DOM y los hooks de virtualización/memoización sobreviven la
           navegación intactos. */}
-      <div style={{ display: pasoMostrado === 4 ? undefined : 'none' }}>
+      <div style={{ display: pasoMostrado === 4 ? 'flex' : 'none', flexDirection: 'column', gap: '20px' }}>
         <div style={navRowStyle}>
           <button onClick={onVolverPaso3} style={{ ...secondaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
             <ArrowLeft size={16} />
@@ -605,64 +638,135 @@ export const RG90View: React.FC<RG90ViewProps> = ({
           4. Resultado de la comparación
         </h3>
 
-        {/* RG90 Summary Filter Cards — "Saltos" va como 4ª card, al costado derecho de
-            "No en libro venta" (antes era un botón aparte, al lado del título). Total
-            combinado: saltos del libro venta (Paso 2) + saltos dentro de la RG90 (Paso 3) —
-            el modal distingue el origen de cada uno con una columna aparte. */}
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${rg90Cards.length + 1}, 1fr)`, gap: '14px' }}>
-          {rg90Cards.map((c: any, idx: number) => (
-            <div
-              key={idx}
-              onClick={c.onClick}
-              style={{
-                backgroundColor: c.isActive ? '#e8f3ec' : '#ffffff',
-                border: `1px solid ${c.isActive ? '#128752' : '#e2e0da'}`,
-                borderRadius: '10px',
-                padding: '16px 20px',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-                boxShadow: c.isActive ? '0 2px 8px rgba(18, 135, 82, 0.15)' : 'none',
-              }}
-            >
-              <div style={{ fontSize: '12px', fontWeight: 600, color: '#5c6470' }}>{c.label}</div>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: c.color, marginTop: '4px' }}>
-                {rg90Loaded ? c.value : '—'}
-              </div>
-            </div>
-          ))}
-          <div
-            onClick={() => setSaltosTotalModalOpen(true)}
-            style={{
-              backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px',
-              padding: '16px 20px', cursor: 'pointer', transition: 'all 0.15s ease',
-            }}
-          >
-            <div style={{ fontSize: '12px', fontWeight: 600, color: '#5c6470' }}>Saltos</div>
-            <div style={{ fontSize: '24px', fontWeight: 700, color: '#b0740f', marginTop: '4px' }}>
-              {saltosTotales.length}
-            </div>
-          </div>
+        {/* Panel de Desglose Matemático: no agrega ningún cálculo nuevo — solo reordena en
+            dos columnas (Libro propio / RG90) los mismos contadores que ya se ven arriba en
+            rg90Cards + anuladasCount, para mostrar cómo se compone cada total. Los valores
+            de rg90Cards vienen como string ya formados (ver rg90CardsState en App.tsx). */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+          {(() => {
+            const porClave = (clave: string) => Number(rg90Cards.find((c: any) => c.key === clave)?.value ?? 0);
+            const coinciden = porClave('Coincide');
+            const diferenciaMonto = porClave('Diferencia de monto');
+            const noEnRg90 = porClave('No llegó a la interfaz');
+            const noEnLibro = porClave('No en libro propio');
+            const anulados = rg90Loaded ? anuladasCount : 0;
+            const sumaLibro = coinciden + diferenciaMonto + noEnRg90 + anulados;
+            const sumaRg90 = coinciden + diferenciaMonto + noEnLibro;
+
+            const filaStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '13px', color: '#5c6470' };
+            const tarjetaStyle: React.CSSProperties = { backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', overflow: 'hidden' };
+            const cabeceraStyle: React.CSSProperties = { backgroundColor: '#fafbfa', borderBottom: '1px solid #e2e0da', padding: '14px 20px' };
+
+            return (
+              <>
+                <div style={tarjetaStyle}>
+                  <div style={{ ...cabeceraStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#22262b' }}>TU LIBRO DE VENTAS</div>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#22262b' }}>
+                      Total de comprobantes: {rg90Loaded ? totalLibroCount : '—'}
+                    </div>
+                  </div>
+                  <div style={{ padding: '16px 20px' }}>
+                    <div style={{ fontSize: '12.5px', color: '#9aa1ab', marginBottom: '4px' }}>Este total se compone de:</div>
+                    <div style={filaStyle}><span>Coinciden</span><span>{coinciden}</span></div>
+                    <div style={filaStyle}><span>Diferencia de monto</span><span>{diferenciaMonto}</span></div>
+                    <div style={filaStyle}><span>No en RG90</span><span>{noEnRg90}</span></div>
+                    <div style={filaStyle}><span>Anulados</span><span>{anulados}</span></div>
+                    <div style={{ ...filaStyle, borderTop: '1px solid #e2e0da', marginTop: '4px', paddingTop: '10px', fontWeight: 700, color: '#22262b' }}>
+                      <span>Total</span><span>{sumaLibro}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={tarjetaStyle}>
+                  <div style={{ ...cabeceraStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#22262b' }}>ARCHIVO RG90 (SET)</div>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#22262b' }}>
+                      Total de comprobantes: {rg90Loaded ? rg90GridTotalCount : '—'}
+                    </div>
+                  </div>
+                  <div style={{ padding: '16px 20px' }}>
+                    <div style={{ fontSize: '12.5px', color: '#9aa1ab', marginBottom: '4px' }}>Este total se compone de:</div>
+                    <div style={filaStyle}><span>Coinciden</span><span>{coinciden}</span></div>
+                    <div style={filaStyle}><span>Diferencia de monto</span><span>{diferenciaMonto}</span></div>
+                    <div style={filaStyle}><span>No en libro de ventas</span><span>{noEnLibro}</span></div>
+                    <div style={{ ...filaStyle, borderTop: '1px solid #e2e0da', marginTop: '4px', paddingTop: '10px', fontWeight: 700, color: '#22262b' }}>
+                      <span>Total</span><span>{sumaRg90}</span>
+                    </div>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
         </div>
 
         {/* Discrepancies Table */}
         <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', overflow: 'hidden' }}>
+          {/* Antes eran 6 cards grandes y sueltas arriba de todo (título 24px, cada una su
+              propia caja con borde/sombra). Ahora son pestañas chicas pegadas al borde
+              superior de esta misma grilla — mismo onClick/isActive que ya traía cada
+              rg90Cards (nada de lógica de filtro nueva), solo mucho más compactas y ancladas
+              visualmente a lo que filtran, en vez de flotar separadas del título de arriba. */}
+          <div style={{ display: 'flex', alignItems: 'stretch', backgroundColor: '#fafbfa', borderBottom: '1px solid #e2e0da', overflowX: 'auto' }}>
+            {rg90Cards.map((c: any, idx: number) => (
+              <button
+                key={idx}
+                onClick={() => { c.onClick(); setDetalleAbierto(true); }}
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px',
+                  padding: '9px 16px', border: 'none', borderRight: '1px solid #e2e0da',
+                  borderBottom: `2px solid ${c.isActive ? '#128752' : 'transparent'}`,
+                  backgroundColor: c.isActive ? '#ffffff' : 'transparent',
+                  cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit',
+                }}
+              >
+                <span style={{ fontSize: '10.5px', fontWeight: 600, color: '#9aa1ab', textTransform: 'uppercase', letterSpacing: '0.02em' }}>{c.label}</span>
+                <span style={{ fontSize: '15px', fontWeight: 700, color: c.isActive ? '#128752' : c.color }}>
+                  {rg90Loaded ? c.value : '—'}
+                </span>
+              </button>
+            ))}
+            <button
+              onClick={() => setSaltosTotalModalOpen(true)}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px',
+                padding: '9px 16px', border: 'none', borderRight: '1px solid #e2e0da',
+                borderBottom: '2px solid transparent', backgroundColor: 'transparent',
+                cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit',
+              }}
+            >
+              <span style={{ fontSize: '10.5px', fontWeight: 600, color: '#9aa1ab', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Saltos</span>
+              <span style={{ fontSize: '15px', fontWeight: 700, color: '#b0740f' }}>{saltosTotales.length}</span>
+            </button>
+            {/* Solo lectura: sin onClick ni cursor de mano, a diferencia de las pestañas de
+                arriba — ver anuladasCount / summary.anuladas del backend. */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px', padding: '9px 16px', cursor: 'default', whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: '10.5px', fontWeight: 600, color: '#9aa1ab', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Anulados</span>
+              <span style={{ fontSize: '15px', fontWeight: 700, color: '#5c6470' }}>{rg90Loaded ? anuladasCount : '—'}</span>
+            </div>
+          </div>
+
+          {/* Ya no se expande in-line (había demasiada información junta en la pantalla al
+              abrirla ahí mismo) — ahora esta barra es solo el resumen, y el detalle
+              (buscador, columnas, Excel y la grilla) vive en el Modal de más abajo. Se abre
+              tocando cualquier pestaña de arriba (ver rg90Cards.map, ya llama a
+              setDetalleAbierto(true)) o directamente esta barra. */}
           <div
             style={{
               padding: '16px 20px',
-              borderBottom: '1px solid #e2e0da',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               backgroundColor: '#fafbfa',
+              cursor: 'pointer',
             }}
+            onClick={() => setDetalleAbierto(true)}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <ChevronDown size={16} color="#5c6470" />
               <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>
                 Detalle de Discrepancias e Inconsistencias ({filteredRg90DiffCols.length.toLocaleString('es-PY')} de {rg90Diff.length.toLocaleString('es-PY')})
               </h4>
-              {isFiltrando && (
-                <span style={{ fontSize: '11px', color: '#9aa1ab', fontStyle: 'italic' }}>Filtrando…</span>
-              )}
               {rg90CategoryFilter && (
                 <span
                   style={{
@@ -678,11 +782,36 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                   }}
                 >
                   Filtro: {rg90CategoryFilter}
-                  <X size={12} style={{ cursor: 'pointer' }} onClick={clearRg90Category} />
+                  <X size={12} style={{ cursor: 'pointer' }} onClick={e => { e.stopPropagation(); clearRg90Category(); }} />
                 </span>
               )}
             </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <button
+                onClick={e => { e.stopPropagation(); descargarDiffVentasExcel(); }}
+                disabled={filteredRg90DiffCols.length === 0 || exportandoDiff}
+                style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', ...(exportandoDiff ? { opacity: 0.7, cursor: 'wait' } : {}) }}
+              >
+                <FileSpreadsheet size={14} color="#5c6470" />
+                <span>{exportandoDiff ? 'Generando Excel…' : 'Excel'}</span>
+              </button>
+              <span style={{ fontSize: '12px', fontWeight: 600, color: '#128752' }}>Ver detalle</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
+      {detalleAbierto && (
+        <Modal title="Detalle de Discrepancias e Inconsistencias" onClose={() => setDetalleAbierto(false)} width="1400px">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '12.5px', color: '#5c6470' }}>
+                {filteredRg90DiffCols.length.toLocaleString('es-PY')} de {rg90Diff.length.toLocaleString('es-PY')}
+              </span>
+              {isFiltrando && (
+                <span style={{ fontSize: '11px', color: '#9aa1ab', fontStyle: 'italic' }}>Filtrando…</span>
+              )}
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               {hayDiffColFiltrosActivos && (
                 <button onClick={() => setDiffColFiltros({})} style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px' }}>
@@ -714,7 +843,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
             </div>
           </div>
 
-          <div style={scrollableGridStyle} ref={diffScrollRef}>
+          <div style={{ ...scrollableGridStyle, border: '1px solid #e2e0da', borderRadius: '8px', maxHeight: '60vh' }} ref={diffScrollRef}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
@@ -809,8 +938,8 @@ export const RG90View: React.FC<RG90ViewProps> = ({
             </tfoot>
           </table>
           </div>
-        </div>
-      </div>
+        </Modal>
+      )}
 
       {saltosRgModalOpen && (
         <Modal title={`Saltos de numeración dentro de la RG90 (${saltosRgRows.length})`} onClose={() => setSaltosRgModalOpen(false)} width="900px">

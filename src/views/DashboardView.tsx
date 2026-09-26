@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowRight, ShieldCheck } from 'lucide-react';
+import { ArrowRight, ShieldCheck, FileSpreadsheet, ShoppingCart } from 'lucide-react';
 import { Modal } from '../components/Modal';
 import { TablaSaltos } from '../components/TablaSaltos';
 
@@ -16,6 +16,13 @@ interface DashboardViewProps {
   kpiLocales: string;
   kpiComprobantes: string;
   kpiSaltos: string;
+  /** Accesos directos a cada asistente de carga — independientes del banner de "siguiente
+      paso" de arriba (que solo guía el flujo de Ventas): siempre llevan al Paso 1 de cada
+      módulo, sin importar en qué paso haya quedado la sesión. */
+  onGoCargaVentas: () => void;
+  onGoCargaCompras: () => void;
+  canCargaVentas: boolean;
+  canCargaCompras: boolean;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -28,6 +35,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   kpiLocales,
   kpiComprobantes,
   kpiSaltos,
+  onGoCargaVentas,
+  onGoCargaCompras,
+  canCargaVentas,
+  canCargaCompras,
 }) => {
   // Modal de "Ver saltos" por sistema (Aloha/Hiopos/Universal) -- mismo patrón que el modal
   // de saltos de Libro Ventas/Compras (RG90View/ComprasView), en vez de navegar a la
@@ -83,6 +94,78 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <ArrowRight size={16} />
         </button>
       </div>
+
+      {/* Accesos directos: siempre al Paso 1 de cada asistente, sin depender de en qué
+          paso quedó la sesión (a diferencia del botón de arriba, que solo sigue a Ventas). */}
+      {(canCargaVentas || canCargaCompras) && (
+        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+          {canCargaVentas && (
+            <button
+              onClick={onGoCargaVentas}
+              style={{
+                flex: '1 1 260px',
+                backgroundColor: '#ffffff',
+                border: '1px solid #e2e0da',
+                borderRadius: '10px',
+                padding: '18px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '14px',
+                cursor: 'pointer',
+                textAlign: 'left',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+              }}
+            >
+              <div
+                style={{
+                  width: '42px', height: '42px', borderRadius: '10px', flex: 'none',
+                  backgroundColor: '#e8f3ec', color: '#128752',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <FileSpreadsheet size={20} />
+              </div>
+              <div>
+                <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#22262b' }}>Cargar libro de ventas</div>
+                <div style={{ fontSize: '11.5px', color: '#9aa1ab', marginTop: '2px' }}>Reportes de Aloha, Hiopos o Formato Universal</div>
+              </div>
+            </button>
+          )}
+
+          {canCargaCompras && (
+            <button
+              onClick={onGoCargaCompras}
+              style={{
+                flex: '1 1 260px',
+                backgroundColor: '#ffffff',
+                border: '1px solid #e2e0da',
+                borderRadius: '10px',
+                padding: '18px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '14px',
+                cursor: 'pointer',
+                textAlign: 'left',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+              }}
+            >
+              <div
+                style={{
+                  width: '42px', height: '42px', borderRadius: '10px', flex: 'none',
+                  backgroundColor: '#e8f3ec', color: '#128752',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <ShoppingCart size={20} />
+              </div>
+              <div>
+                <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#22262b' }}>Cargar libro de compras</div>
+                <div style={{ fontSize: '11.5px', color: '#9aa1ab', marginTop: '2px' }}>Reporte en Formato Universal</div>
+              </div>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* 3 Step Process Overview */}
       <div

@@ -1,5 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Filter } from 'lucide-react';
+
+const PANEL_WIDTH = 220;
+const PANEL_MARGIN = 12;
 
 interface ExcelFilterHeaderProps {
   label: string;
@@ -19,6 +23,15 @@ export const ExcelFilterHeader: React.FC<ExcelFilterHeaderProps> = ({ label, all
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [draft, setDraft] = useState<Set<string>>(new Set());
+  // El ícono vive dentro de la grilla con scroll (scrollableGridStyle: overflow:auto) —
+  // un panel position:absolute ahí adentro queda recortado por ese overflow apenas la
+  // columna está cerca del borde derecho (exactamente el caso de "Estado", que además
+  // suele ser una de las últimas columnas). Se dibuja en un portal a document.body con
+  // position:fixed, calculando su posición a mano desde dónde está el ícono en pantalla
+  // — así escapa del overflow:auto de cualquier grilla, sin importar qué tan angosta sea
+  // o en qué columna esté el filtro.
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
   const distinct = useMemo(
     () => Array.from(new Set(allValues)).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' })),
@@ -35,8 +48,27 @@ export const ExcelFilterHeader: React.FC<ExcelFilterHeaderProps> = ({ label, all
   const abrir = () => {
     setDraft(active ? new Set(active) : new Set(distinct));
     setSearch('');
+    const rect = btnRef.current?.getBoundingClientRect();
+    if (rect) {
+      const left = Math.min(rect.left, window.innerWidth - PANEL_WIDTH - PANEL_MARGIN);
+      setPos({ top: rect.bottom + 6, left: Math.max(PANEL_MARGIN, left) });
+    }
     setOpen(true);
   };
+
+  // Al estar en un portal con position:fixed (ver comentario de arriba), el panel no se
+  // mueve solo si el usuario hace scroll de la grilla que tiene el ícono — se cierra en
+  // ese caso en vez de quedar "flotando" desconectado de la columna que lo abrió.
+  useEffect(() => {
+    if (!open) return;
+    const cerrar = () => setOpen(false);
+    window.addEventListener('scroll', cerrar, true);
+    window.addEventListener('resize', cerrar);
+    return () => {
+      window.removeEventListener('scroll', cerrar, true);
+      window.removeEventListener('resize', cerrar);
+    };
+  }, [open]);
 
   const toggleValor = (v: string) => {
     setDraft(prev => {
@@ -70,6 +102,7 @@ export const ExcelFilterHeader: React.FC<ExcelFilterHeaderProps> = ({ label, all
     <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: '5px', justifyContent: align === 'right' ? 'flex-end' : 'flex-start' }}>
       <span>{label}</span>
       <button
+        ref={btnRef}
         onClick={(e) => { e.stopPropagation(); open ? setOpen(false) : abrir(); }}
         title={`Filtrar por ${label}`}
         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex', color: isActive ? '#128752' : '#9aa1ab' }}
@@ -77,16 +110,16 @@ export const ExcelFilterHeader: React.FC<ExcelFilterHeaderProps> = ({ label, all
         <Filter size={12} fill={isActive ? '#128752' : 'none'} />
       </button>
 
-      {open && (
+      {open && pos && createPortal(
         <>
-          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 1040 }} />
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              position: 'absolute', top: '100%', left: 0, marginTop: '6px',
+              position: 'fixed', top: pos.top, left: pos.left,
               background: '#ffffff', border: '1px solid #e2e0da', borderRadius: '8px',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.15)', padding: '10px', width: '220px',
-              zIndex: 50, fontWeight: 400, textTransform: 'none', color: '#22262b',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.15)', padding: '10px', width: `${PANEL_WIDTH}px`,
+              zIndex: 1050, fontWeight: 400, textTransform: 'none', color: '#22262b',
             }}
           >
             <input
@@ -123,7 +156,8 @@ export const ExcelFilterHeader: React.FC<ExcelFilterHeaderProps> = ({ label, all
               </div>
             </div>
           </div>
-        </>
+        </>,
+        document.body
       )}
     </span>
   );

@@ -1,18 +1,20 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   UploadCloud, Trash2, FileSpreadsheet, X, GitCompare, Download,
-  ArrowLeft, ArrowRight,
+  ArrowLeft, ArrowRight, ChevronDown,
 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { ProcessingModal } from '../components/ProcessingModal';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
 import { ColumnPicker } from '../components/ColumnPicker';
-import { secondaryBtnStyle, primaryBtnStyle, dangerBtnStyle, navRowStyle, disabledBtnStyle, stickyTheadStyle, scrollableGridStyle } from '../components/Modal';
+import { Modal, secondaryBtnStyle, primaryBtnStyle, dangerBtnStyle, navRowStyle, disabledBtnStyle, stickyTheadStyle, scrollableGridStyle } from '../components/Modal';
 import type { Local, CompraRow, CompraDiffRow, CompraDiffLado } from '../services/api';
 import { ingestComprasApi, reconcileComprasApi } from '../services/api';
 import { downloadExcel } from '../utils/exportExcel';
 import { formatGs } from '../utils/format';
+import { idbGet, idbSet, COMPRAS_PERSIST_KEY } from '../utils/persistStore';
 
 interface ComprasViewProps {
   locales: Local[];
@@ -175,6 +177,13 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [colFiltros, setColFiltros] = useState<Record<string, Set<string> | null>>({});
+  // Visibilidad de columnas en pantalla — no afecta descargarExcel, que arma sus
+  // headers/dataRows a mano desde filteredRows sin mirar este estado, así que el .xlsx
+  // siempre trae las 14 columnas aunque el usuario tenga alguna oculta acá. Ocultas por
+  // defecto: Gravada 10%, IVA 10%, Gravada 5%, IVA 5%, Exenta.
+  const [libroColOcultas, setLibroColOcultas] = useState<Set<string>>(
+    new Set(['gravadas', 'iva', 'gravadas_5', 'iva_5', 'exentas'])
+  );
 
   // ── Paso 2: adjuntar RG y su propia grilla ──────────────────────────────
   const [rgFiles, setRgFiles] = useState<File[]>([]);
@@ -184,6 +193,11 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const [rgGridSearch, setRgGridSearch] = useState('');
   const [rgGridPage, setRgGridPage] = useState(1);
   const [rgColFiltros, setRgColFiltros] = useState<Record<string, Set<string> | null>>({});
+  // Mismo criterio que libroColOcultas de arriba, para la grilla de la RG (paso 2): no
+  // afecta descargarRgExcel, que ignora este estado y exporta las 13 columnas siempre.
+  const [rgColOcultas, setRgColOcultas] = useState<Set<string>>(
+    new Set(['gravadas', 'iva', 'gravadas_5', 'iva_5', 'exentas'])
+  );
   // Saltos de numeración DENTRO de la RG de compras misma (agrupados por proveedor) — no
   // hay control de correlatividad del libro propio acá (ver docstring de ComprasEngine).
 
@@ -193,6 +207,11 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const [diffSearch, setDiffSearch] = useState('');
   const [diffCategoryFilter, setDiffCategoryFilter] = useState<string>('');
   const [diffColFiltros, setDiffColFiltros] = useState<Record<string, Set<string> | null>>({});
+  // Mismo criterio que RG90View.tsx (Ventas): el Detalle de Discrepancias arranca
+  // colapsado al entrar al Paso 3, solo se ve el resumen — se abre al tocar una pestaña de
+  // total o el propio encabezado. El encabezado (buscador, columnas, Excel) sigue visible
+  // esté abierto o cerrado.
+  const [detalleAbierto, setDetalleAbierto] = useState(false);
   // Por defecto se ocultan la Gravada 10%/5% de ambos lados (Libro y RG) y sus columnas
   // "Diferencia" — el resto de los importes "Diferencia" (IVA 10%/5%, Exenta, Total) se
   // muestran de entrada. Todas quedan disponibles desde el selector de columnas.
@@ -205,11 +224,90 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   // RG90 en pantallas distintas del sidebar, acá es una sola pantalla — así que se
   // muestra un paso a la vez, como un wizard real: paso 2 solo el adjuntar RG90, paso 3
   // solo el resultado, sin que se acumule todo hacia abajo).
-  const [pasoMostrado, setPasoMostrado] = useState<1 | 2 | 3>(1);
+  //
+  // Ya no es un useState propio: se deriva de la URL (/compras/carga|rg|resultado), así
+  // que F5 en el resultado de la comparación queda ahí mismo en vez de perder el lugar.
+  // setPasoMostrado queda como una función que navega en vez de un setState real — así
+  // ningún llamador de más abajo (hay varios: "Siguiente", "Volver", el wizard, etc.)
+  // necesitó cambiar una sola línea.
+  const navigate = useNavigate();
+  const { paso: pasoParam } = useParams<{ paso?: string }>();
+  const PASO_A_SEGMENTO: Record<1 | 2 | 3, string> = { 1: 'carga', 2: 'rg', 3: 'resultado' };
+  const SEGMENTO_A_PASO: Record<string, 1 | 2 | 3> = { carga: 1, rg: 2, resultado: 3 };
+  const pasoMostrado: 1 | 2 | 3 = SEGMENTO_A_PASO[pasoParam ?? 'carga'] ?? 1;
+  const setPasoMostrado = (n: 1 | 2 | 3) => navigate(`/compras/${PASO_A_SEGMENTO[n]}`);
+
+  // Persistencia del libro de Compras (ver src/utils/persistStore.ts): mismo criterio que
+  // Ventas en App.tsx — si la página se recarga por accidente, el navegador se cuelga o se
+  // cierra (o el usuario simplemente navega a otra pantalla del sidebar, que ya desmonta
+  // este componente hoy), no se pierde el libro cargado ni el resultado de la comparación.
+  // No se persisten archivos/rgFiles (objetos File del navegador, no serializables) — lo
+  // que se recupera es el libro YA procesado. La limpieza al cerrar sesión la hace
+  // App.tsx (handleLogout) directamente por clave, porque este componente ya se desmonta
+  // solo al salir de la pantalla de Compras.
+  const comprasHydratedRef = useRef(false);
+  // Igual que ventasHydrated en App.tsx: versión-estado del ref de arriba, solo para que el
+  // guard de reachability de más abajo se vuelva a evaluar justo cuando la hidratación
+  // termina (un ref no dispara re-render por sí solo).
+  const [comprasHydrated, setComprasHydrated] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const saved = await idbGet<{
+          rows: CompraRow[];
+          loteId?: number;
+          rgRows: CompraRow[];
+          diffs: CompraDiffRow[];
+          summary: typeof summary;
+          pasoMostrado: 1 | 2 | 3;
+        }>(COMPRAS_PERSIST_KEY);
+        if (saved) {
+          setRows(saved.rows ?? []);
+          setLoteId(saved.loteId);
+          setRgRows(saved.rgRows ?? []);
+          setDiffs(saved.diffs ?? []);
+          setSummary(saved.summary ?? null);
+          // A diferencia de Ventas (App.tsx), acá SÍ es seguro navegar al paso guardado
+          // apenas termina de hidratar: este componente solo existe montado mientras la
+          // URL ya está en /compras/*, así que como mucho reubica al usuario DENTRO de
+          // Compras (nunca lo saca de otra pantalla) — mismo comportamiento de "retomar
+          // donde quedó" que ya tenía antes de este cambio.
+          if ((saved.pasoMostrado ?? 1) !== 1) setPasoMostrado(saved.pasoMostrado ?? 1);
+        }
+      } finally {
+        comprasHydratedRef.current = true;
+        setComprasHydrated(true);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!comprasHydratedRef.current) return;
+    const t = setTimeout(() => {
+      idbSet(COMPRAS_PERSIST_KEY, { rows, loteId, rgRows, diffs, summary, pasoMostrado });
+    }, 400);
+    return () => clearTimeout(t);
+  }, [rows, loteId, rgRows, diffs, summary, pasoMostrado]);
 
   // pasoActual = el progreso real alcanzado (para los "✓" de completado en la barra),
   // independiente de qué paso se esté mostrando en pantalla en este momento.
   const pasoActual = rows.length === 0 ? 1 : !summary ? 2 : 3;
+
+  // Guard de navegación: si la URL pide un paso que todavía no es alcanzable con los datos
+  // reales (ej. entrar por link directo a /compras/resultado sin haber comparado nunca),
+  // se redirige al paso correcto — MISMA regla "reachable" que ya usa la barra de abajo, no
+  // una nueva. Espera a que termine la hidratación para no redirigir con el estado vacío
+  // inicial, antes de que la persistencia tuviera chance de restaurar el libro real.
+  useEffect(() => {
+    if (!comprasHydrated) return;
+    if (pasoMostrado > pasoActual) {
+      navigate(`/compras/${PASO_A_SEGMENTO[pasoActual as 1 | 2 | 3]}`, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comprasHydrated, pasoMostrado, pasoActual]);
+
   const wizardSteps = [
     { n: 1 as const, label: 'Cargar el libro de compras' },
     { n: 2 as const, label: 'Adjuntar RG90' },
@@ -587,6 +685,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                 onChange={e => { setSearch(e.target.value); setPage(1); }}
                 style={{ padding: '7px 12px', border: '1px solid #e2e0da', borderRadius: '6px', fontSize: '12px', width: '200px' }}
               />
+              <ColumnPicker columnas={LIBRO_COLUMNAS} ocultas={libroColOcultas} onChange={setLibroColOcultas} />
               {hayColFiltrosActivos && (
                 <button onClick={() => { setColFiltros({}); setPage(1); }} style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px' }}>
                   Limpiar filtros
@@ -611,7 +710,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-                  {LIBRO_COLUMNAS.map(col => {
+                  {LIBRO_COLUMNAS.filter(col => !libroColOcultas.has(col.key)).map(col => {
                     const esImporte = ['gravadas', 'iva', 'gravadas_5', 'iva_5', 'exentas', 'total'].includes(col.key);
                     return (
                       <th key={col.key} style={{ ...stickyTheadStyle, padding: '10px 14px', fontWeight: 600, textAlign: esImporte ? 'right' : 'left' }}>
@@ -630,41 +729,43 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
               <tbody>
                 {pagedRows.map((r, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid #f0eee8' }}>
-                    <td style={{ padding: '10px 14px', fontWeight: 600, color: '#22262b' }}>{r.doc}</td>
-                    <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.local || '—'}</td>
-                    <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.fecha}</td>
-                    <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.ruc_proveedor}-{r.dv_proveedor} — {r.proveedor}</td>
-                    <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.tipo_doc}</td>
-                    <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.condicion || '—'}</td>
-                    <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.timbrado || '—'}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.gravadas}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.iva}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.gravadas_5}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.iva_5}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.exentas}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: '#22262b' }}>{r.total}</td>
-                    <td style={{ padding: '10px 14px' }}>
-                      <span style={{
-                        background: r.estado === 'Anulada' ? '#fbe9e3' : '#e8f3ec',
-                        color: r.estado === 'Anulada' ? '#b3402f' : '#128752',
-                        fontSize: '11px', fontWeight: 600, padding: '4px 10px', borderRadius: '20px',
-                      }}>
-                        {r.estado}
-                      </span>
-                    </td>
+                    {!libroColOcultas.has('doc') && <td style={{ padding: '10px 14px', fontWeight: 600, color: '#22262b' }}>{r.doc}</td>}
+                    {!libroColOcultas.has('local') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.local || '—'}</td>}
+                    {!libroColOcultas.has('fecha') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.fecha}</td>}
+                    {!libroColOcultas.has('proveedor') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.ruc_proveedor}-{r.dv_proveedor} — {r.proveedor}</td>}
+                    {!libroColOcultas.has('tipo_doc') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.tipo_doc}</td>}
+                    {!libroColOcultas.has('condicion') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.condicion || '—'}</td>}
+                    {!libroColOcultas.has('timbrado') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.timbrado || '—'}</td>}
+                    {!libroColOcultas.has('gravadas') && <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.gravadas}</td>}
+                    {!libroColOcultas.has('iva') && <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.iva}</td>}
+                    {!libroColOcultas.has('gravadas_5') && <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.gravadas_5}</td>}
+                    {!libroColOcultas.has('iva_5') && <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.iva_5}</td>}
+                    {!libroColOcultas.has('exentas') && <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.exentas}</td>}
+                    {!libroColOcultas.has('total') && <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: '#22262b' }}>{r.total}</td>}
+                    {!libroColOcultas.has('estado') && (
+                      <td style={{ padding: '10px 14px' }}>
+                        <span style={{
+                          background: r.estado === 'Anulada' ? '#fbe9e3' : '#e8f3ec',
+                          color: r.estado === 'Anulada' ? '#b3402f' : '#128752',
+                          fontSize: '11px', fontWeight: 600, padding: '4px 10px', borderRadius: '20px',
+                        }}>
+                          {r.estado}
+                        </span>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr style={{ borderTop: '2px solid #e2e0da', backgroundColor: '#fafbfa', fontWeight: 700, color: '#22262b' }}>
-                  <td colSpan={7} style={{ padding: '10px 14px' }}>Total ({filteredRows.length.toLocaleString('es-PY')} filas)</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rowsTotales.gravadas)}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rowsTotales.iva)}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rowsTotales.gravadas_5)}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rowsTotales.iva_5)}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rowsTotales.exentas)}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rowsTotales.total)}</td>
-                  <td />
+                  <td colSpan={['doc', 'local', 'fecha', 'proveedor', 'tipo_doc', 'condicion', 'timbrado'].filter(k => !libroColOcultas.has(k)).length} style={{ padding: '10px 14px' }}>Total ({filteredRows.length.toLocaleString('es-PY')} filas)</td>
+                  {!libroColOcultas.has('gravadas') && <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rowsTotales.gravadas)}</td>}
+                  {!libroColOcultas.has('iva') && <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rowsTotales.iva)}</td>}
+                  {!libroColOcultas.has('gravadas_5') && <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rowsTotales.gravadas_5)}</td>}
+                  {!libroColOcultas.has('iva_5') && <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rowsTotales.iva_5)}</td>}
+                  {!libroColOcultas.has('exentas') && <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rowsTotales.exentas)}</td>}
+                  {!libroColOcultas.has('total') && <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rowsTotales.total)}</td>}
+                  {!libroColOcultas.has('estado') && <td />}
                 </tr>
               </tfoot>
             </table>
@@ -771,6 +872,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
                 onChange={e => { setRgGridSearch(e.target.value); setRgGridPage(1); }}
                 style={{ padding: '7px 12px', border: '1px solid #e2e0da', borderRadius: '6px', fontSize: '12px', width: '200px' }}
               />
+              <ColumnPicker columnas={RG_COLUMNAS} ocultas={rgColOcultas} onChange={setRgColOcultas} />
               {hayRgColFiltrosActivos && (
                 <button onClick={() => { setRgColFiltros({}); setRgGridPage(1); }} style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px' }}>
                   Limpiar filtros
@@ -786,7 +888,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-                  {RG_COLUMNAS.map(col => {
+                  {RG_COLUMNAS.filter(col => !rgColOcultas.has(col.key)).map(col => {
                     const esImporte = ['gravadas', 'iva', 'gravadas_5', 'iva_5', 'exentas', 'total'].includes(col.key);
                     return (
                       <th key={col.key} style={{ ...stickyTheadStyle, padding: '10px 14px', fontWeight: 600, textAlign: esImporte ? 'right' : 'left' }}>
@@ -805,31 +907,31 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
               <tbody>
                 {pagedRgRows.map((r, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid #f0eee8' }}>
-                    <td style={{ padding: '10px 14px', fontWeight: 600, color: '#22262b' }}>{r.doc}</td>
-                    <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.local || '—'}</td>
-                    <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.fecha}</td>
-                    <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.ruc_proveedor}{r.dv_proveedor ? `-${r.dv_proveedor}` : ''} — {r.proveedor}</td>
-                    <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.tipo_doc}</td>
-                    <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.condicion || '—'}</td>
-                    <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.timbrado || '—'}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.gravadas}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.iva}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.gravadas_5}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.iva_5}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.exentas}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: '#22262b' }}>{r.total}</td>
+                    {!rgColOcultas.has('doc') && <td style={{ padding: '10px 14px', fontWeight: 600, color: '#22262b' }}>{r.doc}</td>}
+                    {!rgColOcultas.has('local') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.local || '—'}</td>}
+                    {!rgColOcultas.has('fecha') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.fecha}</td>}
+                    {!rgColOcultas.has('proveedor') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.ruc_proveedor}{r.dv_proveedor ? `-${r.dv_proveedor}` : ''} — {r.proveedor}</td>}
+                    {!rgColOcultas.has('tipo_doc') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.tipo_doc}</td>}
+                    {!rgColOcultas.has('condicion') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.condicion || '—'}</td>}
+                    {!rgColOcultas.has('timbrado') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.timbrado || '—'}</td>}
+                    {!rgColOcultas.has('gravadas') && <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.gravadas}</td>}
+                    {!rgColOcultas.has('iva') && <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.iva}</td>}
+                    {!rgColOcultas.has('gravadas_5') && <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.gravadas_5}</td>}
+                    {!rgColOcultas.has('iva_5') && <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.iva_5}</td>}
+                    {!rgColOcultas.has('exentas') && <td style={{ padding: '10px 14px', textAlign: 'right', color: '#5c6470' }}>{r.exentas}</td>}
+                    {!rgColOcultas.has('total') && <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: '#22262b' }}>{r.total}</td>}
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr style={{ borderTop: '2px solid #e2e0da', backgroundColor: '#fafbfa', fontWeight: 700, color: '#22262b' }}>
-                  <td colSpan={7} style={{ padding: '10px 14px' }}>Total ({filteredRgRows.length.toLocaleString('es-PY')} filas)</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rgRowsTotales.gravadas)}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rgRowsTotales.iva)}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rgRowsTotales.gravadas_5)}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rgRowsTotales.iva_5)}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rgRowsTotales.exentas)}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rgRowsTotales.total)}</td>
+                  <td colSpan={['doc', 'local', 'fecha', 'proveedor', 'tipo_doc', 'condicion', 'timbrado'].filter(k => !rgColOcultas.has(k)).length} style={{ padding: '10px 14px' }}>Total ({filteredRgRows.length.toLocaleString('es-PY')} filas)</td>
+                  {!rgColOcultas.has('gravadas') && <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rgRowsTotales.gravadas)}</td>}
+                  {!rgColOcultas.has('iva') && <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rgRowsTotales.iva)}</td>}
+                  {!rgColOcultas.has('gravadas_5') && <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rgRowsTotales.gravadas_5)}</td>}
+                  {!rgColOcultas.has('iva_5') && <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rgRowsTotales.iva_5)}</td>}
+                  {!rgColOcultas.has('exentas') && <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rgRowsTotales.exentas)}</td>}
+                  {!rgColOcultas.has('total') && <td style={{ padding: '10px 14px', textAlign: 'right' }}>{formatGs(rgRowsTotales.total)}</td>}
                 </tr>
               </tfoot>
             </table>
@@ -859,27 +961,6 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
           </div>
 
           <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>3. Resultado de la comparación</h4>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
-            {RESUMEN_CATEGORIAS.map(c => {
-              const activa = diffCategoryFilter === c.key;
-              return (
-                <div
-                  key={c.key}
-                  onClick={() => setDiffCategoryFilter(prev => (prev === c.key ? '' : c.key))}
-                  style={{
-                    backgroundColor: activa ? '#e8f3ec' : '#ffffff',
-                    border: `1px solid ${activa ? '#128752' : '#e2e0da'}`,
-                    borderRadius: '10px', padding: '16px 20px', cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    boxShadow: activa ? '0 2px 8px rgba(18, 135, 82, 0.15)' : 'none',
-                  }}
-                >
-                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#5c6470' }}>{c.label}</div>
-                  <div style={{ fontSize: '24px', fontWeight: 700, color: c.color, marginTop: '4px' }}>{resumenValores[c.key]}</div>
-                </div>
-              );
-            })}
-          </div>
 
           {diffCategoryFilter && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -893,32 +974,150 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
             </div>
           )}
 
+          {/* Panel de Desglose Matemático: no agrega ningún cálculo nuevo — solo reordena en
+              dos columnas (Libro propio / RG) los mismos contadores que ya se ven arriba en
+              resumenValores, para mostrar cómo se compone cada total. Mismo criterio que el
+              panel equivalente de RG90View.tsx (Ventas), sin fila "Anulados": el campo
+              "estado" de Compras es un placeholder fijo ("Válida") que no viene del export
+              real del sistema (ver docstring de ComprasEngine), así que esa categoría nunca
+              tiene datos reales acá. */}
+          {(() => {
+            const coinciden = resumenValores['Coincide'];
+            const diferenciaMonto = resumenValores['Diferencia de monto'];
+            const noEnRg = resumenValores['No llegó a la interfaz'];
+            const noEnLibro = resumenValores['No en libro propio'];
+            const sumaLibro = coinciden + diferenciaMonto + noEnRg;
+            const sumaRg = coinciden + diferenciaMonto + noEnLibro;
+
+            const filaStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '13px', color: '#5c6470' };
+            const tarjetaStyle: React.CSSProperties = { backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', overflow: 'hidden' };
+            const cabeceraStyle: React.CSSProperties = { backgroundColor: '#fafbfa', borderBottom: '1px solid #e2e0da', padding: '14px 20px' };
+
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+                <div style={tarjetaStyle}>
+                  <div style={{ ...cabeceraStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#22262b' }}>TU LIBRO DE COMPRAS</div>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#22262b' }}>
+                      Total de comprobantes: {rows.length}
+                    </div>
+                  </div>
+                  <div style={{ padding: '16px 20px' }}>
+                    <div style={{ fontSize: '12.5px', color: '#9aa1ab', marginBottom: '4px' }}>Este total se compone de:</div>
+                    <div style={filaStyle}><span>Coinciden</span><span>{coinciden}</span></div>
+                    <div style={filaStyle}><span>Diferencia de monto</span><span>{diferenciaMonto}</span></div>
+                    <div style={filaStyle}><span>No en RG</span><span>{noEnRg}</span></div>
+                    <div style={{ ...filaStyle, borderTop: '1px solid #e2e0da', marginTop: '4px', paddingTop: '10px', fontWeight: 700, color: '#22262b' }}>
+                      <span>Total</span><span>{sumaLibro}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={tarjetaStyle}>
+                  <div style={{ ...cabeceraStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#22262b' }}>ARCHIVO RG (SET)</div>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#22262b' }}>
+                      Total de comprobantes: {rgRows.length}
+                    </div>
+                  </div>
+                  <div style={{ padding: '16px 20px' }}>
+                    <div style={{ fontSize: '12.5px', color: '#9aa1ab', marginBottom: '4px' }}>Este total se compone de:</div>
+                    <div style={filaStyle}><span>Coinciden</span><span>{coinciden}</span></div>
+                    <div style={filaStyle}><span>Diferencia de monto</span><span>{diferenciaMonto}</span></div>
+                    <div style={filaStyle}><span>No en libro de compras</span><span>{noEnLibro}</span></div>
+                    <div style={{ ...filaStyle, borderTop: '1px solid #e2e0da', marginTop: '4px', paddingTop: '10px', fontWeight: 700, color: '#22262b' }}>
+                      <span>Total</span><span>{sumaRg}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', overflow: 'hidden' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e0da', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fafbfa' }}>
-              <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>Detalle de Discrepancias ({filteredDiffs.length.toLocaleString('es-PY')} de {diffs.length.toLocaleString('es-PY')})</h4>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                {hayDiffColFiltrosActivos && (
-                  <button onClick={() => setDiffColFiltros({})} style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px' }}>
-                    Limpiar filtros
+            {/* Antes eran 4 cards grandes y sueltas arriba de todo. Ahora son pestañas
+                chicas pegadas al borde superior de esta misma grilla — mismo
+                setDiffCategoryFilter que ya tenía cada card (nada de lógica de filtro
+                nueva), solo mucho más compactas y ancladas a lo que filtran. */}
+            <div style={{ display: 'flex', alignItems: 'stretch', backgroundColor: '#fafbfa', borderBottom: '1px solid #e2e0da', overflowX: 'auto' }}>
+              {RESUMEN_CATEGORIAS.map(c => {
+                const activa = diffCategoryFilter === c.key;
+                return (
+                  <button
+                    key={c.key}
+                    onClick={() => { setDiffCategoryFilter(prev => (prev === c.key ? '' : c.key)); setDetalleAbierto(true); }}
+                    style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px',
+                      padding: '9px 16px', border: 'none', borderRight: '1px solid #e2e0da',
+                      borderBottom: `2px solid ${activa ? '#128752' : 'transparent'}`,
+                      backgroundColor: activa ? '#ffffff' : 'transparent',
+                      cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit',
+                    }}
+                  >
+                    <span style={{ fontSize: '10.5px', fontWeight: 600, color: '#9aa1ab', textTransform: 'uppercase', letterSpacing: '0.02em' }}>{c.label}</span>
+                    <span style={{ fontSize: '15px', fontWeight: 700, color: activa ? '#128752' : c.color }}>{resumenValores[c.key]}</span>
                   </button>
-                )}
-                <ColumnPicker columnas={DIFF_COLUMNAS_PICKER} ocultas={diffColOcultas} onChange={setDiffColOcultas} />
+                );
+              })}
+            </div>
+
+            {/* Ya no se expande in-line — demasiada información junta en la pantalla al
+                abrirla ahí mismo. Ahora esta barra es solo el resumen; el detalle (buscador,
+                columnas, Excel y la grilla) vive en el Modal de más abajo. Se abre tocando
+                cualquier pestaña de arriba (ya llama a setDetalleAbierto(true)) o esta
+                barra. */}
+            <div
+              style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fafbfa', cursor: 'pointer' }}
+              onClick={() => setDetalleAbierto(true)}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ChevronDown size={16} color="#5c6470" />
+                <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>Detalle de Discrepancias ({filteredDiffs.length.toLocaleString('es-PY')} de {diffs.length.toLocaleString('es-PY')})</h4>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                 <button
-                  onClick={descargarDiffExcel}
+                  onClick={e => { e.stopPropagation(); descargarDiffExcel(); }}
                   disabled={filteredDiffs.length === 0}
                   style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
                 >
                   <FileSpreadsheet size={14} color="#5c6470" />
                   <span>Excel</span>
                 </button>
-                <input
-                  type="text" placeholder="Buscar por doc, proveedor..." value={diffSearch}
-                  onChange={e => setDiffSearch(e.target.value)}
-                  style={{ padding: '7px 12px', border: '1px solid #e2e0da', borderRadius: '6px', fontSize: '12px', width: '220px' }}
-                />
+                <span style={{ fontSize: '12px', fontWeight: 600, color: '#128752' }}>Ver detalle</span>
               </div>
             </div>
-            <div style={scrollableGridStyle}>
+          </div>
+
+          {detalleAbierto && (
+            <Modal title="Detalle de Discrepancias" onClose={() => setDetalleAbierto(false)} width="1400px">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '14px' }}>
+                <span style={{ fontSize: '12.5px', color: '#5c6470' }}>
+                  {filteredDiffs.length.toLocaleString('es-PY')} de {diffs.length.toLocaleString('es-PY')}
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {hayDiffColFiltrosActivos && (
+                    <button onClick={() => setDiffColFiltros({})} style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px' }}>
+                      Limpiar filtros
+                    </button>
+                  )}
+                  <ColumnPicker columnas={DIFF_COLUMNAS_PICKER} ocultas={diffColOcultas} onChange={setDiffColOcultas} />
+                  <button
+                    onClick={descargarDiffExcel}
+                    disabled={filteredDiffs.length === 0}
+                    style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <FileSpreadsheet size={14} color="#5c6470" />
+                    <span>Excel</span>
+                  </button>
+                  <input
+                    type="text" placeholder="Buscar por doc, proveedor..." value={diffSearch}
+                    onChange={e => setDiffSearch(e.target.value)}
+                    style={{ padding: '7px 12px', border: '1px solid #e2e0da', borderRadius: '6px', fontSize: '12px', width: '220px' }}
+                  />
+                </div>
+              </div>
+
+            <div style={{ ...scrollableGridStyle, border: '1px solid #e2e0da', borderRadius: '8px', maxHeight: '60vh' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
@@ -1028,7 +1227,8 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
               </tfoot>
             </table>
             </div>
-          </div>
+            </Modal>
+          )}
         </div>
       )}
 

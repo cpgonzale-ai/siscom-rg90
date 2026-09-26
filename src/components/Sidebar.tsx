@@ -1,16 +1,20 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, FileSpreadsheet, ShieldCheck, MapPin, Users, KeyRound, ChevronDown, ChevronRight, ShoppingCart } from 'lucide-react';
+import { Home, LayoutDashboard, FileSpreadsheet, ShieldCheck, MapPin, Users, KeyRound, ChevronDown, ChevronRight, ShoppingCart, X } from 'lucide-react';
 import logoConsultora from '../assets/logo-consultora-san-miguel.png';
 
-type Screen = 'dashboard' | 'carga' | 'correl' | 'rg90' | 'libroCompleto' | 'compras' | 'locales' | 'usuarios' | 'roles';
+type Screen = 'inicio' | 'dashboard' | 'carga' | 'correl' | 'rg90' | 'libroCompleto' | 'compras' | 'locales' | 'usuarios' | 'roles';
 
 interface SidebarProps {
   currentScreen: Screen;
-  onNavigate: (screen: 'dashboard' | 'carga' | 'correl' | 'rg90' | 'compras' | 'locales' | 'usuarios' | 'roles') => void;
+  onNavigate: (screen: 'inicio' | 'dashboard' | 'carga' | 'correl' | 'rg90' | 'compras' | 'locales' | 'usuarios' | 'roles') => void;
   permisos: Set<string>;
+  /** Colapsado por defecto: el padre controla la visibilidad (arranca en `false`). */
+  open: boolean;
+  /** Se dispara al tocar el backdrop o la X — el padre decide cerrar. */
+  onClose: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate, permisos }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate, permisos, open, onClose }) => {
   const navItemStyle = (screen: string) => {
     const isActive = currentScreen === screen;
     return {
@@ -49,24 +53,63 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate, per
   const [adminAbierto, setAdminAbierto] = useState(estaEnAdmin);
 
   return (
-    <aside
-      style={{
-        width: '260px',
-        backgroundColor: '#0e6b41',
-        color: '#ffffff',
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100vh',
-        position: 'fixed',
-        left: 0,
-        top: 0,
-        zIndex: 100,
-        boxShadow: '2px 0 10px rgba(0,0,0,0.1)',
-        overflowY: 'auto',
-      }}
-    >
+    <>
+      {/* Backdrop: solo existe (y solo intercepta clicks) mientras el menú está abierto —
+          tocar afuera del panel lo cierra, igual en mobile y en desktop. */}
+      {open && (
+        <div
+          onClick={onClose}
+          aria-hidden="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 20, 0.35)',
+            zIndex: 99,
+            animation: 'fadeIn 0.15s ease-out',
+          }}
+        />
+      )}
+
+      <aside
+        role="navigation"
+        aria-label="Menú principal"
+        aria-hidden={!open}
+        style={{
+          width: '260px',
+          maxWidth: '85vw',
+          backgroundColor: '#0e6b41',
+          color: '#ffffff',
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100vh',
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          zIndex: 100,
+          boxShadow: '2px 0 10px rgba(0,0,0,0.1)',
+          overflowY: 'auto',
+          transform: open ? 'translateX(0)' : 'translateX(-100%)',
+          transition: 'transform 0.2s ease',
+        }}
+      >
       {/* Brand Header */}
       <div style={{ padding: '24px 20px 20px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '4px' }}>
+          <button
+            onClick={onClose}
+            aria-label="Cerrar menú"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'rgba(255,255,255,0.7)',
+              cursor: 'pointer',
+              padding: '4px',
+              display: 'flex',
+            }}
+          >
+            <X size={20} />
+          </button>
+        </div>
         <div
           style={{
             backgroundColor: '#ffffff',
@@ -89,7 +132,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate, per
 
       {/* Navigation Links */}
       <nav style={{ padding: '20px 14px', display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
-        <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'rgba(255,255,255,0.5)', margin: '0 8px 8px 8px', fontWeight: 600 }}>
+        {/* Sin gate de permiso a propósito: es solo un launcher hacia lo que cada rol ya
+            tiene habilitado, nunca muestra nada que el usuario no pueda abrir. */}
+        <button style={navItemStyle('inicio')} onClick={() => onNavigate('inicio')}>
+          <div style={dotStyle('inicio')} />
+          <Home size={17} />
+          <span>Inicio</span>
+        </button>
+
+        <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'rgba(255,255,255,0.5)', margin: '12px 8px 8px 8px', fontWeight: 600 }}>
           Módulos de Conciliación
         </div>
 
@@ -170,6 +221,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate, per
       <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,0.1)', fontSize: '11px', color: 'rgba(255,255,255,0.5)', textAlign: 'center' }}>
         desarrollado por CORVISPY v1.0
       </div>
-    </aside>
+      </aside>
+    </>
   );
 };

@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { UploadCloud, FileSpreadsheet, Trash2, Search, Download, RefreshCw, CheckCircle2, ArrowLeft, ArrowRight, X } from 'lucide-react';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
+import { ColumnPicker } from '../components/ColumnPicker';
 import { Modal, primaryBtnStyle, secondaryBtnStyle, dangerBtnStyle, navRowStyle, disabledBtnStyle, stickyTheadStyle, scrollableGridStyle } from '../components/Modal';
 import { TablaSaltos } from '../components/TablaSaltos';
 import { formatGs } from '../utils/format';
@@ -112,6 +113,17 @@ export const CargaView: React.FC<CargaViewProps> = ({
   libroTotales,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Visibilidad de columnas en pantalla (Paso 2) — no afecta la exportación a Excel a
+  // propósito: downloadLimpio (App.tsx) arma el archivo a partir de LIBRO_COLUMNAS
+  // completo, sin mirar este estado, así que el .xlsx siempre trae todas las columnas
+  // aunque el usuario tenga alguna oculta acá. Ocultas por defecto: Gravadas 10%, IVA 10%,
+  // Gravadas 5%, IVA 5%, Exentas.
+  const [libroColOcultas, setLibroColOcultas] = useState<Set<string>>(
+    new Set(['gravadas', 'iva', 'gravadas_5', 'iva_5', 'exentas'])
+  );
+  const libroColVisiblesKeys = new Set(libroColumnFilters.filter(c => !libroColOcultas.has(c.key)).map(c => c.key));
+  const libroLeadingColSpan = ['doc', 'tipo_doc', 'sistema', 'local', 'fecha', 'ruc', 'nombre']
+    .filter(k => libroColVisiblesKeys.has(k)).length;
   const [saltosModalOpen, setSaltosModalOpen] = useState(false);
 
   return (
@@ -428,6 +440,8 @@ export const CargaView: React.FC<CargaViewProps> = ({
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <ColumnPicker columnas={libroColumnFilters} ocultas={libroColOcultas} onChange={setLibroColOcultas} />
+
               {hayLibroColFiltrosActivos && (
                 <button onClick={limpiarLibroColFiltros} style={{ ...secondaryBtnStyle, padding: '9px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}>
                   Limpiar filtros
@@ -483,7 +497,7 @@ export const CargaView: React.FC<CargaViewProps> = ({
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
               <thead>
                 <tr style={{ backgroundColor: '#fafbfa', borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-                  {libroColumnFilters.map(col => {
+                  {libroColumnFilters.filter(col => !libroColOcultas.has(col.key)).map(col => {
                     const esImporte = ['gravadas', 'iva', 'gravadas_5', 'iva_5', 'exentas', 'total'].includes(col.key);
                     return (
                       <th key={col.key} style={{ ...stickyTheadStyle, backgroundColor: '#fafbfa', padding: '12px 14px', fontWeight: 600, textAlign: esImporte ? 'right' : 'left' }}>
@@ -496,48 +510,52 @@ export const CargaView: React.FC<CargaViewProps> = ({
               <tbody>
                 {pagedLibro.map((r, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid #f0eee8' }}>
-                    <td style={{ padding: '12px 14px', fontWeight: 600, color: '#22262b' }}>{r.doc}</td>
-                    <td style={{ padding: '12px 14px' }}>
-                      <span
-                        style={{
-                          background: r.tipo_doc === 'Nota de Crédito' ? '#f1eef8' : '#eef2fb',
-                          color: r.tipo_doc === 'Nota de Crédito' ? '#5b3aa8' : '#2f5fa8',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          padding: '3px 9px',
-                          borderRadius: '20px',
-                        }}
-                      >
-                        {r.tipo_doc || 'Factura'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '12px 14px', color: '#5c6470' }}>{r.sistema}</td>
-                    <td style={{ padding: '12px 14px', color: '#5c6470' }}>{r.local}</td>
-                    <td style={{ padding: '12px 14px', color: '#5c6470' }}>{r.fecha}</td>
-                    <td style={{ padding: '12px 14px', color: '#5c6470' }}>{r.ruc}</td>
-                    <td style={{ padding: '12px 14px', color: '#22262b', fontWeight: 500 }}>{r.nombre}</td>
-                    <td style={{ padding: '12px 14px', textAlign: 'right', color: '#5c6470' }}>{r.gravadas}</td>
-                    <td style={{ padding: '12px 14px', textAlign: 'right', color: '#5c6470' }}>{r.iva}</td>
-                    <td style={{ padding: '12px 14px', textAlign: 'right', color: '#5c6470' }}>{r.gravadas_5 ?? '0'}</td>
-                    <td style={{ padding: '12px 14px', textAlign: 'right', color: '#5c6470' }}>{r.iva_5 ?? '0'}</td>
-                    <td style={{ padding: '12px 14px', textAlign: 'right', color: '#5c6470' }}>{r.exentas}</td>
-                    <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: '#22262b' }}>{r.total}</td>
-                    <td style={{ padding: '12px 14px' }}>
-                      <span style={parseInlineStyle(r.estadoStyle)}>{r.estado}</span>
-                    </td>
+                    {!libroColOcultas.has('doc') && <td style={{ padding: '12px 14px', fontWeight: 600, color: '#22262b' }}>{r.doc}</td>}
+                    {!libroColOcultas.has('tipo_doc') && (
+                      <td style={{ padding: '12px 14px' }}>
+                        <span
+                          style={{
+                            background: r.tipo_doc === 'Nota de Crédito' ? '#f1eef8' : '#eef2fb',
+                            color: r.tipo_doc === 'Nota de Crédito' ? '#5b3aa8' : '#2f5fa8',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            padding: '3px 9px',
+                            borderRadius: '20px',
+                          }}
+                        >
+                          {r.tipo_doc || 'Factura'}
+                        </span>
+                      </td>
+                    )}
+                    {!libroColOcultas.has('sistema') && <td style={{ padding: '12px 14px', color: '#5c6470' }}>{r.sistema}</td>}
+                    {!libroColOcultas.has('local') && <td style={{ padding: '12px 14px', color: '#5c6470' }}>{r.local}</td>}
+                    {!libroColOcultas.has('fecha') && <td style={{ padding: '12px 14px', color: '#5c6470' }}>{r.fecha}</td>}
+                    {!libroColOcultas.has('ruc') && <td style={{ padding: '12px 14px', color: '#5c6470' }}>{r.ruc}</td>}
+                    {!libroColOcultas.has('nombre') && <td style={{ padding: '12px 14px', color: '#22262b', fontWeight: 500 }}>{r.nombre}</td>}
+                    {!libroColOcultas.has('gravadas') && <td style={{ padding: '12px 14px', textAlign: 'right', color: '#5c6470' }}>{r.gravadas}</td>}
+                    {!libroColOcultas.has('iva') && <td style={{ padding: '12px 14px', textAlign: 'right', color: '#5c6470' }}>{r.iva}</td>}
+                    {!libroColOcultas.has('gravadas_5') && <td style={{ padding: '12px 14px', textAlign: 'right', color: '#5c6470' }}>{r.gravadas_5 ?? '0'}</td>}
+                    {!libroColOcultas.has('iva_5') && <td style={{ padding: '12px 14px', textAlign: 'right', color: '#5c6470' }}>{r.iva_5 ?? '0'}</td>}
+                    {!libroColOcultas.has('exentas') && <td style={{ padding: '12px 14px', textAlign: 'right', color: '#5c6470' }}>{r.exentas}</td>}
+                    {!libroColOcultas.has('total') && <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: '#22262b' }}>{r.total}</td>}
+                    {!libroColOcultas.has('estado') && (
+                      <td style={{ padding: '12px 14px' }}>
+                        <span style={parseInlineStyle(r.estadoStyle)}>{r.estado}</span>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr style={{ borderTop: '2px solid #e2e0da', backgroundColor: '#fafbfa', fontWeight: 700, color: '#22262b' }}>
-                  <td colSpan={7} style={{ padding: '12px 14px' }}>Total ({filteredCount.toLocaleString('es-PY')} filas)</td>
-                  <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(libroTotales.gravadas)}</td>
-                  <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(libroTotales.iva)}</td>
-                  <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(libroTotales.gravadas_5)}</td>
-                  <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(libroTotales.iva_5)}</td>
-                  <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(libroTotales.exentas)}</td>
-                  <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(libroTotales.total)}</td>
-                  <td />
+                  <td colSpan={libroLeadingColSpan} style={{ padding: '12px 14px' }}>Total ({filteredCount.toLocaleString('es-PY')} filas)</td>
+                  {!libroColOcultas.has('gravadas') && <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(libroTotales.gravadas)}</td>}
+                  {!libroColOcultas.has('iva') && <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(libroTotales.iva)}</td>}
+                  {!libroColOcultas.has('gravadas_5') && <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(libroTotales.gravadas_5)}</td>}
+                  {!libroColOcultas.has('iva_5') && <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(libroTotales.iva_5)}</td>}
+                  {!libroColOcultas.has('exentas') && <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(libroTotales.exentas)}</td>}
+                  {!libroColOcultas.has('total') && <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(libroTotales.total)}</td>}
+                  {!libroColOcultas.has('estado') && <td />}
                 </tr>
               </tfoot>
             </table>

@@ -38,12 +38,160 @@
   padding: 0;
 }
 
+html {
+  /* Base explícita (antes dependía del default del navegador, típicamente 16px) — punto
+     de partida para una futura pasada de tipografía vista por vista; hoy la mayoría de los
+     tamaños siguen fijados en px inline en cada componente y no heredan de acá. */
+  font-size: 16px;
+}
+
 body {
   background-color: var(--bg-app);
   color: var(--text-main);
   font-family: var(--font-sans);
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Contenedor de contenido principal (App.tsx) — padding que se reduce en pantallas
+   angostas en vez de quedar fijo en 32px, para no comerse la mitad del ancho útil en un
+   celular. */
+.app-content-pad {
+  padding: 32px;
+  /* flex column: si el hijo de esta pantalla pide flex:1 (ver .inicio-wrap), se estira
+     hasta el fondo real del viewport en vez de terminar donde termina su contenido. Las
+     demás pantallas no piden flex:1, así que siguen midiendo su alto por contenido, igual
+     que antes — este cambio no las mueve ni un píxel. */
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 768px) {
+  .app-content-pad {
+    padding: 16px;
+  }
+  /* El nombre de la empresa + RUC en el Header se saca en mobile: con el sidebar ahora
+     colapsado por defecto, el título de la pantalla ya necesita todo el espacio horizontal
+     disponible junto al botón hamburguesa. */
+  .header-company-info {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-content-pad {
+    padding: 12px;
+  }
+}
+
+/* Pantalla de Inicio (InicioView) --------------------------------------------------- */
+
+/* Panel con degradé suave (equivalente a Tailwind bg-gradient-to-br from-slate-50
+   to-slate-100) + esquinas redondeadas, para que las tarjetas blancas de adentro
+   resalten contra algo que no sea blanco. position: relative + overflow: hidden acá
+   porque el logo de fondo (.inicio-watermark) es position: absolute dentro de este
+   contenedor — overflow: hidden solo recorta ESTE panel, nunca la página ni su scroll.
+   flex: 1 (el padre .app-content-pad ya es flex column) para que el degradé llegue
+   siempre hasta el fondo real del viewport, aunque haya poco contenido (ej. un rol con
+   solo 1-2 tarjetas habilitadas) — antes el fondo terminaba donde terminaba el contenido
+   y dejaba un bloque blanco vacío debajo. */
+.inicio-wrap {
+  position: relative;
+  background: linear-gradient(to bottom right, #f8fafc, #f1f5f9);
+  border-radius: 24px;
+  padding: 32px;
+  /* pb extra (además del padding general) para que el logo de abajo a la derecha tenga
+     su propio "respiro" y la pantalla no termine justo pegada a las tarjetas. */
+  padding-bottom: 80px;
+  overflow: hidden;
+  flex: 1;
+}
+
+/* Logo con posición y tamaño fijos (no un % relativo al contenedor) — así nunca se
+   recorta contra el borde: siempre 24px del borde inferior/derecho del panel, con ancho
+   fijo que jamás pasa el 40% del panel aunque este sea angosto (`min()`). */
+.inicio-watermark {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  width: min(320px, 40%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.inicio-watermark img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  opacity: 0.1;
+}
+
+/* El contenido real va por encima de la marca de agua */
+.inicio-content {
+  position: relative;
+  z-index: 1;
+}
+
+/* Blanco puro y borde/sombra sólidos (nada de transparencia ni blur): contra el degradé
+   gris de .inicio-wrap, una tarjeta semitransparente perdía contraste — se veía "empastada"
+   con el fondo. El look "vidrio" quedó descartado a favor de contraste real. */
+.inicio-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.inicio-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+  border-color: #128752;
+}
+
+/* Hero cards (Libro Ventas / Libro Compras) — mismo blanco puro que .inicio-card, con un
+   borde lateral grueso del color corporativo como único acento (ya no lleva el degradé
+   verde de la versión anterior: mezclaba el blanco de la tarjeta con el gris del fondo y
+   bajaba el contraste). */
+.inicio-card--hero {
+  border-left: 6px solid #128752;
+}
+
+.inicio-card--hero:hover {
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.14);
+}
+
+/* CTA "Ir" de las hero cards — botón sólido siempre visible (no solo al hover) para
+   máximo contraste: fondo verde corporativo lleno, texto blanco. La flecha se corre a la
+   derecha al pasar el mouse por TODA la tarjeta (":hover" en el botón padre), equivalente
+   al patrón "group/group-hover" sin Tailwind. */
+.inicio-hero-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #128752;
+  color: #ffffff;
+  padding: 8px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  width: fit-content;
+  transition: background-color 0.2s ease;
+}
+
+.inicio-card--hero:hover .inicio-hero-cta {
+  background: #0f7346;
+}
+
+.inicio-hero-cta-arrow {
+  display: inline-flex;
+  transition: transform 0.2s ease;
+}
+
+.inicio-card--hero:hover .inicio-hero-cta-arrow {
+  transform: translateX(4px);
 }
 
 button, input, select {
@@ -73,18 +221,36 @@ input[type="password"]::-ms-clear {
   display: none;
 }
 
-/* Custom Scrollbars */
+/* Custom Scrollbars — más gruesos y con más contraste que la versión anterior (6px, casi
+   invisible contra el fondo de las grillas): las tablas de la app son horizontal Y
+   verticalmente largas (ver scrollableGridStyle en Modal.tsx), y un scroll finito cuesta
+   verlo y agarrarlo con el mouse. */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 14px;
+  height: 14px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #f0eee8;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: 3px;
+  background: var(--text-light);
+  border-radius: 8px;
+  /* El "borde" transparente + background-clip hace que el thumb no ocupe todo el ancho de
+     la pista, dejando un margen parejo a los dos lados (efecto "flotante", más fácil de
+     distinguir del track que si lo llenara por completo). */
+  border: 3px solid #f0eee8;
+  background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
+}
+::-webkit-scrollbar-corner {
+  background: #f0eee8;
+}
+
+/* Firefox no soporta ::-webkit-scrollbar-* — usa estas dos propiedades en su lugar.
+   Se heredan a todos los contenedores con scroll propio, sin necesidad de repetirlas. */
+html {
+  scrollbar-width: auto;
+  scrollbar-color: var(--text-light) #f0eee8;
 }
