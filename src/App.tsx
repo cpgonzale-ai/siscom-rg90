@@ -741,24 +741,45 @@ export function App() {
   });
 
   // Table filtering and pagination
-  let filteredLibro = libroRows.filter(r => matchesSistema(r.sistema, filtro));
-  if (estadoFilter) filteredLibro = filteredLibro.filter(r => r.estado === estadoFilter);
-  for (const col of LIBRO_COLUMNAS) {
-    const activo = libroColFiltros[col.key];
-    if (activo) filteredLibro = filteredLibro.filter(r => activo.has(col.getValue(r)));
-  }
-  if (searchGeneral.trim()) {
-    const q = searchGeneral.trim().toLowerCase();
-    filteredLibro = filteredLibro.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
-  }
+  //
+  // Mismo hallazgo F2/F4 que ya se corrigió para RG90 (/auditoria/05-performance.md), acá
+  // extendido: el buscador del Libro de Ventas (Paso 2) nunca recibió el useDeferredValue
+  // que sí tiene el de RG90 — cada tecla disparaba el filtro completo sobre libroRows de
+  // forma síncrona.
+  const searchGeneralDeferred = useDeferredValue(searchGeneral);
+  const libroCompletoSearchDeferred = useDeferredValue(libroCompletoSearch);
+
+  // Hallazgo F4 (mismo que filteredRg90Rows/rg90GridTotales, nunca extendido a esta
+  // grilla): filteredLibro era un `let` reasignado varias veces, SIN useMemo — se
+  // recalculaba entero (recorriendo todo libroRows) en CADA render de App.tsx, sin
+  // importar si la pantalla activa era Carga, RG90, Compras o cualquier otra. Esto es lo
+  // que causaba el congelamiento al cambiar de paso y la lentitud al terminar de cargar un
+  // Excel grande: App.tsx se re-renderiza en cada navegación, y este cálculo se repetía
+  // completo cada vez, aunque la pantalla nueva ni lo necesitara.
+  const filteredLibro = useMemo(() => {
+    let lista = libroRows.filter(r => matchesSistema(r.sistema, filtro));
+    if (estadoFilter) lista = lista.filter(r => r.estado === estadoFilter);
+    for (const col of LIBRO_COLUMNAS) {
+      const activo = libroColFiltros[col.key];
+      if (activo) lista = lista.filter(r => activo.has(col.getValue(r)));
+    }
+    if (searchGeneralDeferred.trim()) {
+      const q = searchGeneralDeferred.trim().toLowerCase();
+      lista = lista.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
+    }
+    return lista;
+  }, [libroRows, filtro, estadoFilter, libroColFiltros, searchGeneralDeferred]);
 
   // Pantalla "Ver todos" (libroCompleto): mismos filtros de arriba (filteredLibro) más su
   // propio buscador — se usa tanto para lo que se lista como para lo que se descarga, así
-  // el Excel siempre coincide con lo que esa pantalla está mostrando.
-  const libroCompletoFiltrado = filteredLibro.filter(r =>
-    !libroCompletoSearch.trim() ||
-    Object.values(r).some(v => String(v).toLowerCase().includes(libroCompletoSearch.trim().toLowerCase()))
-  );
+  // el Excel siempre coincide con lo que esa pantalla está mostrando. Mismo criterio F4:
+  // memoizado, y con el buscador propio también diferido (F2) — esta pantalla es
+  // justamente la que muestra el libro COMPLETO sin paginar, así que es la más costosa de
+  // recalcular en cada tecla.
+  const libroCompletoFiltrado = useMemo(() => filteredLibro.filter(r =>
+    !libroCompletoSearchDeferred.trim() ||
+    Object.values(r).some(v => String(v).toLowerCase().includes(libroCompletoSearchDeferred.trim().toLowerCase()))
+  ), [filteredLibro, libroCompletoSearchDeferred]);
 
   // Mismo criterio que rg90GridAllValuesPorColumna más abajo (ver hallazgo F1 de
   // /auditoria/05-performance.md): allValues memoizado por separado, dependiendo solo de
@@ -784,14 +805,15 @@ export function App() {
 
   // Totalizador sobre TODO lo filtrado (tabs de sistema + filtros de columna + buscador),
   // no solo la página visible — para que el total acompañe al filtro, no a la paginación.
-  const libroTotales = {
+  // Mismo hallazgo F4 que rg90GridTotales: 6 pasadas de reduce() sin memoizar.
+  const libroTotales = useMemo(() => ({
     gravadas: filteredLibro.reduce((s, r) => s + (r.gravadas_num || 0), 0),
     iva: filteredLibro.reduce((s, r) => s + (r.iva_num || 0), 0),
     gravadas_5: filteredLibro.reduce((s, r) => s + (r.gravadas_5_num || 0), 0),
     iva_5: filteredLibro.reduce((s, r) => s + (r.iva_5_num || 0), 0),
     exentas: filteredLibro.reduce((s, r) => s + (r.exentas_num || 0), 0),
     total: filteredLibro.reduce((s, r) => s + (r.total_num || 0), 0),
-  };
+  }), [filteredLibro]);
 
   const totalPages = Math.max(1, Math.ceil(filteredLibro.length / pageSize));
   const currentPage = Math.min(Math.max(1, page), totalPages);
@@ -869,11 +891,20 @@ export function App() {
   const rg90GridCurrentPage = Math.min(Math.max(1, rg90GridPage), rg90GridTotalPages);
   const pagedRg90Rows = filteredRg90Rows.slice((rg90GridCurrentPage - 1) * pageSize, rg90GridCurrentPage * pageSize);
 
-  const filteredCorrel = correlatividadRows.filter(r => matchesSistema(r.sistema, correlFiltro));
+  // Mismo hallazgo F4: filtro sobre correlatividadRows sin memoizar, recalculado en cada
+  // render de App.tsx sin importar la pantalla activa.
+  const filteredCorrel = useMemo(
+    () => correlatividadRows.filter(r => matchesSistema(r.sistema, correlFiltro)),
+    [correlatividadRows, correlFiltro]
+  );
 
   // Estado de ingesta por sistema origen: calculado de los datos reales del libro
   // cargado, no valores fijos — refleja exactamente lo que se subió y proceso.
-  const importStatusComputed = SYSTEMS_META.map(sysMeta => {
+  //
+  // Mismo hallazgo F4: recorre libroRows completo (varias veces, una por sistema) sin
+  // memoizar — solo se ve en el Panel general, pero antes se recalculaba igual en
+  // cualquier otra pantalla, en cada render de App.tsx.
+  const importStatusComputed = useMemo(() => SYSTEMS_META.map(sysMeta => {
     const filasSistema = libroRows.filter(r => matchesSistema(r.sistema, sysMeta.label));
     const localesSistema = new Set(filasSistema.map(r => r.local));
     const saltosSistema = correlatividadRows.filter(r => matchesSistema(r.sistema, sysMeta.label));
@@ -890,7 +921,7 @@ export function App() {
       // — mismo patrón que el modal de saltos de Libro Ventas/Compras (RG90View/ComprasView).
       saltosRows: saltosSistema,
     };
-  });
+  }), [libroRows, correlatividadRows, uploadedFiles]);
 
   // Mismo patrón F2 (/auditoria/05-performance.md, ya usado en rg90GridSearchDeferred del
   // Paso 3) — la tecla en sí (el <input value={rg90Search}>, sin cambios, en RG90View.tsx)
