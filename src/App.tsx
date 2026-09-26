@@ -275,6 +275,16 @@ export function App() {
   const [ventasHydrated, setVentasHydrated] = useState(false);
 
   useEffect(() => {
+    // Espera a que se sepa QUIÉN está logueado antes de tocar IndexedDB: sin esto, esta
+    // hidratación corría una sola vez al montar App (con el mount-once de []), sin importar
+    // si ya había una sesión activa o no en ese instante. En una PC compartida, si el
+    // Usuario A cierra el navegador (o se cuelga) sin apretar "Cerrar sesión", su libro
+    // quedaba en IndexedDB; cuando el Usuario B abría la app y se logueaba, esta
+    // hidratación ya se había disparado ANTES de que B iniciara sesión y podía llegar a
+    // mostrarle el libro de A. Al esperar meInfoLoaded y usar la clave por usuario de abajo
+    // (ver claveVentas), cada usuario solo puede leer su propia clave en IndexedDB.
+    if (!meInfoLoaded || !meInfo) return;
+    const claveVentas = `${VENTAS_PERSIST_KEY}:${meInfo.id}`;
     (async () => {
       try {
         const saved = await idbGet<{
@@ -289,7 +299,7 @@ export function App() {
           rg90Summary: typeof rg90Summary;
           loteId?: number;
           rg90PasoMostrado: 3 | 4;
-        }>(VENTAS_PERSIST_KEY);
+        }>(claveVentas);
         if (saved) {
           setConverted(saved.converted);
           setRg90Loaded(saved.rg90Loaded);
@@ -325,7 +335,7 @@ export function App() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [meInfoLoaded, meInfo?.id]);
 
   // Guard de navegación (reemplaza a screenHistory/goBack manual): si la URL actual pide
   // un paso de Ventas que todavía no es alcanzable con los datos reales (ej. entrar por
@@ -346,15 +356,18 @@ export function App() {
   }, [ventasHydrated, location.pathname, converted, rg90Loaded]);
 
   useEffect(() => {
-    if (!ventasHydratedRef.current) return;
+    // Misma clave por usuario que la hidratación de arriba — así lo que guarda el Usuario A
+    // nunca puede terminar leyéndolo el Usuario B, aunque compartan la misma PC/navegador.
+    if (!ventasHydratedRef.current || !meInfo) return;
+    const claveVentas = `${VENTAS_PERSIST_KEY}:${meInfo.id}`;
     const t = setTimeout(() => {
-      idbSet(VENTAS_PERSIST_KEY, {
+      idbSet(claveVentas, {
         converted, rg90Loaded, libroRows, correlatividadRows, cortesRows,
         rg90Rows, rg90GapsRows, rg90DiffRows, rg90Summary, loteId, rg90PasoMostrado,
       });
     }, 400);
     return () => clearTimeout(t);
-  }, [converted, rg90Loaded, libroRows, correlatividadRows, cortesRows, rg90Rows, rg90GapsRows, rg90DiffRows, rg90Summary, loteId, rg90PasoMostrado]);
+  }, [meInfo, converted, rg90Loaded, libroRows, correlatividadRows, cortesRows, rg90Rows, rg90GapsRows, rg90DiffRows, rg90Summary, loteId, rg90PasoMostrado]);
 
   // Se saca la 4ª card "Saltos" que había acá: contaba diffs con diferencia ===
   // "Salto de numeración", un valor que reconcile_with_rg90() nunca asigna (siempre daba
@@ -933,13 +946,25 @@ export function App() {
 
     // Limpieza del libro persistido (ver src/utils/persistStore.ts): por pedido explícito,
     // el libro cargado sobrevive a un refresh/cuelgue pero SOLO se borra acá, al cerrar
-    // sesión — nunca por otro motivo. Se resetea también el estado de Ventas en memoria
-    // (Compras no hace falta: ComprasView se desmonta solo al salir de screen==='compras',
-    // ver App.tsx más abajo, así que ya arranca vacío la próxima vez) para que si otro
-    // usuario entra después en la misma pestaña no vea ni por un instante el libro del
-    // usuario anterior antes de que la próxima carga lo pise.
-    idbDelete(VENTAS_PERSIST_KEY);
-    idbDelete(COMPRAS_PERSIST_KEY);
+    // sesión — nunca por otro motivo. Se borra la clave DE ESTE usuario específicamente (no
+    // una clave global — ver el namespacing por meInfo.id en los efectos de arriba), y se
+    // resetea también el estado de Ventas en memoria (Compras no hace falta: ComprasView se
+    // desmonta solo al salir de screen==='compras', ver App.tsx más abajo, así que ya
+    // arranca vacío la próxima vez) para que si otro usuario entra después en la misma
+    // pestaña no vea ni por un instante el libro del usuario anterior antes de que la
+    // próxima carga lo pise.
+    if (meInfo) {
+      idbDelete(`${VENTAS_PERSIST_KEY}:${meInfo.id}`);
+      idbDelete(`${COMPRAS_PERSIST_KEY}:${meInfo.id}`);
+    }
+    // meInfoLoaded/meInfo vuelven a su estado inicial: si no se resetean, un login
+    // inmediato del siguiente usuario en la misma pestaña no dispara de nuevo la
+    // hidratación de arriba (que depende de que meInfoLoaded pase de false a true), y
+    // ventasHydratedRef en false evita que el efecto de guardado escriba con el estado
+    // vacío de abajo ANTES de que la hidratación del próximo usuario tenga chance de correr.
+    setMeInfo(null);
+    setMeInfoLoaded(false);
+    ventasHydratedRef.current = false;
     setConverted(false);
     setRg90Loaded(false);
     setLibroRows([]);
@@ -1121,7 +1146,7 @@ export function App() {
           ) : <Navigate to="/" replace />} />
 
           <Route path="/compras/:paso" element={!meInfoLoaded ? null : puede('pantalla:compras') ? (
-            <ComprasView locales={locales} permisos={permisos} />
+            <ComprasView locales={locales} permisos={permisos} usuarioId={meInfo?.id} />
           ) : <Navigate to="/" replace />} />
           <Route path="/compras" element={<Navigate to="/compras/carga" replace />} />
 

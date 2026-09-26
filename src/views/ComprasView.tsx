@@ -19,6 +19,12 @@ import { idbGet, idbSet, COMPRAS_PERSIST_KEY } from '../utils/persistStore';
 interface ComprasViewProps {
   locales: Local[];
   permisos: Set<string>;
+  // Identificador del usuario logueado (meInfo.id en App.tsx) — namespaces la clave de
+  // persistencia en IndexedDB (ver claveCompras más abajo) para que en una PC compartida
+  // el libro de un usuario nunca pueda terminar leyéndolo otro. Este componente solo se
+  // monta cuando ya hay un usuario autenticado con permiso (ver el guard de ruta en
+  // App.tsx), así que en la práctica siempre llega definido.
+  usuarioId?: number;
 }
 
 interface ArchivoAdjunto {
@@ -162,7 +168,7 @@ const RESUMEN_CATEGORIAS: { key: string; label: string; color: string }[] = [
   { key: 'Diferencia de monto', label: 'Registros con diferencia de monto', color: '#b0740f' },
 ];
 
-export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) => {
+export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usuarioId }) => {
   const puede = (clave: string) => permisos.has(clave);
 
   // ── Paso 1: carga del export del sistema ────────────────────────────────
@@ -252,6 +258,12 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
   const [comprasHydrated, setComprasHydrated] = useState(false);
 
   useEffect(() => {
+    // Sin usuarioId todavía no se sabe de quién es la sesión — no tocar IndexedDB hasta
+    // tenerlo (ver el mismo criterio y el porqué en el efecto equivalente de App.tsx/
+    // Ventas). Namespacea la clave por usuario para que en una PC compartida el libro de
+    // un usuario nunca pueda terminar mostrándosele a otro.
+    if (usuarioId === undefined) return;
+    const claveCompras = `${COMPRAS_PERSIST_KEY}:${usuarioId}`;
     (async () => {
       try {
         const saved = await idbGet<{
@@ -261,7 +273,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
           diffs: CompraDiffRow[];
           summary: typeof summary;
           pasoMostrado: 1 | 2 | 3;
-        }>(COMPRAS_PERSIST_KEY);
+        }>(claveCompras);
         if (saved) {
           setRows(saved.rows ?? []);
           setLoteId(saved.loteId);
@@ -284,15 +296,16 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos }) =
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [usuarioId]);
 
   useEffect(() => {
-    if (!comprasHydratedRef.current) return;
+    if (!comprasHydratedRef.current || usuarioId === undefined) return;
+    const claveCompras = `${COMPRAS_PERSIST_KEY}:${usuarioId}`;
     const t = setTimeout(() => {
-      idbSet(COMPRAS_PERSIST_KEY, { rows, loteId, rgRows, diffs, summary, pasoMostrado });
+      idbSet(claveCompras, { rows, loteId, rgRows, diffs, summary, pasoMostrado });
     }, 400);
     return () => clearTimeout(t);
-  }, [rows, loteId, rgRows, diffs, summary, pasoMostrado]);
+  }, [usuarioId, rows, loteId, rgRows, diffs, summary, pasoMostrado]);
 
   // pasoActual = el progreso real alcanzado (para los "✓" de completado en la barra),
   // independiente de qué paso se esté mostrando en pantalla en este momento.
