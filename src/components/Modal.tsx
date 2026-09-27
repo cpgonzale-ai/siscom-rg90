@@ -84,6 +84,14 @@ export const dangerBtnStyle: React.CSSProperties = {
   background: '#fff', color: '#b3402f', border: '1px solid #f0c9be', borderRadius: '7px',
   padding: '9px 16px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
 };
+// Todos los botones de "descargar/generar Excel" del sistema (Libro de Ventas, Libro de
+// Compras, RG90/RG de Compras, Detalle de Discrepancias) comparten este mismo estilo —
+// mismo texto "Excel" y mismo fondo verde en los ocho puntos de descarga, en vez de que
+// cada vista tuviera su propio color (antes: naranja en Carga, blanco en el resto).
+export const excelBtnStyle: React.CSSProperties = {
+  background: '#128752', color: '#fff', border: 'none', borderRadius: '7px',
+  padding: '9px 16px', fontSize: '13px', fontWeight: 700, cursor: 'pointer',
+};
 
 // Fila de navegación (Volver / Siguiente) que usan los tres wizards (Libro Ventas, RG90,
 // Libro Compras) arriba de cada paso — antes vivía triplicada, definida igual en cada vista.

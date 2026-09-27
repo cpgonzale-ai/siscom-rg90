@@ -10,7 +10,7 @@ import { ProcessingModal } from '../components/ProcessingModal';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
 import { ColumnPicker } from '../components/ColumnPicker';
-import { Modal, secondaryBtnStyle, primaryBtnStyle, dangerBtnStyle, navRowStyle, disabledBtnStyle, stickyTheadStyle, scrollableGridStyle } from '../components/Modal';
+import { Modal, secondaryBtnStyle, primaryBtnStyle, dangerBtnStyle, excelBtnStyle, navRowStyle, disabledBtnStyle, stickyTheadStyle, scrollableGridStyle } from '../components/Modal';
 import type { Local, CompraRow, CompraDiffRow, CompraDiffLado } from '../services/api';
 import { ingestComprasApi, reconcileComprasApi, exportarTablaExcelApi } from '../services/api';
 import { formatGs } from '../utils/format';
@@ -794,8 +794,8 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
                 </button>
               )}
               {puede('boton:compras.descargar_csv') && (
-                <button onClick={descargarExcel} style={{ ...secondaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Download size={14} />
+                <button onClick={descargarExcel} style={{ ...excelBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Download size={14} color="#fff" />
                   <span>Excel</span>
                 </button>
               )}
@@ -986,7 +986,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
                   Limpiar filtros
                 </button>
               )}
-              <button onClick={descargarRgExcel} style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px' }}>
+              <button onClick={descargarRgExcel} style={{ ...excelBtnStyle, padding: '7px 12px', fontSize: '12px' }}>
                 Excel
               </button>
               {/* Mismo criterio que "Borrar libro" en la grilla del Paso 1: antes la única
@@ -1198,9 +1198,9 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
                 <button
                   onClick={e => { e.stopPropagation(); descargarDiffExcel(); }}
                   disabled={filteredDiffs.length === 0}
-                  style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  style={{ ...excelBtnStyle, padding: '7px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
                 >
-                  <FileSpreadsheet size={14} color="#5c6470" />
+                  <FileSpreadsheet size={14} color="#fff" />
                   <span>Excel</span>
                 </button>
                 <span style={{ fontSize: '12px', fontWeight: 600, color: '#128752' }}>Ver detalle</span>
@@ -1224,9 +1224,9 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
                   <button
                     onClick={descargarDiffExcel}
                     disabled={filteredDiffs.length === 0}
-                    style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                    style={{ ...excelBtnStyle, padding: '7px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
                   >
-                    <FileSpreadsheet size={14} color="#5c6470" />
+                    <FileSpreadsheet size={14} color="#fff" />
                     <span>Excel</span>
                   </button>
                   <input

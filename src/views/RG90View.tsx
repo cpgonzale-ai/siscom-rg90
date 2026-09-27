@@ -3,7 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { GitCompare, UploadCloud, X, Trash2, ArrowLeft, ArrowRight, FileSpreadsheet, ChevronDown } from 'lucide-react';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
-import { Modal, primaryBtnStyle, secondaryBtnStyle, dangerBtnStyle, navRowStyle, disabledBtnStyle, stickyTheadStyle, scrollableGridStyle } from '../components/Modal';
+import { Modal, primaryBtnStyle, secondaryBtnStyle, dangerBtnStyle, excelBtnStyle, navRowStyle, disabledBtnStyle, stickyTheadStyle, scrollableGridStyle } from '../components/Modal';
 import { ColumnPicker } from '../components/ColumnPicker';
 import { TablaSaltos } from '../components/TablaSaltos';
 import { formatGs } from '../utils/format';
@@ -525,7 +525,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                 <button
                   onClick={descargarRg90Excel}
                   disabled={exportandoRg90}
-                  style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px', ...(exportandoRg90 ? { opacity: 0.7, cursor: 'wait' } : {}) }}
+                  style={{ ...excelBtnStyle, padding: '7px 12px', fontSize: '12px', ...(exportandoRg90 ? { opacity: 0.7, cursor: 'wait' } : {}) }}
                 >
                   {exportandoRg90 ? 'Generando Excel…' : 'Excel'}
                 </button>
@@ -794,9 +794,9 @@ export const RG90View: React.FC<RG90ViewProps> = ({
               <button
                 onClick={e => { e.stopPropagation(); descargarDiffVentasExcel(); }}
                 disabled={filteredRg90DiffCols.length === 0 || exportandoDiff}
-                style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', ...(exportandoDiff ? { opacity: 0.7, cursor: 'wait' } : {}) }}
+                style={{ ...excelBtnStyle, padding: '7px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', ...(exportandoDiff ? { opacity: 0.7, cursor: 'wait' } : {}) }}
               >
-                <FileSpreadsheet size={14} color="#5c6470" />
+                <FileSpreadsheet size={14} color="#fff" />
                 <span>{exportandoDiff ? 'Generando Excel…' : 'Excel'}</span>
               </button>
               <span style={{ fontSize: '12px', fontWeight: 600, color: '#128752' }}>Ver detalle</span>
@@ -826,9 +826,9 @@ export const RG90View: React.FC<RG90ViewProps> = ({
               <button
                 onClick={descargarDiffVentasExcel}
                 disabled={filteredRg90DiffCols.length === 0 || exportandoDiff}
-                style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', ...(exportandoDiff ? { opacity: 0.7, cursor: 'wait' } : {}) }}
+                style={{ ...excelBtnStyle, padding: '7px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', ...(exportandoDiff ? { opacity: 0.7, cursor: 'wait' } : {}) }}
               >
-                <FileSpreadsheet size={14} color="#5c6470" />
+                <FileSpreadsheet size={14} color="#fff" />
                 <span>{exportandoDiff ? 'Generando Excel…' : 'Excel'}</span>
               </button>
               <input

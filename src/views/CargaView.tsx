@@ -3,7 +3,7 @@ import { UploadCloud, FileSpreadsheet, Trash2, Search, Download, RefreshCw, Chec
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
 import { ColumnPicker } from '../components/ColumnPicker';
-import { Modal, primaryBtnStyle, secondaryBtnStyle, dangerBtnStyle, navRowStyle, disabledBtnStyle, stickyTheadStyle, scrollableGridStyle } from '../components/Modal';
+import { Modal, primaryBtnStyle, secondaryBtnStyle, dangerBtnStyle, excelBtnStyle, navRowStyle, disabledBtnStyle, stickyTheadStyle, scrollableGridStyle } from '../components/Modal';
 import { TablaSaltos } from '../components/TablaSaltos';
 import { formatGs } from '../utils/format';
 
@@ -386,22 +386,10 @@ export const CargaView: React.FC<CargaViewProps> = ({
               {canDescargarCsv && (
                 <button
                   onClick={downloadLimpio}
-                  style={{
-                    backgroundColor: '#f0a63d',
-                    color: '#1a1a1a',
-                    border: 'none',
-                    borderRadius: '7px',
-                    padding: '9px 16px',
-                    fontSize: '12.5px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                  }}
+                  style={{ ...excelBtnStyle, fontSize: '12.5px', display: 'flex', alignItems: 'center', gap: '6px' }}
                 >
                   <Download size={14} />
-                  <span>Descargar Excel</span>
+                  <span>Excel</span>
                 </button>
               )}
             </div>
