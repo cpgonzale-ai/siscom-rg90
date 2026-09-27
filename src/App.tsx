@@ -17,7 +17,6 @@ import { LocalesView } from './views/LocalesView';
 import { UsuariosView } from './views/UsuariosView';
 import { RolesView } from './views/RolesView';
 import { formatGs } from './utils/format';
-import { downloadExcel } from './utils/exportExcel';
 import { idbGet, idbSet, idbDelete, VENTAS_PERSIST_KEY, COMPRAS_PERSIST_KEY } from './utils/persistStore';
 
 import {
@@ -40,6 +39,7 @@ import {
   listRolesApi,
   listPermisosApi,
   listUsuariosApi,
+  exportarTablaExcelApi,
 } from './services/api';
 
 // Un local/sistema "matchea" un filtro por inclusión, no por igualdad: el backend
@@ -596,7 +596,15 @@ export function App() {
   // filteredLibro y LibroCompletoView pasa su propia lista (filteredLibro + la búsqueda de
   // esa pantalla) — cada una "lo que se ve en su grilla" en ese momento. Si no hay ningún
   // filtro activo, esas listas ya son iguales a libroRows completo.
-  const downloadLimpio = (rows: LibroRow[]) => {
+  // Antes usaba downloadExcel (SheetJS, arma el .xlsx completo en el navegador de forma
+  // síncrona) — medido: 4,25s bloqueado con 20.000 filas, y con los archivos reales del
+  // cliente (50.000-100.000+) esto escala mucho peor o directamente cuelga el navegador
+  // (mismo problema ya documentado y resuelto para el Detalle de Discrepancias de Ventas,
+  // nunca extendido acá). Se cambia a exportarTablaExcelApi (backend, streaming,
+  // openpyxl write_only) — mismo endpoint ya probado que usa RG90View para su propia
+  // grilla. Ningún dato ni cálculo cambia: se le mandan las mismas filas ya armadas
+  // (dataRows + totales/resumen), el backend solo arma el archivo en vez del navegador.
+  const downloadLimpio = async (rows: LibroRow[]) => {
     const headers = ['Proyecto', 'Factura', 'Tipo Doc.', 'Fecha', 'Ruc', 'Nombre', 'Gravadas 10%', 'IVA 10%', 'Gravadas 5%', 'IVA 5%', 'Exentas', 'Total Neto', 'Estado'];
     // Los importes van con el mismo texto ya formateado que se ve en la grilla (r.gravadas,
     // no r.gravadas_num) — así el Excel descargado coincide con la pantalla tal cual, sin
@@ -648,11 +656,15 @@ export function App() {
     const netoRow = ['', '', '', '', '', 'NETO', formatGs(neto.gravada10), formatGs(neto.iva10), formatGs(neto.gravada5), formatGs(neto.iva5), formatGs(neto.exentas), formatGs(neto.total), ''];
     const checkRow = ['', '', '', '', '', 'Check', '', '', '', '', '', formatGs(check), ''];
 
-    downloadExcel('Libro_Ventas_Global_formato_limpio.xlsx', 'Libro de Ventas', headers, [
-      ...dataRows, totalRow,
-      blank, blank, blank,
-      resumenHeader, blank, facturaRow, ncRow, netoRow, checkRow,
-    ]);
+    try {
+      await exportarTablaExcelApi('Libro_Ventas_Global_formato_limpio.xlsx', 'Libro de Ventas', headers, [
+        ...dataRows, totalRow,
+        blank, blank, blank,
+        resumenHeader, blank, facturaRow, ncRow, netoRow, checkRow,
+      ]);
+    } catch (e) {
+      console.error('Error al exportar el Libro de Ventas a Excel:', e);
+    }
   };
 
   // Guidance texts and wizard steps

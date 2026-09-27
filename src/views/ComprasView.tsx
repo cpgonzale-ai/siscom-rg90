@@ -12,8 +12,7 @@ import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
 import { ColumnPicker } from '../components/ColumnPicker';
 import { Modal, secondaryBtnStyle, primaryBtnStyle, dangerBtnStyle, navRowStyle, disabledBtnStyle, stickyTheadStyle, scrollableGridStyle } from '../components/Modal';
 import type { Local, CompraRow, CompraDiffRow, CompraDiffLado } from '../services/api';
-import { ingestComprasApi, reconcileComprasApi } from '../services/api';
-import { downloadExcel } from '../utils/exportExcel';
+import { ingestComprasApi, reconcileComprasApi, exportarTablaExcelApi } from '../services/api';
 import { formatGs } from '../utils/format';
 import { idbGet, idbSet, COMPRAS_PERSIST_KEY } from '../utils/persistStore';
 
@@ -467,7 +466,13 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
   // Si hay filtro de columna o búsqueda activo, se descarga solo lo que queda filtrado en
   // la grilla (filteredRows/filteredRgRows, definidas más abajo); sin filtros, ambas son
   // iguales a la lista completa, así que esto también cubre "descargar todo".
-  const descargarExcel = () => {
+  // Antes usaba downloadExcel (SheetJS, arma el .xlsx completo en el navegador de forma
+  // síncrona) — mismo problema ya medido y resuelto para el Detalle de Discrepancias de
+  // Ventas (4,25s bloqueado con 20.000 filas, escala mucho peor con archivos reales de
+  // 50.000-100.000+), nunca extendido acá. Se cambia a exportarTablaExcelApi (backend,
+  // streaming) — mismo endpoint ya probado que usa RG90View. Mismos headers/filas, ningún
+  // cálculo cambia, solo dónde se arma el archivo.
+  const descargarExcel = async () => {
     if (filteredRows.length === 0) return;
     const headers = ['Documento', 'Local', 'Fecha', 'RUC Proveedor', 'Proveedor', 'Tipo', 'Condición', 'Timbrado', 'Gravada 10%', 'IVA 10%', 'Gravada 5%', 'IVA 5%', 'Exenta', 'Total', 'Estado'];
     // Importes con el mismo texto ya formateado de la grilla (r.gravadas, no un number) —
@@ -477,17 +482,25 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
       r.doc, r.local, r.fecha, `${r.ruc_proveedor}-${r.dv_proveedor}`, r.proveedor, r.tipo_doc, r.condicion, r.timbrado,
       r.gravadas, r.iva, r.gravadas_5, r.iva_5, r.exentas, r.total, r.estado,
     ]);
-    downloadExcel('Libro_de_Compras.xlsx', 'Libro de Compras', headers, dataRows);
+    try {
+      await exportarTablaExcelApi('Libro_de_Compras.xlsx', 'Libro de Compras', headers, dataRows);
+    } catch (e) {
+      console.error('Error al exportar el Libro de Compras a Excel:', e);
+    }
   };
 
-  const descargarRgExcel = () => {
+  const descargarRgExcel = async () => {
     if (filteredRgRows.length === 0) return;
     const headers = ['Documento', 'Local', 'Fecha', 'RUC Proveedor', 'Proveedor', 'Tipo', 'Condición', 'Timbrado', 'Gravada 10%', 'IVA 10%', 'Gravada 5%', 'IVA 5%', 'Exenta', 'Total'];
     const dataRows = filteredRgRows.map(r => [
       r.doc, r.local, r.fecha, r.dv_proveedor ? `${r.ruc_proveedor}-${r.dv_proveedor}` : r.ruc_proveedor, r.proveedor, r.tipo_doc, r.condicion, r.timbrado,
       r.gravadas, r.iva, r.gravadas_5, r.iva_5, r.exentas, r.total,
     ]);
-    downloadExcel('RG_Compras.xlsx', 'RG (SET) — Compras', headers, dataRows);
+    try {
+      await exportarTablaExcelApi('RG_Compras.xlsx', 'RG (SET) — Compras', headers, dataRows);
+    } catch (e) {
+      console.error('Error al exportar la RG de Compras a Excel:', e);
+    }
   };
 
   // allValues por columna para cada uno de los 3 desplegables de filtro (Libro, RG,
@@ -586,11 +599,19 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
   // Excel de la grilla de resultado (Paso 3) — mismos labels del selector de columnas y
   // solo las filas que quedan tras los filtros de columna + categoría + búsqueda
   // (filteredDiffs ya viene con todo eso aplicado, ver arriba).
-  const descargarDiffExcel = () => {
+  // El cálculo por celda (col.getValue) ya lo hace el frontend acá abajo, barato — lo único
+  // que colgaba el navegador era el paso final de armar el .xlsx en sí (downloadExcel/
+  // SheetJS, síncrono). Mismo cambio que descargarExcel/descargarRgExcel: se manda el mismo
+  // headers+dataRows ya armado al endpoint genérico del backend en vez de a SheetJS.
+  const descargarDiffExcel = async () => {
     if (filteredDiffs.length === 0) return;
     const headers = DIFF_COLUMNAS_PICKER.map(c => c.label);
     const dataRows = filteredDiffs.map(d => DIFF_COLUMNAS.map(col => col.getValue(d)));
-    downloadExcel('Resultado_Comparacion_Compras_RG.xlsx', 'Resultado — Compras vs RG', headers, dataRows);
+    try {
+      await exportarTablaExcelApi('Resultado_Comparacion_Compras_RG.xlsx', 'Resultado — Compras vs RG', headers, dataRows);
+    } catch (e) {
+      console.error('Error al exportar el resultado de Compras a Excel:', e);
+    }
   };
 
   const CAMPOS_DIFF: (keyof CompraDiffLado)[] = ['gravada_10', 'gravada_5', 'iva_10', 'iva_5', 'exenta', 'total'];
