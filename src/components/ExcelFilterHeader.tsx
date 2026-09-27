@@ -33,10 +33,29 @@ export const ExcelFilterHeader: React.FC<ExcelFilterHeaderProps> = ({ label, all
   const btnRef = useRef<HTMLButtonElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
-  const distinct = useMemo(
-    () => Array.from(new Set(allValues)).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' })),
-    [allValues]
-  );
+  // Cálculo perezoso: antes era un useMemo con dependencia [allValues], que corre en el
+  // PRIMER render del componente sin importar si el usuario llega a abrir el desplegable
+  // o no. Eso no se notaba mientras la grilla que lo usa quedara montada una sola vez —
+  // pero varias grillas de este sistema se desmontan y remontan al navegar entre pasos
+  // (ver el comentario sobre el Paso 3 en RG90View.tsx), y cada remontaje es una instancia
+  // nueva de ExcelFilterHeader por columna, sin el caché de la anterior: 14+ columnas
+  // volviendo a ordenar (con localeCompare, más lento que un sort simple) sus valores
+  // únicos de cero, aunque nadie hubiera tocado ningún filtro. Ahora el sort recién se
+  // hace la primera vez que ESTE desplegable puntual se abre, cacheado en un ref mientras
+  // `allValues` no cambie de referencia.
+  const distinctCacheRef = useRef<{ src: string[]; value: string[] } | null>(null);
+  const getDistinct = (): string[] => {
+    if (distinctCacheRef.current && distinctCacheRef.current.src === allValues) {
+      return distinctCacheRef.current.value;
+    }
+    const value = Array.from(new Set(allValues)).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+    distinctCacheRef.current = { src: allValues, value };
+    return value;
+  };
+  // Mientras el desplegable está cerrado no hace falta el valor real: usar el último
+  // calculado si ya existe (abrir/cerrar no debe recalcular) o un array vacío si nunca se
+  // abrió — ninguno de los dos dispara el sort.
+  const distinct = open ? getDistinct() : (distinctCacheRef.current?.src === allValues ? distinctCacheRef.current.value : []);
   const filteredDistinct = useMemo(() => {
     if (!search.trim()) return distinct;
     const q = search.trim().toLowerCase();
@@ -46,7 +65,11 @@ export const ExcelFilterHeader: React.FC<ExcelFilterHeaderProps> = ({ label, all
   const isActive = active !== null;
 
   const abrir = () => {
-    setDraft(active ? new Set(active) : new Set(distinct));
+    // getDistinct() directo, NO la constante `distinct` de arriba -- en este punto el
+    // render todavía es el de open=false, así que `distinct` vale [] (ver su definición
+    // arriba); getDistinct() sí calcula (o reusa el caché) sin depender de en qué render
+    // está parado.
+    setDraft(active ? new Set(active) : new Set(getDistinct()));
     setSearch('');
     const rect = btnRef.current?.getBoundingClientRect();
     if (rect) {

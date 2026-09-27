@@ -18,6 +18,7 @@ import { UsuariosView } from './views/UsuariosView';
 import { RolesView } from './views/RolesView';
 import { formatGs } from './utils/format';
 import { idbGet, idbSet, idbDelete, VENTAS_PERSIST_KEY, COMPRAS_PERSIST_KEY } from './utils/persistStore';
+import { RG90_DIFF_COLUMNAS } from './utils/diffVentasColumns';
 
 import {
   LibroRow,
@@ -355,6 +356,14 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ventasHydrated, location.pathname, converted, rg90Loaded]);
 
+  // rg90PasoMostrado SE SACÓ de este guardado (payload y dependencias): ya no es estado
+  // propio, se lee de la URL (ver arriba), y la hidratación de arriba a propósito NO lo
+  // restaura ("no hay nada que restaurar acá" en su comentario) — quedó guardándose sin
+  // que nadie lo leyera nunca. Medido con un archivo de 100.000 filas: al estar en las
+  // dependencias, cada click entre Paso 3 y Paso 4 (rg90PasoMostrado cambia con la URL)
+  // volvía a serializar y escribir TODO el libro en IndexedDB (libroRows, rg90DiffRows,
+  // etc.), 1-3 segundos de bloqueo real por click, solo por un dato que nunca se usaba de
+  // vuelta.
   useEffect(() => {
     // Misma clave por usuario que la hidratación de arriba — así lo que guarda el Usuario A
     // nunca puede terminar leyéndolo el Usuario B, aunque compartan la misma PC/navegador.
@@ -363,11 +372,11 @@ export function App() {
     const t = setTimeout(() => {
       idbSet(claveVentas, {
         converted, rg90Loaded, libroRows, correlatividadRows, cortesRows,
-        rg90Rows, rg90GapsRows, rg90DiffRows, rg90Summary, loteId, rg90PasoMostrado,
+        rg90Rows, rg90GapsRows, rg90DiffRows, rg90Summary, loteId,
       });
     }, 400);
     return () => clearTimeout(t);
-  }, [meInfo, converted, rg90Loaded, libroRows, correlatividadRows, cortesRows, rg90Rows, rg90GapsRows, rg90DiffRows, rg90Summary, loteId, rg90PasoMostrado]);
+  }, [meInfo, converted, rg90Loaded, libroRows, correlatividadRows, cortesRows, rg90Rows, rg90GapsRows, rg90DiffRows, rg90Summary, loteId]);
 
   // Se saca la 4ª card "Saltos" que había acá: contaba diffs con diferencia ===
   // "Salto de numeración", un valor que reconcile_with_rg90() nunca asigna (siempre daba
@@ -948,6 +957,19 @@ export function App() {
   // tecla.
   const rg90SearchDeferred = useDeferredValue(rg90Search);
 
+  // Se movió acá desde RG90View.tsx (antes vivía como useMemo local, dependiendo de
+  // rg90DiffAll) — ver el comentario en la interfaz de props de RG90View para el porqué:
+  // el caché de un useMemo local se pierde cada vez que ese componente se desmonta (ej.
+  // volver a "Cargar reportes" y entrar de nuevo a "Resultados"), forzando un recálculo
+  // completo de las 21 columnas × todas las filas aunque rg90DiffRows no hubiera cambiado
+  // — medido: 27 segundos de bloqueo real con 100.000 filas, solo por ese ciclo de
+  // desmontaje/remontaje. Acá en App.tsx (que nunca se desmonta) el mismo cálculo, con la
+  // misma dependencia real (rg90DiffRows), sobrevive esos ciclos.
+  const diffAllValuesPorColumna = useMemo(
+    () => Object.fromEntries(RG90_DIFF_COLUMNAS.map(col => [col.key, rg90DiffRows.map(col.getValue)])),
+    [rg90DiffRows]
+  );
+
   // Hallazgo F4, punto 4 (/auditoria/05-performance.md) — filter+filter+map armando un
   // string de estilo por fila, sin memoizar. Dependencias: las tres son estado directo
   // (rg90DiffRows, rg90SearchDeferred, rg90CategoryFilter), sin ningún valor derivado
@@ -999,6 +1021,10 @@ export function App() {
     if (meInfo) {
       idbDelete(`${VENTAS_PERSIST_KEY}:${meInfo.id}`);
       idbDelete(`${COMPRAS_PERSIST_KEY}:${meInfo.id}`);
+      // Clave chica y separada donde ComprasView guarda solo el paso actual (ver el porqué
+      // en su propio comentario, en ComprasView.tsx) — hay que borrarla también, si no
+      // quedaría huérfana con el id de este usuario en IndexedDB.
+      idbDelete(`${COMPRAS_PERSIST_KEY}:${meInfo.id}:paso`);
     }
     // meInfoLoaded/meInfo vuelven a su estado inicial: si no se resetean, un login
     // inmediato del siguiente usuario en la misma pestaña no dispara de nuevo la
@@ -1281,7 +1307,7 @@ export function App() {
               anuladasCount={rg90Summary?.anuladas ?? 0}
               totalLibroCount={libroRows.length}
               rg90Diff={filteredRg90Diff}
-              rg90DiffAll={rg90DiffRows}
+              diffAllValuesPorColumna={diffAllValuesPorColumna}
               rg90Search={rg90Search}
               onRg90Search={(e) => setRg90Search(e.target.value)}
               clearRg90Search={() => setRg90Search('')}

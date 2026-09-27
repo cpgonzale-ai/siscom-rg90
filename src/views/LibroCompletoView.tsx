@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowLeft, Search, Download } from 'lucide-react';
 import type { LibroRow } from '../services/api';
 
@@ -22,6 +23,29 @@ export const LibroCompletoView: React.FC<LibroCompletoViewProps> = ({
   onVolver,
   onDownload,
 }) => {
+  // Virtualizado con el mismo patrón y librería que el Detalle de Discrepancias
+  // (RG90View.tsx/ComprasView.tsx) — esta pantalla existe justamente para mostrar el libro
+  // COMPLETO sin recortar por paginado (ver el comentario de arriba), así que sin esto
+  // renderizaba un <tr> real por cada fila del libro entero: con archivos grandes (decenas
+  // o cientos de miles de comprobantes) eso significa insertar esa misma cantidad de nodos
+  // al DOM de una sola vez, el mismo tipo de freeze que ya se había corregido en el Detalle
+  // de Discrepancias pero que nunca se extendió a esta pantalla.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollRef.current,
+    // Fila de una sola línea (documento, importes, chips cortos de tipo/estado — nada
+    // envuelve a dos líneas), igual que la grilla de Discrepancias — mismo criterio de
+    // altura fija sin measureElement, medido en el navegador real.
+    estimateSize: () => 47,
+    overscan: 15,
+  });
+  const virtualItems = rowVirtualizer.getVirtualItems();
+  const paddingTop = virtualItems.length > 0 ? virtualItems[0].start : 0;
+  const paddingBottom = virtualItems.length > 0
+    ? rowVirtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end
+    : 0;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div
@@ -108,7 +132,7 @@ export const LibroCompletoView: React.FC<LibroCompletoViewProps> = ({
       </div>
 
       <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', overflow: 'hidden' }}>
-        <div style={{ maxHeight: '75vh', overflow: 'auto' }}>
+        <div ref={scrollRef} style={{ maxHeight: '75vh', overflow: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
             <thead>
               <tr style={{ backgroundColor: '#fafbfa', borderBottom: '1px solid #e2e0da', color: '#5c6470', position: 'sticky', top: 0 }}>
@@ -129,8 +153,15 @@ export const LibroCompletoView: React.FC<LibroCompletoViewProps> = ({
               </tr>
             </thead>
             <tbody>
-              {rows.map((r, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #f0eee8' }}>
+              {paddingTop > 0 && (
+                <tr>
+                  <td colSpan={14} style={{ padding: 0, height: `${paddingTop}px`, border: 'none' }} />
+                </tr>
+              )}
+              {virtualItems.map((vi) => {
+                const r = rows[vi.index];
+                return (
+                <tr key={vi.key} style={{ borderBottom: '1px solid #f0eee8' }}>
                   <td style={{ padding: '10px 14px', fontWeight: 600, color: '#22262b', whiteSpace: 'nowrap' }}>{r.doc}</td>
                   <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
                     <span
@@ -172,7 +203,13 @@ export const LibroCompletoView: React.FC<LibroCompletoViewProps> = ({
                     </span>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
+              {paddingBottom > 0 && (
+                <tr>
+                  <td colSpan={14} style={{ padding: 0, height: `${paddingBottom}px`, border: 'none' }} />
+                </tr>
+              )}
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={14} style={{ padding: '32px', textAlign: 'center', color: '#9aa1ab' }}>

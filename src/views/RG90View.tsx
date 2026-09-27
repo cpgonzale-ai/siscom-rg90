@@ -61,12 +61,17 @@ interface RG90ViewProps {
   // solo para el Panel de Desglose Matemático, no participa de ningún cálculo de negocio.
   totalLibroCount: number;
   rg90Diff: any[];
-  // Fuente SIN filtrar por búsqueda/categoría, para los desplegables de filtro tipo Excel
-  // del encabezado (diffAllValuesPorColumna) — ver /auditoria/08-analisis-memoria-lag-global-200k.md:
-  // antes esos desplegables se recalculaban sobre rg90Diff (que SÍ cambia de referencia en
-  // cada tecla del buscador), 4,2 millones de llamadas a getValue por tecla. rg90DiffAll
-  // solo cambia cuando se carga o recompara un lote de verdad.
-  rg90DiffAll: any[];
+  // Ya viene calculado desde App.tsx (ver el porqué en su propio comentario, junto a donde
+  // se memoiza) — antes se calculaba ACÁ ADENTRO a partir de un rg90DiffAll crudo. El
+  // problema no era la memoización en sí (estaba bien hecha, dependía solo de la fuente
+  // sin filtrar) sino DÓNDE vivía: el caché de un useMemo es del componente, y App.tsx
+  // desmonta y remonta RG90View cada vez que se sale del comparador (ej. volver a "Cargar
+  // reportes") y se vuelve a entrar — perdiendo el caché aunque los datos no hubieran
+  // cambiado un poco. Medido con un archivo de 100.000 filas: 27 segundos de bloqueo real
+  // del navegador, recalculando desde cero las 21 columnas × todas las filas, solo por
+  // haber salido y vuelto a entrar. Al vivir en App.tsx (que nunca se desmonta), este
+  // cálculo sobrevive esos ciclos y solo se rehace cuando el diff real cambia de verdad.
+  diffAllValuesPorColumna: Record<string, string[]>;
   rg90Search: string;
   onRg90Search: (e: React.ChangeEvent<HTMLInputElement>) => void;
   clearRg90Search: () => void;
@@ -121,7 +126,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   anuladasCount,
   totalLibroCount,
   rg90Diff,
-  rg90DiffAll,
+  diffAllValuesPorColumna,
   rg90Search,
   onRg90Search,
   rg90CategoryFilter,
@@ -218,23 +223,8 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   // Por defecto se muestra el apartado "Diferencia" completo (IVA 10%/5%, Exenta, Total) —
   // solo quedan ocultas Gravada 10%/5%, igual que en Libro de Compras (ComprasView).
   const [diffColOcultas, setDiffColOcultas] = useState<Set<string>>(new Set(['dif_gravada_10', 'dif_gravada_5']));
-  // Mismo patrón F1 (/auditoria/05-performance.md) — quedó pendiente cuando esta grilla era
-  // F3 ("no tocar todavía"). allValues por columna para los desplegables de filtro del
-  // encabezado, memoizado aparte, dependiendo de rg90DiffAll (la fuente SIN filtrar por
-  // búsqueda/categoría — el desplegable tiene que ofrecer todos los valores posibles, no
-  // solo los que quedan visibles con el filtro actual). RG90_DIFF_COLUMNAS es una constante
-  // de módulo.
-  //
-  // Corregido en /auditoria/08-analisis-memoria-lag-global-200k.md: antes dependía de
-  // rg90Diff (ya filtrado por búsqueda/categoría en App.tsx), que cambia de referencia en
-  // cada tecla del buscador aunque el contenido no cambie — eso disparaba 4,2 millones de
-  // llamadas a getValue (21 columnas × 200.000 filas) por tecla. rg90DiffAll solo cambia
-  // cuando se carga o recompara un lote de verdad, no al tipear ni al tocar los cards de
-  // categoría.
-  const diffAllValuesPorColumna = useMemo(
-    () => Object.fromEntries(RG90_DIFF_COLUMNAS.map(col => [col.key, rg90DiffAll.map(col.getValue)])),
-    [rg90DiffAll]
-  );
+  // diffAllValuesPorColumna llega calculado como prop desde App.tsx (ver comentario en la
+  // interfaz de props, arriba) — ya no se calcula acá.
   // Memoizado con dependencia en rg90Diff/diffColFiltros (ambos estables: rg90Diff es una
   // prop que, después del hallazgo F4 de /auditoria/05-performance.md, viene de
   // filteredRg90Diff ya memoizado en App.tsx; diffColFiltros es un Record de estado propio
@@ -367,8 +357,15 @@ export const RG90View: React.FC<RG90ViewProps> = ({
       {/* 4 Step Wizard Progress Bar */}
       <WizardSteps steps={wizardSteps} />
 
-      {pasoMostrado === 3 && (
-        <>
+      {/* Se mantiene siempre montado (mismo criterio que el bloque del Paso 4, más abajo,
+          y por el mismo motivo que ahí se explica) -- antes era un `&&` condicional: al
+          desmontar y remontar, la grilla de la RG90 (SET) de este paso perdía la
+          memoización interna de ExcelFilterHeader (el Set + sort de valores únicos por
+          columna, en sus 14 columnas) aunque los `allValues` que recibe como prop nunca
+          hubieran cambiado -- medido con un archivo de 100.000 filas: 3-4 segundos de
+          bloqueo real cada vez que se volvía a este paso desde Resultados, sin tocar
+          ningún filtro. Con display:none esa memoización sobrevive la navegación. */}
+      <div style={{ display: pasoMostrado === 3 ? 'flex' : 'none', flexDirection: 'column', gap: '20px' }}>
         <div style={navRowStyle}>
           <button onClick={onVolverCarga} style={{ ...secondaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
             <ArrowLeft size={16} />
@@ -620,10 +617,10 @@ export const RG90View: React.FC<RG90ViewProps> = ({
             )}
           </div>
         )}
-        </>
-      )}
+      </div>
 
-      {/* Se mantiene siempre montado (a diferencia del Paso 3) y se oculta con display:none
+      {/* Se mantiene siempre montado (mismo criterio que el bloque del Paso 3, arriba) y se
+          oculta con display:none
           en vez de un && condicional -- medido en /auditoria/08-analisis-memoria-lag-global-200k.md:
           con 200.000 filas, desmontar y volver a montar este bloque le hace perder a
           diffAllValuesPorColumna/filteredRg90DiffCols/diffTotalesVentas toda su memoización

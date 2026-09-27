@@ -272,21 +272,23 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
           rgRows: CompraRow[];
           diffs: CompraDiffRow[];
           summary: typeof summary;
-          pasoMostrado: 1 | 2 | 3;
         }>(claveCompras);
+        // El paso actual vive en una clave APARTE y chica (ver el efecto de guardado, más
+        // abajo, para el porqué) — se lee por separado y se combina acá con el resto.
+        const pasoGuardado = await idbGet<1 | 2 | 3>(`${claveCompras}:paso`);
         if (saved) {
           setRows(saved.rows ?? []);
           setLoteId(saved.loteId);
           setRgRows(saved.rgRows ?? []);
           setDiffs(saved.diffs ?? []);
           setSummary(saved.summary ?? null);
-          // A diferencia de Ventas (App.tsx), acá SÍ es seguro navegar al paso guardado
-          // apenas termina de hidratar: este componente solo existe montado mientras la
-          // URL ya está en /compras/*, así que como mucho reubica al usuario DENTRO de
-          // Compras (nunca lo saca de otra pantalla) — mismo comportamiento de "retomar
-          // donde quedó" que ya tenía antes de este cambio.
-          if ((saved.pasoMostrado ?? 1) !== 1) setPasoMostrado(saved.pasoMostrado ?? 1);
         }
+        // A diferencia de Ventas (App.tsx), acá SÍ es seguro navegar al paso guardado
+        // apenas termina de hidratar: este componente solo existe montado mientras la
+        // URL ya está en /compras/*, así que como mucho reubica al usuario DENTRO de
+        // Compras (nunca lo saca de otra pantalla) — mismo comportamiento de "retomar
+        // donde quedó" que ya tenía antes de este cambio.
+        if ((pasoGuardado ?? 1) !== 1) setPasoMostrado(pasoGuardado ?? 1);
       } catch {
         // idbGet ya atrapa sus propios errores internamente (ver persistStore.ts) y nunca
         // debería rechazar — este catch es solo una red de seguridad si ese contrato cambia.
@@ -302,10 +304,23 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
     if (!comprasHydratedRef.current || usuarioId === undefined) return;
     const claveCompras = `${COMPRAS_PERSIST_KEY}:${usuarioId}`;
     const t = setTimeout(() => {
-      idbSet(claveCompras, { rows, loteId, rgRows, diffs, summary, pasoMostrado });
+      idbSet(claveCompras, { rows, loteId, rgRows, diffs, summary });
     }, 400);
     return () => clearTimeout(t);
-  }, [usuarioId, rows, loteId, rgRows, diffs, summary, pasoMostrado]);
+  }, [usuarioId, rows, loteId, rgRows, diffs, summary]);
+
+  // Guardado APARTE, chico, solo para el paso actual — a propósito NO comparte efecto ni
+  // dependencias con el de arriba. pasoMostrado viene de la URL y cambia con cada click
+  // entre pasos aunque rows/rgRows/diffs no cambien nada; si estuviera en las mismas
+  // dependencias que el guardado de arriba, cada click entre pasos volvería a serializar
+  // y escribir TODO el libro (rows/rgRows/diffs, que pueden ser decenas de miles de filas)
+  // solo para actualizar un número. Medido con un archivo de 100.000 filas: 1-3 segundos
+  // de bloqueo real del navegador por click, solo por esto. Al ser un valor chico (un
+  // número), no hace falta debounce.
+  useEffect(() => {
+    if (!comprasHydratedRef.current || usuarioId === undefined) return;
+    idbSet(`${COMPRAS_PERSIST_KEY}:${usuarioId}:paso`, pasoMostrado);
+  }, [usuarioId, pasoMostrado]);
 
   // pasoActual = el progreso real alcanzado (para los "✓" de completado en la barra),
   // independiente de qué paso se esté mostrando en pantalla en este momento.
