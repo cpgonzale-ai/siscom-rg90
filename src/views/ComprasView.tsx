@@ -487,8 +487,16 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
   // 50.000-100.000+), nunca extendido acá. Se cambia a exportarTablaExcelApi (backend,
   // streaming) — mismo endpoint ya probado que usa RG90View. Mismos headers/filas, ningún
   // cálculo cambia, solo dónde se arma el archivo.
+  // Mismo criterio que exportandoRg90/exportandoDiff en RG90View.tsx (Ventas): mientras el
+  // backend arma el archivo, el botón muestra "Generando Excel…" y queda deshabilitado, para
+  // que el usuario sepa que está procesando y no dispare varios pedidos a la vez clickeando
+  // de nuevo con archivos grandes (el backend puede tardar un rato real, ver docstring de
+  // app/api/export.py).
+  const [exportandoLibro, setExportandoLibro] = useState(false);
+  const [exportandoRg, setExportandoRg] = useState(false);
+
   const descargarExcel = async () => {
-    if (filteredRows.length === 0) return;
+    if (filteredRows.length === 0 || exportandoLibro) return;
     const headers = ['Documento', 'Local', 'Fecha', 'RUC Proveedor', 'Proveedor', 'Tipo', 'Condición', 'Timbrado', 'Gravada 10%', 'IVA 10%', 'Gravada 5%', 'IVA 5%', 'Exenta', 'Total', 'Estado'];
     // Importes con el mismo texto ya formateado de la grilla (r.gravadas, no un number) —
     // el Excel descargado coincide con la pantalla tal cual, sin riesgo de que se invierta
@@ -497,24 +505,30 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
       r.doc, r.local, r.fecha, `${r.ruc_proveedor}-${r.dv_proveedor}`, r.proveedor, r.tipo_doc, r.condicion, r.timbrado,
       r.gravadas, r.iva, r.gravadas_5, r.iva_5, r.exentas, r.total, r.estado,
     ]);
+    setExportandoLibro(true);
     try {
       await exportarTablaExcelApi('Libro_de_Compras.xlsx', 'Libro de Compras', headers, dataRows);
     } catch (e) {
       console.error('Error al exportar el Libro de Compras a Excel:', e);
+    } finally {
+      setExportandoLibro(false);
     }
   };
 
   const descargarRgExcel = async () => {
-    if (filteredRgRows.length === 0) return;
+    if (filteredRgRows.length === 0 || exportandoRg) return;
     const headers = ['Documento', 'Local', 'Fecha', 'RUC Proveedor', 'Proveedor', 'Tipo', 'Condición', 'Timbrado', 'Gravada 10%', 'IVA 10%', 'Gravada 5%', 'IVA 5%', 'Exenta', 'Total'];
     const dataRows = filteredRgRows.map(r => [
       r.doc, r.local, r.fecha, r.dv_proveedor ? `${r.ruc_proveedor}-${r.dv_proveedor}` : r.ruc_proveedor, r.proveedor, r.tipo_doc, r.condicion, r.timbrado,
       r.gravadas, r.iva, r.gravadas_5, r.iva_5, r.exentas, r.total,
     ]);
+    setExportandoRg(true);
     try {
       await exportarTablaExcelApi('RG_Compras.xlsx', 'RG (SET) — Compras', headers, dataRows);
     } catch (e) {
       console.error('Error al exportar la RG de Compras a Excel:', e);
+    } finally {
+      setExportandoRg(false);
     }
   };
 
@@ -618,14 +632,18 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
   // que colgaba el navegador era el paso final de armar el .xlsx en sí (downloadExcel/
   // SheetJS, síncrono). Mismo cambio que descargarExcel/descargarRgExcel: se manda el mismo
   // headers+dataRows ya armado al endpoint genérico del backend en vez de a SheetJS.
+  const [exportandoDiff, setExportandoDiff] = useState(false);
   const descargarDiffExcel = async () => {
-    if (filteredDiffs.length === 0) return;
+    if (filteredDiffs.length === 0 || exportandoDiff) return;
     const headers = DIFF_COLUMNAS_PICKER.map(c => c.label);
     const dataRows = filteredDiffs.map(d => DIFF_COLUMNAS.map(col => col.getValue(d)));
+    setExportandoDiff(true);
     try {
       await exportarTablaExcelApi('Resultado_Comparacion_Compras_RG.xlsx', 'Resultado — Compras vs RG', headers, dataRows);
     } catch (e) {
       console.error('Error al exportar el resultado de Compras a Excel:', e);
+    } finally {
+      setExportandoDiff(false);
     }
   };
 
@@ -794,9 +812,13 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
                 </button>
               )}
               {puede('boton:compras.descargar_csv') && (
-                <button onClick={descargarExcel} style={{ ...excelBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <button
+                  onClick={descargarExcel}
+                  disabled={exportandoLibro}
+                  style={{ ...excelBtnStyle, display: 'flex', alignItems: 'center', gap: '6px', ...(exportandoLibro ? { opacity: 0.7, cursor: 'wait' } : {}) }}
+                >
                   <Download size={14} color="#fff" />
-                  <span>Excel</span>
+                  <span>{exportandoLibro ? 'Generando Excel…' : 'Excel'}</span>
                 </button>
               )}
               {puede('boton:compras.borrar_libro') && (
@@ -986,8 +1008,12 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
                   Limpiar filtros
                 </button>
               )}
-              <button onClick={descargarRgExcel} style={{ ...excelBtnStyle, padding: '7px 12px', fontSize: '12px' }}>
-                Excel
+              <button
+                onClick={descargarRgExcel}
+                disabled={exportandoRg}
+                style={{ ...excelBtnStyle, padding: '7px 12px', fontSize: '12px', ...(exportandoRg ? { opacity: 0.7, cursor: 'wait' } : {}) }}
+              >
+                {exportandoRg ? 'Generando Excel…' : 'Excel'}
               </button>
               {/* Mismo criterio que "Borrar libro" en la grilla del Paso 1: antes la única
                   forma de sacar la RG era "Eliminar todos" en el recuadro de carga de más
@@ -1197,11 +1223,11 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
               <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                 <button
                   onClick={e => { e.stopPropagation(); descargarDiffExcel(); }}
-                  disabled={filteredDiffs.length === 0}
-                  style={{ ...excelBtnStyle, padding: '7px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  disabled={filteredDiffs.length === 0 || exportandoDiff}
+                  style={{ ...excelBtnStyle, padding: '7px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', ...(exportandoDiff ? { opacity: 0.7, cursor: 'wait' } : {}) }}
                 >
                   <FileSpreadsheet size={14} color="#fff" />
-                  <span>Excel</span>
+                  <span>{exportandoDiff ? 'Generando Excel…' : 'Excel'}</span>
                 </button>
                 <span style={{ fontSize: '12px', fontWeight: 600, color: '#128752' }}>Ver detalle</span>
               </div>
@@ -1223,11 +1249,11 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
                   <ColumnPicker columnas={DIFF_COLUMNAS_PICKER} ocultas={diffColOcultas} onChange={setDiffColOcultas} />
                   <button
                     onClick={descargarDiffExcel}
-                    disabled={filteredDiffs.length === 0}
-                    style={{ ...excelBtnStyle, padding: '7px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                    disabled={filteredDiffs.length === 0 || exportandoDiff}
+                    style={{ ...excelBtnStyle, padding: '7px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', ...(exportandoDiff ? { opacity: 0.7, cursor: 'wait' } : {}) }}
                   >
                     <FileSpreadsheet size={14} color="#fff" />
-                    <span>Excel</span>
+                    <span>{exportandoDiff ? 'Generando Excel…' : 'Excel'}</span>
                   </button>
                   <input
                     type="text" placeholder="Buscar por doc, proveedor..." value={diffSearch}

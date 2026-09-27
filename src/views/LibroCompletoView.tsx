@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowLeft, Search, Download } from 'lucide-react';
+import { excelBtnStyle } from '../components/Modal';
 import type { LibroRow } from '../services/api';
 
 interface LibroCompletoViewProps {
@@ -10,6 +11,7 @@ interface LibroCompletoViewProps {
   onSearch: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onVolver: () => void;
   onDownload: () => void;
+  descargando: boolean;
 }
 
 // Pantalla dedicada a "Ver todos": muestra el libro de ventas completo, sin recortar
@@ -22,6 +24,7 @@ export const LibroCompletoView: React.FC<LibroCompletoViewProps> = ({
   onSearch,
   onVolver,
   onDownload,
+  descargando,
 }) => {
   // Virtualizado con el mismo patrón y librería que el Detalle de Discrepancias
   // (RG90View.tsx/ComprasView.tsx) — esta pantalla existe justamente para mostrar el libro
@@ -111,22 +114,11 @@ export const LibroCompletoView: React.FC<LibroCompletoViewProps> = ({
           </div>
           <button
             onClick={onDownload}
-            style={{
-              backgroundColor: '#f0a63d',
-              color: '#1a1a1a',
-              border: 'none',
-              borderRadius: '7px',
-              padding: '9px 16px',
-              fontSize: '12.5px',
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
+            disabled={descargando}
+            style={{ ...excelBtnStyle, fontSize: '12.5px', display: 'flex', alignItems: 'center', gap: '6px', ...(descargando ? { opacity: 0.7, cursor: 'wait' } : {}) }}
           >
             <Download size={14} />
-            <span>Descargar CSV</span>
+            <span>{descargando ? 'Generando Excel…' : 'Excel'}</span>
           </button>
         </div>
       </div>

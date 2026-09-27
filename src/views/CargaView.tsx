@@ -35,6 +35,7 @@ interface CargaViewProps {
   saltosRows: any[];
   deleteLibro: () => void;
   downloadLimpio: () => void;
+  descargandoLimpio: boolean;
   pagedLibro: any[];
   filterStyleTodos: string;
   filterStyleAloha: string;
@@ -86,6 +87,7 @@ export const CargaView: React.FC<CargaViewProps> = ({
   saltosRows,
   deleteLibro,
   downloadLimpio,
+  descargandoLimpio,
   pagedLibro,
   filterStyleTodos,
   filterStyleAloha,
@@ -386,10 +388,11 @@ export const CargaView: React.FC<CargaViewProps> = ({
               {canDescargarCsv && (
                 <button
                   onClick={downloadLimpio}
-                  style={{ ...excelBtnStyle, fontSize: '12.5px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  disabled={descargandoLimpio}
+                  style={{ ...excelBtnStyle, fontSize: '12.5px', display: 'flex', alignItems: 'center', gap: '6px', ...(descargandoLimpio ? { opacity: 0.7, cursor: 'wait' } : {}) }}
                 >
                   <Download size={14} />
-                  <span>Excel</span>
+                  <span>{descargandoLimpio ? 'Generando Excel…' : 'Excel'}</span>
                 </button>
               )}
             </div>

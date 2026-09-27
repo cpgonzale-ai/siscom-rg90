@@ -618,7 +618,14 @@ export function App() {
   // openpyxl write_only) — mismo endpoint ya probado que usa RG90View para su propia
   // grilla. Ningún dato ni cálculo cambia: se le mandan las mismas filas ya armadas
   // (dataRows + totales/resumen), el backend solo arma el archivo en vez del navegador.
+  // Mismo criterio que exportandoRg90/exportandoDiff en RG90View.tsx: mientras el backend
+  // arma el archivo (puede ser un rato real con archivos grandes), el botón muestra
+  // "Generando Excel…" y queda deshabilitado, para que el usuario sepa que está
+  // procesando y no dispare varios pedidos a la vez a fuerza de clickear de nuevo.
+  const [descargandoLimpio, setDescargandoLimpio] = useState(false);
   const downloadLimpio = async (rows: LibroRow[]) => {
+    if (descargandoLimpio) return;
+    setDescargandoLimpio(true);
     const headers = ['Proyecto', 'Factura', 'Tipo Doc.', 'Fecha', 'Ruc', 'Nombre', 'Gravadas 10%', 'IVA 10%', 'Gravadas 5%', 'IVA 5%', 'Exentas', 'Total Neto', 'Estado'];
     // Los importes van con el mismo texto ya formateado que se ve en la grilla (r.gravadas,
     // no r.gravadas_num) — así el Excel descargado coincide con la pantalla tal cual, sin
@@ -678,6 +685,8 @@ export function App() {
       ]);
     } catch (e) {
       console.error('Error al exportar el Libro de Ventas a Excel:', e);
+    } finally {
+      setDescargandoLimpio(false);
     }
   };
 
@@ -1158,6 +1167,7 @@ export function App() {
               saltosRows={correlatividadRows}
               deleteLibro={deleteLibro}
               downloadLimpio={() => downloadLimpio(filteredLibro)}
+              descargandoLimpio={descargandoLimpio}
               pagedLibro={pagedLibro}
               libroColumnFilters={libroColumnFilters}
               hayLibroColFiltrosActivos={hayLibroColFiltrosActivos}
@@ -1203,6 +1213,7 @@ export function App() {
               onSearch={(e) => setLibroCompletoSearch(e.target.value)}
               onVolver={() => { setLibroCompletoSearch(''); navigate('/ventas/carga'); }}
               onDownload={() => downloadLimpio(libroCompletoFiltrado)}
+              descargando={descargandoLimpio}
             />
           ) : <Navigate to="/" replace />} />
 
