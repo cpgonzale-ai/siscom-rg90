@@ -445,11 +445,39 @@ function triggerBlobDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+// El JSON de estos pedidos (Detalle de Discrepancias con decenas de miles de filas, cada
+// una con el libro Y la RG90 anidados) llega a pesar varias decenas de MB -- medido: 41MB
+// para 97.851 filas. Ese JSON es MUY repetitivo (mismos nombres de campo miles de veces,
+// números con el mismo formato) y comprime ~10x con gzip (41MB -> 3,8MB, medido con un
+// archivo real). Esa subida corre por la conexión del propio usuario, no por la del
+// servidor -- es, en la práctica, el cuello de botella más grande de esta descarga con
+// archivos grandes, mucho más que el tiempo que el servidor tarda en armar el Excel en sí.
+// CompressionStream (soportado en todos los navegadores modernos -- Chrome/Edge 80+,
+// Firefox 113+, Safari 16.4+) comprime el body antes de subirlo; el backend lo descomprime
+// en un middleware (GzipRequestDecompressionMiddleware, main.py) antes de que llegue a
+// cualquier endpoint, así que ningún endpoint necesita saber que esto existe.
+async function comprimirGzip(texto: string): Promise<Blob | null> {
+  if (typeof CompressionStream === 'undefined') return null;
+  try {
+    const stream = new Blob([texto]).stream().pipeThrough(new CompressionStream('gzip'));
+    return await new Response(stream).blob();
+  } catch {
+    // Nunca debe ser la causa de que la descarga deje de funcionar -- si falla comprimir,
+    // se manda sin comprimir (más lento, pero funciona igual).
+    return null;
+  }
+}
+
 async function postParaDescarga(path: string, body: unknown, filename: string, fallback: string): Promise<void> {
+  const json = JSON.stringify(body);
+  const comprimido = await comprimirGzip(json);
+  const headers: Record<string, string> = { ...(authHeaders() as Record<string, string>), 'Content-Type': 'application/json' };
+  if (comprimido) headers['Content-Encoding'] = 'gzip';
+
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    headers,
+    body: comprimido ?? json,
   });
   if (!res.ok) return throwApiError(res, fallback);
   const blob = await res.blob();
