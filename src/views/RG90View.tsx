@@ -667,17 +667,17 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                   <div style={{ ...cabeceraStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
                     <div style={{ fontSize: '13px', fontWeight: 700, color: '#22262b' }}>TU LIBRO DE VENTAS</div>
                     <div style={{ fontSize: '13px', fontWeight: 700, color: '#22262b' }}>
-                      Total de comprobantes: {rg90Loaded ? totalLibroCount : '—'}
+                      Total de comprobantes: {rg90Loaded ? totalLibroCount.toLocaleString('es-PY') : '—'}
                     </div>
                   </div>
                   <div style={{ padding: '16px 20px' }}>
                     <div style={{ fontSize: '12.5px', color: '#9aa1ab', marginBottom: '4px' }}>Este total se compone de:</div>
-                    <div style={filaStyle}><span>Coinciden</span><span>{coinciden}</span></div>
-                    <div style={filaStyle}><span>Diferencia de monto</span><span>{diferenciaMonto}</span></div>
-                    <div style={filaStyle}><span>No en RG90</span><span>{noEnRg90}</span></div>
-                    <div style={filaStyle}><span>Anulados</span><span>{anulados}</span></div>
+                    <div style={filaStyle}><span>Coinciden</span><span>{coinciden.toLocaleString('es-PY')}</span></div>
+                    <div style={filaStyle}><span>Diferencia de monto</span><span>{diferenciaMonto.toLocaleString('es-PY')}</span></div>
+                    <div style={filaStyle}><span>No en RG90</span><span>{noEnRg90.toLocaleString('es-PY')}</span></div>
+                    <div style={filaStyle}><span>Anulados</span><span>{anulados.toLocaleString('es-PY')}</span></div>
                     <div style={{ ...filaStyle, borderTop: '1px solid #e2e0da', marginTop: '4px', paddingTop: '10px', fontWeight: 700, color: '#22262b' }}>
-                      <span>Total</span><span>{sumaLibro}</span>
+                      <span>Total</span><span>{sumaLibro.toLocaleString('es-PY')}</span>
                     </div>
                   </div>
                 </div>
@@ -686,16 +686,16 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                   <div style={{ ...cabeceraStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
                     <div style={{ fontSize: '13px', fontWeight: 700, color: '#22262b' }}>ARCHIVO RG90 (SET)</div>
                     <div style={{ fontSize: '13px', fontWeight: 700, color: '#22262b' }}>
-                      Total de comprobantes: {rg90Loaded ? rg90GridTotalCount : '—'}
+                      Total de comprobantes: {rg90Loaded ? rg90GridTotalCount.toLocaleString('es-PY') : '—'}
                     </div>
                   </div>
                   <div style={{ padding: '16px 20px' }}>
                     <div style={{ fontSize: '12.5px', color: '#9aa1ab', marginBottom: '4px' }}>Este total se compone de:</div>
-                    <div style={filaStyle}><span>Coinciden</span><span>{coinciden}</span></div>
-                    <div style={filaStyle}><span>Diferencia de monto</span><span>{diferenciaMonto}</span></div>
-                    <div style={filaStyle}><span>No en libro de ventas</span><span>{noEnLibro}</span></div>
+                    <div style={filaStyle}><span>Coinciden</span><span>{coinciden.toLocaleString('es-PY')}</span></div>
+                    <div style={filaStyle}><span>Diferencia de monto</span><span>{diferenciaMonto.toLocaleString('es-PY')}</span></div>
+                    <div style={filaStyle}><span>No en libro de ventas</span><span>{noEnLibro.toLocaleString('es-PY')}</span></div>
                     <div style={{ ...filaStyle, borderTop: '1px solid #e2e0da', marginTop: '4px', paddingTop: '10px', fontWeight: 700, color: '#22262b' }}>
-                      <span>Total</span><span>{sumaRg90}</span>
+                      <span>Total</span><span>{sumaRg90.toLocaleString('es-PY')}</span>
                     </div>
                   </div>
                 </div>
@@ -726,7 +726,9 @@ export const RG90View: React.FC<RG90ViewProps> = ({
               >
                 <span style={{ fontSize: '10.5px', fontWeight: 600, color: '#9aa1ab', textTransform: 'uppercase', letterSpacing: '0.02em' }}>{c.label}</span>
                 <span style={{ fontSize: '15px', fontWeight: 700, color: c.isActive ? '#128752' : c.color }}>
-                  {rg90Loaded ? c.value : '—'}
+                  {/* c.value es el número crudo en string (ver el comentario de rg90CardsState
+                      en App.tsx) -- se formatea acá recién, solo para mostrarlo. */}
+                  {rg90Loaded ? Number(c.value).toLocaleString('es-PY') : '—'}
                 </span>
               </button>
             ))}
@@ -740,13 +742,13 @@ export const RG90View: React.FC<RG90ViewProps> = ({
               }}
             >
               <span style={{ fontSize: '10.5px', fontWeight: 600, color: '#9aa1ab', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Saltos</span>
-              <span style={{ fontSize: '15px', fontWeight: 700, color: '#b0740f' }}>{saltosTotales.length}</span>
+              <span style={{ fontSize: '15px', fontWeight: 700, color: '#b0740f' }}>{saltosTotales.length.toLocaleString('es-PY')}</span>
             </button>
             {/* Solo lectura: sin onClick ni cursor de mano, a diferencia de las pestañas de
                 arriba — ver anuladasCount / summary.anuladas del backend. */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px', padding: '9px 16px', cursor: 'default', whiteSpace: 'nowrap' }}>
               <span style={{ fontSize: '10.5px', fontWeight: 600, color: '#9aa1ab', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Anulados</span>
-              <span style={{ fontSize: '15px', fontWeight: 700, color: '#5c6470' }}>{rg90Loaded ? anuladasCount : '—'}</span>
+              <span style={{ fontSize: '15px', fontWeight: 700, color: '#5c6470' }}>{rg90Loaded ? anuladasCount.toLocaleString('es-PY') : '—'}</span>
             </div>
           </div>
 

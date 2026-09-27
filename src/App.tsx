@@ -387,6 +387,11 @@ export function App() {
   // decían "Coinciden" / "No en RG90" / "No en libro venta" — mucho más cortas y crípticas
   // que las de Compras, pese a ser la misma idea) — alineadas acá para que ambas pantallas
   // usen el mismo criterio de claridad.
+  // value queda como el número CRUDO en string (sin puntos de miles): RG90View vuelve a
+  // convertirlo con Number(c.value) (ver porClave, en el Panel de Desglose Matemático) para
+  // sumarlo -- si acá ya viniera formateado ("12.453"), Number("12.453") lo leería mal (como
+  // 12,453 decimal, no doce mil). El punto de miles se agrega solo al MOSTRARLO, en
+  // RG90View.tsx.
   const rg90CardsState = [
     { key: 'Coincide', label: 'Registros que coinciden', value: `${rg90Summary?.coinciden ?? 0}`, color: '#128752' },
     { key: 'No llegó a la interfaz', label: 'Registros que no se encuentran en la RG90', value: `${rg90Summary?.no_en_rg90 ?? 0}`, color: '#b3402f' },

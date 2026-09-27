@@ -1119,16 +1119,16 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
                   <div style={{ ...cabeceraStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
                     <div style={{ fontSize: '13px', fontWeight: 700, color: '#22262b' }}>TU LIBRO DE COMPRAS</div>
                     <div style={{ fontSize: '13px', fontWeight: 700, color: '#22262b' }}>
-                      Total de comprobantes: {rows.length}
+                      Total de comprobantes: {rows.length.toLocaleString('es-PY')}
                     </div>
                   </div>
                   <div style={{ padding: '16px 20px' }}>
                     <div style={{ fontSize: '12.5px', color: '#9aa1ab', marginBottom: '4px' }}>Este total se compone de:</div>
-                    <div style={filaStyle}><span>Coinciden</span><span>{coinciden}</span></div>
-                    <div style={filaStyle}><span>Diferencia de monto</span><span>{diferenciaMonto}</span></div>
-                    <div style={filaStyle}><span>No en RG</span><span>{noEnRg}</span></div>
+                    <div style={filaStyle}><span>Coinciden</span><span>{coinciden.toLocaleString('es-PY')}</span></div>
+                    <div style={filaStyle}><span>Diferencia de monto</span><span>{diferenciaMonto.toLocaleString('es-PY')}</span></div>
+                    <div style={filaStyle}><span>No en RG</span><span>{noEnRg.toLocaleString('es-PY')}</span></div>
                     <div style={{ ...filaStyle, borderTop: '1px solid #e2e0da', marginTop: '4px', paddingTop: '10px', fontWeight: 700, color: '#22262b' }}>
-                      <span>Total</span><span>{sumaLibro}</span>
+                      <span>Total</span><span>{sumaLibro.toLocaleString('es-PY')}</span>
                     </div>
                   </div>
                 </div>
@@ -1137,16 +1137,16 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
                   <div style={{ ...cabeceraStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
                     <div style={{ fontSize: '13px', fontWeight: 700, color: '#22262b' }}>ARCHIVO RG (SET)</div>
                     <div style={{ fontSize: '13px', fontWeight: 700, color: '#22262b' }}>
-                      Total de comprobantes: {rgRows.length}
+                      Total de comprobantes: {rgRows.length.toLocaleString('es-PY')}
                     </div>
                   </div>
                   <div style={{ padding: '16px 20px' }}>
                     <div style={{ fontSize: '12.5px', color: '#9aa1ab', marginBottom: '4px' }}>Este total se compone de:</div>
-                    <div style={filaStyle}><span>Coinciden</span><span>{coinciden}</span></div>
-                    <div style={filaStyle}><span>Diferencia de monto</span><span>{diferenciaMonto}</span></div>
-                    <div style={filaStyle}><span>No en libro de compras</span><span>{noEnLibro}</span></div>
+                    <div style={filaStyle}><span>Coinciden</span><span>{coinciden.toLocaleString('es-PY')}</span></div>
+                    <div style={filaStyle}><span>Diferencia de monto</span><span>{diferenciaMonto.toLocaleString('es-PY')}</span></div>
+                    <div style={filaStyle}><span>No en libro de compras</span><span>{noEnLibro.toLocaleString('es-PY')}</span></div>
                     <div style={{ ...filaStyle, borderTop: '1px solid #e2e0da', marginTop: '4px', paddingTop: '10px', fontWeight: 700, color: '#22262b' }}>
-                      <span>Total</span><span>{sumaRg}</span>
+                      <span>Total</span><span>{sumaRg.toLocaleString('es-PY')}</span>
                     </div>
                   </div>
                 </div>
@@ -1175,7 +1175,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
                     }}
                   >
                     <span style={{ fontSize: '10.5px', fontWeight: 600, color: '#9aa1ab', textTransform: 'uppercase', letterSpacing: '0.02em' }}>{c.label}</span>
-                    <span style={{ fontSize: '15px', fontWeight: 700, color: activa ? '#128752' : c.color }}>{resumenValores[c.key]}</span>
+                    <span style={{ fontSize: '15px', fontWeight: 700, color: activa ? '#128752' : c.color }}>{resumenValores[c.key].toLocaleString('es-PY')}</span>
                   </button>
                 );
               })}
