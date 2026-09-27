@@ -1,9 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { Filter } from 'lucide-react';
 
 const PANEL_WIDTH = 220;
 const PANEL_MARGIN = 12;
+// Altura real de una fila del desplegable (checkbox + valor, una sola línea), medida en el
+// navegador — igual criterio que las grillas virtualizadas del resto del sistema
+// (RG90View.tsx/ComprasView.tsx/LibroCompletoView.tsx): fila fija, sin measureElement.
+const ROW_HEIGHT = 25;
+// Un único Intl.Collator, reusado entre columnas y aperturas, en vez de
+// String.prototype.localeCompare(locale, options) llamado una vez POR COMPARACIÓN del sort
+// (que internamente crea y descarta un Collator temporal en cada llamada) — medido: 2,2s
+// contra 80ms para ordenar 100.000 valores únicos, mismo resultado. Ver el porqué de que
+// esto llegue a ejecutarse con 100.000 valores en el comentario de getDistinct(), abajo.
+const distinctCollator = new Intl.Collator('es', { sensitivity: 'base' });
 
 interface ExcelFilterHeaderProps {
   label: string;
@@ -48,7 +59,7 @@ export const ExcelFilterHeader: React.FC<ExcelFilterHeaderProps> = ({ label, all
     if (distinctCacheRef.current && distinctCacheRef.current.src === allValues) {
       return distinctCacheRef.current.value;
     }
-    const value = Array.from(new Set(allValues)).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+    const value = Array.from(new Set(allValues)).sort(distinctCollator.compare);
     distinctCacheRef.current = { src: allValues, value };
     return value;
   };
@@ -61,6 +72,35 @@ export const ExcelFilterHeader: React.FC<ExcelFilterHeaderProps> = ({ label, all
     const q = search.trim().toLowerCase();
     return distinct.filter(v => v.toLowerCase().includes(q));
   }, [distinct, search]);
+
+  // Virtualizado con el mismo patrón que ya usan las grillas del sistema (RG90View.tsx/
+  // ComprasView.tsx/LibroCompletoView.tsx) — sin esto, una columna de altísima cardinalidad
+  // (ej. "Documento", con un valor casi único por fila) monta un <label> real por cada
+  // valor distinto en este desplegable: con 100.000 valores, eso es 100.000 nodos reales
+  // dentro de un contenedor de apenas 160px de alto. Ahora solo se montan las filas
+  // visibles + el colchón de overscan, sin importar cuántos valores distintos haya.
+  const listScrollRef = useRef<HTMLDivElement>(null);
+  const listVirtualizer = useVirtualizer({
+    count: filteredDistinct.length,
+    getScrollElement: () => listScrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 10,
+  });
+  const listVirtualItems = listVirtualizer.getVirtualItems();
+  const listPaddingTop = listVirtualItems.length > 0 ? listVirtualItems[0].start : 0;
+  const listPaddingBottom = listVirtualItems.length > 0
+    ? listVirtualizer.getTotalSize() - listVirtualItems[listVirtualItems.length - 1].end
+    : 0;
+  // Altura EXPLÍCITA (no maxHeight): el virtualizador necesita medir el alto real del
+  // contenedor (getBoundingClientRect) para decidir qué filas están "visibles" — con
+  // maxHeight y sin contenido todavía (0 filas montadas al principio) el contenedor mide
+  // 0px de alto, lo que hace que el virtualizador calcule 0 filas visibles... y al no
+  // montar ninguna fila, el contenedor sigue sin contenido que le dé alto: nunca sale de
+  // ese estado vacío. Calculando el alto ACÁ, a partir de la cantidad de valores (que sí
+  // se conoce de entrada, sin depender del virtualizador), se rompe ese círculo. Se
+  // mantiene igual de compacto que antes para listas cortas (no crece más de lo que ocupa
+  // el contenido real) y sigue topando en 160px para las largas.
+  const listHeight = filteredDistinct.length === 0 ? 32 : Math.min(filteredDistinct.length * ROW_HEIGHT, 160);
 
   const isActive = active !== null;
 
@@ -154,13 +194,24 @@ export const ExcelFilterHeader: React.FC<ExcelFilterHeaderProps> = ({ label, all
               <input type="checkbox" checked={seleccionTotal} onChange={toggleTodos} />
               (Seleccionar todo)
             </label>
-            <div style={{ maxHeight: '160px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              {filteredDistinct.map(v => (
-                <label key={v} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#5c6470', padding: '3px 2px', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={draft.has(v)} onChange={() => toggleValor(v)} />
-                  {v || '(vacío)'}
-                </label>
-              ))}
+            <div ref={listScrollRef} style={{ height: `${listHeight}px`, overflowY: 'auto' }}>
+              {listPaddingTop > 0 && <div style={{ height: `${listPaddingTop}px` }} />}
+              {listVirtualItems.map(vi => {
+                const v = filteredDistinct[vi.index];
+                return (
+                  <label
+                    key={vi.key}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#5c6470',
+                      padding: '3px 2px', cursor: 'pointer', height: `${ROW_HEIGHT}px`, boxSizing: 'border-box',
+                    }}
+                  >
+                    <input type="checkbox" checked={draft.has(v)} onChange={() => toggleValor(v)} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v || '(vacío)'}</span>
+                  </label>
+                );
+              })}
+              {listPaddingBottom > 0 && <div style={{ height: `${listPaddingBottom}px` }} />}
               {filteredDistinct.length === 0 && (
                 <div style={{ fontSize: '12px', color: '#9aa1ab', padding: '6px 2px' }}>Sin resultados</div>
               )}
