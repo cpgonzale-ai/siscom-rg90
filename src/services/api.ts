@@ -378,7 +378,12 @@ export async function ingestFilesApi(
 
 // La RG90 se descarga en reportes separados por tipo de comprobante (venta y nota de
 // crédito, ver Minuta 3) y ambos se consolidan en el backend antes de comparar.
-export async function reconcileApi(rg90Files: File[], posRows: LibroRow[], loteId?: number) {
+export async function reconcileApi(
+  rg90Files: File[],
+  posRows: LibroRow[],
+  loteId?: number,
+  onUploadProgress?: (loaded: number, total: number) => void,
+) {
   const formData = new FormData();
   rg90Files.forEach(f => formData.append('rg90_files', f));
   // Se manda como archivo (Blob), no como campo de texto plano: un campo de texto llega al
@@ -390,11 +395,9 @@ export async function reconcileApi(rg90Files: File[], posRows: LibroRow[], loteI
   formData.append('pos_data_json', new Blob([JSON.stringify(posRows)], { type: 'application/json' }), 'pos_data.json');
   if (loteId !== undefined) formData.append('lote_id', String(loteId));
 
-  const res = await fetch(`${API_BASE}/reconcile`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: formData,
-  });
+  const res = onUploadProgress
+    ? await xhrPostFormData(`${API_BASE}/reconcile`, formData, onUploadProgress)
+    : await fetch(`${API_BASE}/reconcile`, { method: 'POST', headers: authHeaders(), body: formData });
 
   if (!res.ok) {
     if (res.status === 401) throw new Error('Tu sesión expiró o no iniciaste sesión. Volvé a loguearte e intentá de nuevo.');

@@ -261,7 +261,6 @@ export function App() {
   const [cortesRows, setCortesRows] = useState<CorteRow[]>([]);
   const [rg90DiffRows, setRg90DiffRows] = useState<RG90DiffRow[]>([]);
   const [rg90Files, setRg90Files] = useState<File[]>([]);
-  const [rg90Analyzing, setRg90Analyzing] = useState<boolean>(false);
   const [rg90Error, setRg90Error] = useState<string | null>(null);
   // Caso especial de rg90Error: comprobantes duplicados detectados al adjuntar el Libro o
   // la RG90 (misma validación de siempre, ver ReconcileDuplicadosError en services/api.ts)
@@ -272,11 +271,20 @@ export function App() {
   const [loteId, setLoteId] = useState<number | undefined>(undefined);
   const [converting, setConverting] = useState<boolean>(false);
   const [convertError, setConvertError] = useState<string | null>(null);
-  // Indicador de avance mientras se analiza el Excel del Libro (doConvert) o de la RG90
-  // (handleRg90FileUpload) -- ver ProgressModal/utils/progreso.ts. null = no hay ningún
-  // análisis de archivo en curso ahora mismo (se usa también como condición de render).
+  // Indicador de avance mientras se analiza el Excel del Libro (doConvert) -- ver
+  // ProgressModal/utils/progreso.ts. null = no hay ningún análisis de archivo en curso
+  // ahora mismo (se usa también como condición de render).
   const [libroProgress, setLibroProgress] = useState<{ percent: number; total: number } | null>(null);
-  const [rg90Progress, setRg90Progress] = useState<{ percent: number; total: number } | null>(null);
+  // Mismo mecanismo para TODO lo que analiza/lee la RG90 -- tanto la validación inmediata al
+  // adjuntar (handleRg90FileUpload) como la comparación contra el Libro ("Analizar y
+  // comparar", ver analyzeRg90) comparten este ÚNICO estado (con su propio `message` según
+  // cuál de las dos está en curso). Bug real corregido acá: antes cada una tenía su propio
+  // indicador (esta barra + el spinner "Comparando contra la RG90…" de ProcessingModal), y
+  // si el usuario clickeaba "Analizar y comparar" mientras la validación de adjuntar todavía
+  // estaba en curso (el botón no estaba deshabilitado para eso), los dos se mostraban
+  // superpuestos. Con un solo estado compartido es imposible que haya dos a la vez: no hay
+  // ningún renglón de código donde ambos puedan ser no-null al mismo tiempo.
+  const [rg90Progress, setRg90Progress] = useState<{ percent: number; total: number; message: string } | null>(null);
 
   // Persistencia del libro de Ventas (ver src/utils/persistStore.ts): si la página se
   // recarga por accidente, el navegador se cuelga o se cierra, el usuario no pierde el
@@ -582,7 +590,7 @@ export function App() {
       // Total aproximado (SheetJS, en el navegador) para "Procesados: X de Y" -- ver
       // contarFilasAproximado. Puramente visual, no participa en ninguna regla de negocio.
       const totalAprox = await contarFilasAproximado(nuevos);
-      setRg90Progress({ percent: 0, total: totalAprox });
+      setRg90Progress({ percent: 0, total: totalAprox, message: 'Analizando archivo de la RG90…' });
 
       // Validación de duplicados de la RG90, apenas se adjunta el archivo -- no espera a
       // "Analizar y comparar" contra el Libro (ver validarDuplicadosRg90Api). Un error que NO
@@ -618,12 +626,23 @@ export function App() {
 
   const analyzeRg90 = async () => {
     if (!rg90Attached || rg90Files.length === 0) return;
+    // Nunca se solapa con la validación inmediata de adjuntar (ver rg90Progress, arriba) --
+    // si por algún motivo esta función se llamara mientras esa validación todavía está en
+    // curso, no arranca una segunda barra encima.
+    if (rg90Progress) return;
 
-    setRg90Analyzing(true);
     setRg90Error(null);
     setRg90DuplicadosError(null);
+    const totalAprox = (await contarFilasAproximado(rg90Files)) + libroRows.length;
+    setRg90Progress({ percent: 0, total: totalAprox, message: 'Comparando contra la RG90…' });
+
+    let duplicadoDetectado: ComprobantesDuplicadosError | null = null;
+    let errorGenerico: string | null = null;
     try {
-      const res = await reconcileApi(rg90Files, libroRows, loteId);
+      const res = await ejecutarConAvance(
+        (onUploadProgress) => reconcileApi(rg90Files, libroRows, loteId, onUploadProgress),
+        (f) => setRg90Progress(p => (p ? { ...p, percent: f * 100 } : p)),
+      );
       setRg90DiffRows(res.diffs || []);
       setRg90Rows(res.rg90_rows || []);
       setRg90GapsRows(res.rg90_gaps || []);
@@ -641,13 +660,20 @@ export function App() {
       // Paso 4 con "Siguiente" cuando quiera ver el resultado, igual que Compras.
     } catch (e) {
       if (e instanceof ReconcileDuplicadosError) {
-        setRg90DuplicadosError(e.payload);
+        duplicadoDetectado = e.payload;
       } else {
-        setRg90Error(e instanceof Error ? e.message : 'Error al ejecutar la comparación RG90.');
+        errorGenerico = e instanceof Error ? e.message : 'Error al ejecutar la comparación RG90.';
       }
-    } finally {
-      setRg90Analyzing(false);
     }
+
+    // Mismo criterio que doConvert/handleRg90FileUpload: completar la barra, dejarla un
+    // instante como terminada, ocultarla, y RECIÉN AHÍ mostrar el error o el modal de
+    // duplicados -- nunca superpuestos con el indicador de avance.
+    setRg90Progress(p => (p ? { ...p, percent: 100 } : p));
+    await new Promise(resolve => setTimeout(resolve, 350));
+    setRg90Progress(null);
+    if (duplicadoDetectado) setRg90DuplicadosError(duplicadoDetectado);
+    if (errorGenerico) setRg90Error(errorGenerico);
   };
 
   const resetRg90 = () => {
@@ -1154,6 +1180,11 @@ export function App() {
     setRg90Files([]);
   };
 
+  // Único indicador de "la RG90 está siendo analizada" (adjuntar o comparar, ver
+  // rg90Progress) -- reemplaza al viejo estado rg90Analyzing para que sea imposible tener
+  // dos indicadores de progreso de RG90 activos a la vez.
+  const rg90Busy = rg90Progress !== null;
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#faf9f5' }}>
       <Sidebar
@@ -1378,7 +1409,7 @@ export function App() {
               rg90Loaded={rg90Loaded}
               rg90Attached={rg90Attached}
               rg90StatusText={
-                rg90Analyzing
+                rg90Busy
                   ? 'Comparando contra la RG90 en el servidor…'
                   : rg90Loaded
                   ? `Archivo cargado y comparado — ${rg90Files.map(f => f.name).join(', ')}`
@@ -1393,11 +1424,11 @@ export function App() {
                 ';flex:1;min-width:220px;border-radius:7px;padding:9px 14px;font-size:12.5px;cursor:pointer'
               }
               rg90AnalyzeBtnStyle={
-                rg90Attached && !rg90Analyzing
+                rg90Attached && !rg90Busy
                   ? 'background:#f0a63d;color:#1a1a1a;border:none;border-radius:7px;padding:10px 16px;font-size:12.5px;font-weight:700;cursor:pointer'
                   : 'background:#e5e2da;color:#9aa1ab;border:none;border-radius:7px;padding:10px 16px;font-size:12.5px;font-weight:700;cursor:not-allowed'
               }
-              rg90Analyzing={rg90Analyzing}
+              rg90Analyzing={rg90Busy}
               rg90Error={rg90Error}
               canComparar={puede('boton:rg90.comparar')}
               canQuitarArchivo={puede('boton:rg90.quitar_archivo')}
@@ -1475,24 +1506,22 @@ export function App() {
         <ProcessingModal error={convertError} onClose={() => setConvertError(null)} />
       )}
 
-      {/* Mismo criterio para la RG90: barra de progreso apenas se adjunta el archivo (ver
-          handleRg90FileUpload), independiente de la comparación posterior contra el Libro. */}
+      {/* Barra de progreso ÚNICA para todo lo que analiza la RG90 -- tanto adjuntar
+          (handleRg90FileUpload) como comparar contra el Libro (analyzeRg90) comparten
+          rg90Progress (con su propio `message` según cuál esté en curso), así que nunca se
+          solapan dos indicadores de RG90 al mismo tiempo (ver el comentario en la
+          declaración del estado). */}
       {rg90Progress && (
         <ProgressModal
-          message="Analizando archivo de la RG90…"
+          message={rg90Progress.message}
           percent={rg90Progress.percent}
           total={rg90Progress.total}
         />
       )}
-
-      {/* Comparación contra la RG90 (Paso 3→4, "Analizar y comparar") -- sin cambios, sigue
-          siendo el spinner genérico (no lee un Excel nuevo, cruza lo que ya se cargó). */}
-      {(rg90Analyzing || rg90Error) && (
-        <ProcessingModal
-          message="Comparando contra la RG90…"
-          error={rg90Analyzing ? null : rg90Error}
-          onClose={() => setRg90Error(null)}
-        />
+      {/* Mismo criterio que con el Libro: sin barra, ya no hay ningún avance que mostrar --
+          rg90Error ya viene limpio a null apenas arranca un intento nuevo. */}
+      {!rg90Progress && rg90Error && (
+        <ProcessingModal error={rg90Error} onClose={() => setRg90Error(null)} />
       )}
 
       {/* Comprobantes duplicados detectados al adjuntar el Libro o la RG90 -- mismo error
