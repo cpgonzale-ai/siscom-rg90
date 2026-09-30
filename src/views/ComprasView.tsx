@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { ProcessingModal } from '../components/ProcessingModal';
+import { ProgressModal } from '../components/ProgressModal';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
 import { ColumnPicker } from '../components/ColumnPicker';
@@ -15,6 +16,7 @@ import type { Local, CompraRow, CompraDiffRow, CompraDiffLado } from '../service
 import { ingestComprasApi, reconcileComprasApi, exportarTablaExcelApi } from '../services/api';
 import { formatGs } from '../utils/format';
 import { idbGet, idbSet, COMPRAS_PERSIST_KEY } from '../utils/persistStore';
+import { contarFilasAproximado, ejecutarConAvance } from '../utils/progreso';
 
 interface ComprasViewProps {
   locales: Local[];
@@ -175,6 +177,10 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
   const [archivos, setArchivos] = useState<ArchivoAdjunto[]>([]);
   const [converting, setConverting] = useState(false);
   const [convertError, setConvertError] = useState<string | null>(null);
+  // Indicador de avance mientras se analiza el Excel del libro de compras (doConvertir) --
+  // ver ProgressModal/utils/progreso.ts (mismo mecanismo que RG90View para Ventas). null =
+  // no hay ningún análisis de archivo en curso ahora mismo.
+  const [libroProgress, setLibroProgress] = useState<{ percent: number; total: number } | null>(null);
   const [confirmEliminarTodos, setConfirmEliminarTodos] = useState(false);
 
   // ── Paso 1: libro procesado ──────────────────────────────────────────────
@@ -393,8 +399,15 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
     }
     setConverting(true);
     setConvertError(null);
+    // Total aproximado (SheetJS, en el navegador) para el indicador "Procesados: X de Y" --
+    // ver contarFilasAproximado. Puramente visual, no participa en ninguna regla de negocio.
+    const totalAprox = await contarFilasAproximado(archivos.map(a => a.rawFile));
+    setLibroProgress({ percent: 0, total: totalAprox });
     try {
-      const res = await ingestComprasApi(archivos.map(a => a.rawFile));
+      const res = await ejecutarConAvance(
+        (onUploadProgress) => ingestComprasApi(archivos.map(a => a.rawFile), 'Local General', onUploadProgress),
+        (f) => setLibroProgress(p => (p ? { ...p, percent: f * 100 } : p)),
+      );
       const rowsConLocal = (res.rows || []).map(r => ({ ...r, local: resolveLocal(r.codigo_sucursal) }));
       setRows(rowsConLocal);
       setLoteId(res.lote_id);
@@ -402,12 +415,18 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
       if (!res.rows || res.rows.length === 0) {
         setConvertError('El servidor procesó el/los archivo(s) pero no encontró ningún comprobante válido. Revisá que sea el reporte de compras del sistema, sin editar a mano.');
       }
+      // Recién con el archivo COMPLETAMENTE analizado se completa la barra al 100%, se
+      // espera un instante para que se perciba como terminada, y solo entonces se revela el
+      // resultado -- mismo criterio que doConvert en App.tsx (Ventas).
+      setLibroProgress(p => (p ? { ...p, percent: 100 } : p));
+      await new Promise(resolve => setTimeout(resolve, 350));
       // Se queda en el paso 1 mostrando la grilla — el usuario avanza al paso 2 con el
       // botón "Siguiente" cuando ya revisó el libro, no de forma automática.
     } catch (e) {
       setConvertError(e instanceof Error ? e.message : 'Error al procesar los archivos en el servidor.');
     } finally {
       setConverting(false);
+      setLibroProgress(null);
     }
   };
 
@@ -1396,18 +1415,22 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
         />
       )}
 
-      {/* Overlay bloqueante mientras el sistema está procesando — ingesta/conversión del
-          libro de compras (Paso 1) — para que no se pueda interactuar con nada hasta que
-          termine. Si termina en error (ej. archivo con formato incorrecto), el mismo modal
-          pasa a mostrarlo en vez de desaparecer silenciosamente: convertError ya viene
-          limpio a null apenas arranca un intento nuevo (ver doConvertir), así que solo queda
-          en pie acá cuando la conversión ya terminó y falló. */}
-      {(converting || convertError) && (
-        <ProcessingModal
-          message="Analizando y convirtiendo el libro de compras…"
-          error={converting ? null : convertError}
-          onClose={() => setConvertError(null)}
+      {/* Overlay bloqueante con barra de progreso mientras se lee/analiza el Excel del libro
+          de compras (Paso 1, ver doConvertir) -- mismo mecanismo que doConvert en App.tsx
+          (Ventas): nada de la grilla resultante queda visible detrás hasta que termina. */}
+      {converting && libroProgress && (
+        <ProgressModal
+          message="Analizando archivo del Libro de Compras…"
+          percent={libroProgress.percent}
+          total={libroProgress.total}
         />
+      )}
+      {/* Si termina en error (ej. archivo con formato incorrecto), se muestra con el modal
+          genérico de siempre (sin barra, ya no hay ningún avance que mostrar) -- convertError
+          ya viene limpio a null apenas arranca un intento nuevo (ver doConvertir), así que
+          solo queda en pie acá cuando la conversión ya terminó y falló. */}
+      {!converting && convertError && (
+        <ProcessingModal error={convertError} onClose={() => setConvertError(null)} />
       )}
 
       {/* Mismo criterio para la comparación contra la RG (Paso 2). */}

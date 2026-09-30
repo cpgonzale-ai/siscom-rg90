@@ -515,16 +515,18 @@ export function deleteUsuarioApi(id: number): Promise<void> {
 }
 
 // ── Libro de Compras (Minuta 5) ─────────────────────────────────────────────
-export async function ingestComprasApi(files: File[], localName: string = 'Local General'): Promise<CompraIngestResult> {
+export async function ingestComprasApi(
+  files: File[],
+  localName: string = 'Local General',
+  onUploadProgress?: (loaded: number, total: number) => void,
+): Promise<CompraIngestResult> {
   const formData = new FormData();
   files.forEach(f => formData.append('files', f));
   formData.append('local_name', localName);
 
-  const res = await fetch(`${API_BASE}/compras/ingest`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: formData,
-  });
+  const res = onUploadProgress
+    ? await xhrPostFormData(`${API_BASE}/compras/ingest`, formData, onUploadProgress)
+    : await fetch(`${API_BASE}/compras/ingest`, { method: 'POST', headers: authHeaders(), body: formData });
 
   if (!res.ok) {
     if (res.status === 401) throw new Error('Tu sesión expiró o no iniciaste sesión. Volvé a loguearte e intentá de nuevo.');
