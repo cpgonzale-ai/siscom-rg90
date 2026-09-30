@@ -279,6 +279,37 @@ function authHeaders(): HeadersInit {
   return authToken ? { Authorization: `Bearer ${authToken}` } : {};
 }
 
+// fetch() no expone progreso de SUBIDA (solo de descarga, vía response.body) -- para poder
+// mostrar una barra de avance real mientras se sube y analiza un archivo grande (Libro o
+// RG90, ver ProgressModal/utils/progreso.ts) hace falta xhr.upload.onprogress, que solo
+// XMLHttpRequest tiene. Se arma un objeto con la misma porción de Response que el resto del
+// código ya usa (status/ok/json()) para no duplicar el manejo de errores existente en cada
+// función -- ingestFilesApi/validarDuplicadosLibroApi/validarDuplicadosRg90Api solo usan
+// esto cuando reciben un onUploadProgress; sin ese callback siguen usando fetch como siempre.
+function xhrPostFormData(
+  url: string,
+  formData: FormData,
+  onUploadProgress: (loaded: number, total: number) => void,
+): Promise<{ status: number; ok: boolean; json: () => Promise<any> }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    Object.entries(authHeaders()).forEach(([k, v]) => xhr.setRequestHeader(k, v as string));
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onUploadProgress(e.loaded, e.total);
+    };
+    xhr.onload = () => {
+      resolve({
+        status: xhr.status,
+        ok: xhr.status >= 200 && xhr.status < 300,
+        json: async () => { try { return JSON.parse(xhr.responseText); } catch { return null; } },
+      });
+    };
+    xhr.onerror = () => reject(new Error('Error de red al conectar con el servidor.'));
+    xhr.send(formData);
+  });
+}
+
 async function throwApiError(res: Response, fallback: string): Promise<never> {
   if (res.status === 401) throw new Error('Tu sesión expiró o no iniciaste sesión. Volvé a loguearte e intentá de nuevo.');
   if (res.status === 403) throw new Error('No tenés permiso para hacer esto.');
@@ -321,17 +352,20 @@ export async function loginApi(nroDocumento: string, password: string): Promise<
   return await res.json();
 }
 
-export async function ingestFilesApi(files: File[], systemKey: string, localName: string = 'Local General'): Promise<IngestResult> {
+export async function ingestFilesApi(
+  files: File[],
+  systemKey: string,
+  localName: string = 'Local General',
+  onUploadProgress?: (loaded: number, total: number) => void,
+): Promise<IngestResult> {
   const formData = new FormData();
   files.forEach(f => formData.append('files', f));
   formData.append('system_key', systemKey);
   formData.append('local_name', localName);
 
-  const res = await fetch(`${API_BASE}/ingest`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: formData,
-  });
+  const res = onUploadProgress
+    ? await xhrPostFormData(`${API_BASE}/ingest`, formData, onUploadProgress)
+    : await fetch(`${API_BASE}/ingest`, { method: 'POST', headers: authHeaders(), body: formData });
 
   if (!res.ok) {
     if (res.status === 401) throw new Error('Tu sesión expiró o no iniciaste sesión. Volvé a loguearte e intentá de nuevo.');
@@ -384,15 +418,16 @@ export async function reconcileApi(rg90Files: File[], posRows: LibroRow[], loteI
 // reconcileApi: un duplicado tira ReconcileDuplicadosError (con la grilla completa), otros
 // problemas de formato quedan como Error común y no se muestran acá (la comparación en el
 // Paso 3 los va a volver a mostrar igual que siempre).
-export async function validarDuplicadosLibroApi(posRows: LibroRow[]): Promise<void> {
+export async function validarDuplicadosLibroApi(
+  posRows: LibroRow[],
+  onUploadProgress?: (loaded: number, total: number) => void,
+): Promise<void> {
   const formData = new FormData();
   formData.append('pos_data_json', new Blob([JSON.stringify(posRows)], { type: 'application/json' }), 'pos_data.json');
 
-  const res = await fetch(`${API_BASE}/validar-duplicados-libro`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: formData,
-  });
+  const res = onUploadProgress
+    ? await xhrPostFormData(`${API_BASE}/validar-duplicados-libro`, formData, onUploadProgress)
+    : await fetch(`${API_BASE}/validar-duplicados-libro`, { method: 'POST', headers: authHeaders(), body: formData });
 
   if (!res.ok) {
     if (res.status === 401) throw new Error('Tu sesión expiró o no iniciaste sesión. Volvé a loguearte e intentá de nuevo.');
@@ -407,15 +442,16 @@ export async function validarDuplicadosLibroApi(posRows: LibroRow[]): Promise<vo
 
 // Valida la(s) RG90 en busca de comprobantes duplicados apenas se adjunta (Paso 3), sin
 // esperar a la comparación contra el libro -- ver validarDuplicadosLibroApi, mismo criterio.
-export async function validarDuplicadosRg90Api(rg90Files: File[]): Promise<void> {
+export async function validarDuplicadosRg90Api(
+  rg90Files: File[],
+  onUploadProgress?: (loaded: number, total: number) => void,
+): Promise<void> {
   const formData = new FormData();
   rg90Files.forEach(f => formData.append('rg90_files', f));
 
-  const res = await fetch(`${API_BASE}/validar-duplicados-rg90`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: formData,
-  });
+  const res = onUploadProgress
+    ? await xhrPostFormData(`${API_BASE}/validar-duplicados-rg90`, formData, onUploadProgress)
+    : await fetch(`${API_BASE}/validar-duplicados-rg90`, { method: 'POST', headers: authHeaders(), body: formData });
 
   if (!res.ok) {
     if (res.status === 401) throw new Error('Tu sesión expiró o no iniciaste sesión. Volvé a loguearte e intentá de nuevo.');

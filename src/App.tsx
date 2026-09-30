@@ -4,7 +4,9 @@ import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { ConfirmModal } from './components/ConfirmModal';
 import { ProcessingModal } from './components/ProcessingModal';
+import { ProgressModal } from './components/ProgressModal';
 import { ComprobantesDuplicadosModal } from './components/ComprobantesDuplicadosModal';
+import { contarFilasAproximado, ejecutarConAvance } from './utils/progreso';
 
 import { InicioView } from './views/InicioView';
 import { DashboardView } from './views/DashboardView';
@@ -270,6 +272,11 @@ export function App() {
   const [loteId, setLoteId] = useState<number | undefined>(undefined);
   const [converting, setConverting] = useState<boolean>(false);
   const [convertError, setConvertError] = useState<string | null>(null);
+  // Indicador de avance mientras se analiza el Excel del Libro (doConvert) o de la RG90
+  // (handleRg90FileUpload) -- ver ProgressModal/utils/progreso.ts. null = no hay ningún
+  // análisis de archivo en curso ahora mismo (se usa también como condición de render).
+  const [libroProgress, setLibroProgress] = useState<{ percent: number; total: number } | null>(null);
+  const [rg90Progress, setRg90Progress] = useState<{ percent: number; total: number } | null>(null);
 
   // Persistencia del libro de Ventas (ver src/utils/persistStore.ts): si la página se
   // recarga por accidente, el navegador se cuelga o se cierra, el usuario no pierde el
@@ -476,11 +483,20 @@ export function App() {
 
     setConverting(true);
     setConvertError(null);
+    setRg90DuplicadosError(null);
+    // Total aproximado (SheetJS, en el navegador) para el indicador "Procesados: X de Y" --
+    // ver contarFilasAproximado. Puramente visual, no participa en ninguna regla de negocio.
+    const totalAprox = await contarFilasAproximado(archivosReales);
+    setLibroProgress({ percent: 0, total: totalAprox });
     try {
       // Un solo pedido para todos los archivos — ya no hace falta agruparlos por sistema
       // de antemano: el backend detecta, por archivo, cuál de los perfiles conocidos
-      // corresponde (ver /api/ingest y archivos_detectados en la respuesta).
-      const resultado = await ingestFilesApi(archivosReales, 'auto');
+      // corresponde (ver /api/ingest y archivos_detectados en la respuesta). Peso 80% del
+      // indicador de avance -- es la parte más pesada (lectura/parseo real del Excel).
+      const resultado = await ejecutarConAvance(
+        (onUploadProgress) => ingestFilesApi(archivosReales, 'auto', 'Local General', onUploadProgress),
+        (f) => setLibroProgress(p => (p ? { ...p, percent: f * 80 } : p)),
+      );
       const rows = resultado.rows || [];
       const gaps = resultado.gaps || [];
       const cortes = resultado.cortes || [];
@@ -504,33 +520,45 @@ export function App() {
       if (rows.length === 0) {
         setConvertError('El servidor procesó el/los archivo(s) pero no encontró ningún comprobante válido. Revisá que sea el reporte correcto (hoja "tal como se descarga del sistema", sin editar a mano).');
       }
+
+      // Validación de duplicados del Libro, apenas se convierte -- no espera a que se
+      // adjunte la RG90 ni a "Analizar y comparar" (ver validarDuplicadosLibroApi). Peso 20%
+      // restante del indicador de avance. Try/catch propio: un duplicado (o cualquier otro
+      // problema de ESTA validación en particular) no debe pisar convertError ni impedir que
+      // la conversión se dé por terminada -- la conversión en sí ya funcionó bien, esto es un
+      // chequeo aparte que se suma. Si esta validación falla por un motivo QUE NO sea
+      // duplicados (red, formato raro, etc.), se ignora en silencio acá: analyzeRg90 vuelve a
+      // correr la misma validación más adelante y ahí sí se muestra cualquier error real.
+      let duplicadoDetectado: ComprobantesDuplicadosError | null = null;
+      if (rowsConLocal.length > 0) {
+        try {
+          await ejecutarConAvance(
+            (onUploadProgress) => validarDuplicadosLibroApi(rowsConLocal, onUploadProgress),
+            (f) => setLibroProgress(p => (p ? { ...p, percent: 80 + f * 20 } : p)),
+          );
+        } catch (e) {
+          if (e instanceof ReconcileDuplicadosError) duplicadoDetectado = e.payload;
+        }
+      }
+
+      // Recién con el archivo COMPLETAMENTE analizado (conversión + chequeo de duplicados)
+      // se completa la barra al 100%, se espera un instante para que se perciba como
+      // terminada, y solo entonces se revela el resultado (Paso 2) y/o el modal de
+      // duplicados -- mientras tanto, el overlay de progreso es lo único visible.
+      setLibroProgress(p => (p ? { ...p, percent: 100 } : p));
+      await new Promise(resolve => setTimeout(resolve, 350));
+
       setConverted(true);
       setCargaUploaderOpen(false);
       setPage(1);
-
-      // Validación de duplicados del Libro, apenas se convierte -- no espera a que se
-      // adjunte la RG90 ni a "Analizar y comparar" (ver validarDuplicadosLibroApi).
-      // Try/catch propio, DENTRO del try de arriba pero sin dejar que sus errores caigan en
-      // el catch de conversión: un duplicado (o cualquier otro problema de ESTA validación
-      // en particular) no debe pisar convertError ni revertir converted=true -- la
-      // conversión en sí ya funcionó bien, esto es un chequeo aparte que se suma. Si esta
-      // validación falla por un motivo QUE NO sea duplicados (red, formato raro, etc.), se
-      // ignora en silencio acá: analyzeRg90 vuelve a correr la misma validación más
-      // adelante y ahí sí se muestra cualquier error real, sin cambios respecto de antes.
-      setRg90DuplicadosError(null);
-      if (rowsConLocal.length > 0) {
-        try {
-          await validarDuplicadosLibroApi(rowsConLocal);
-        } catch (e) {
-          if (e instanceof ReconcileDuplicadosError) setRg90DuplicadosError(e.payload);
-        }
-      }
+      if (duplicadoDetectado) setRg90DuplicadosError(duplicadoDetectado);
     } catch (e) {
       setConvertError(e instanceof Error ? e.message : 'Error al procesar los archivos en el servidor.');
       // No avanzamos a "convertido": mejor mostrar el error y dejar reintentar que
       // mostrar datos de ejemplo como si fueran el resultado real.
     } finally {
       setConverting(false);
+      setLibroProgress(null);
     }
   };
 
@@ -547,19 +575,36 @@ export function App() {
       setRg90Files(prev => [...prev, ...nuevos]);
       setRg90Attached(true);
       setRg90Error(null);
+      // Se limpia cualquier resultado de una carga anterior antes de validar los archivos
+      // nuevos, para no dejar mostrando duplicados de un archivo ya reemplazado/complementado.
+      setRg90DuplicadosError(null);
+
+      // Total aproximado (SheetJS, en el navegador) para "Procesados: X de Y" -- ver
+      // contarFilasAproximado. Puramente visual, no participa en ninguna regla de negocio.
+      const totalAprox = await contarFilasAproximado(nuevos);
+      setRg90Progress({ percent: 0, total: totalAprox });
 
       // Validación de duplicados de la RG90, apenas se adjunta el archivo -- no espera a
-      // "Analizar y comparar" contra el Libro (ver validarDuplicadosRg90Api). Se limpia
-      // cualquier resultado de una carga anterior antes de validar los archivos nuevos, para
-      // no dejar mostrando duplicados de un archivo ya reemplazado/complementado. Mismo
-      // criterio que en doConvert: un error que NO sea de duplicados se ignora acá en
-      // silencio, "Analizar y comparar" lo vuelve a mostrar más adelante sin cambios.
-      setRg90DuplicadosError(null);
+      // "Analizar y comparar" contra el Libro (ver validarDuplicadosRg90Api). Un error que NO
+      // sea de duplicados se ignora acá en silencio, "Analizar y comparar" lo vuelve a
+      // mostrar más adelante sin cambios (mismo criterio que en doConvert).
+      let duplicadoDetectado: ComprobantesDuplicadosError | null = null;
       try {
-        await validarDuplicadosRg90Api(nuevos);
+        await ejecutarConAvance(
+          (onUploadProgress) => validarDuplicadosRg90Api(nuevos, onUploadProgress),
+          (f) => setRg90Progress(p => (p ? { ...p, percent: f * 100 } : p)),
+        );
       } catch (e) {
-        if (e instanceof ReconcileDuplicadosError) setRg90DuplicadosError(e.payload);
+        if (e instanceof ReconcileDuplicadosError) duplicadoDetectado = e.payload;
       }
+
+      // Mismo criterio que en doConvert: completar la barra al 100%, dejarla un instante
+      // como terminada, y recién ahí (con el overlay ya oculto) mostrar el modal de
+      // duplicados si corresponde.
+      setRg90Progress(p => (p ? { ...p, percent: 100 } : p));
+      await new Promise(resolve => setTimeout(resolve, 350));
+      setRg90Progress(null);
+      if (duplicadoDetectado) setRg90DuplicadosError(duplicadoDetectado);
     }
   };
 
@@ -1410,21 +1455,38 @@ export function App() {
         />
       )}
 
-      {/* Overlay bloqueante mientras el sistema está procesando — ingesta/conversión del
-          libro de ventas (Paso 1→2) — para que no se pueda interactuar con nada hasta que
-          termine. Si termina en error (ej. archivo con formato incorrecto), el mismo modal
-          pasa a mostrarlo en vez de desaparecer silenciosamente: convertError ya viene
-          limpio a null apenas arranca un intento nuevo (ver doConvert), así que solo queda
-          en pie acá cuando la conversión ya terminó y falló. */}
-      {(converting || convertError) && (
-        <ProcessingModal
-          message="Analizando y convirtiendo el libro de ventas…"
-          error={converting ? null : convertError}
-          onClose={() => setConvertError(null)}
+      {/* Overlay bloqueante con barra de progreso mientras se lee/analiza el Excel del
+          Libro (Paso 1→2, ver doConvert) -- nada de la pantalla siguiente queda visible
+          detrás hasta que termina. Si converting sigue en pie pero libroProgress ya se
+          limpió (no debería pasar, pero por las dudas) no se muestra nada roto: ambos
+          se limpian juntos en el finally de doConvert. */}
+      {converting && libroProgress && (
+        <ProgressModal
+          message="Analizando archivo del Libro…"
+          percent={libroProgress.percent}
+          total={libroProgress.total}
+        />
+      )}
+      {/* Si termina en error (ej. archivo con formato incorrecto), se muestra con el modal
+          genérico de siempre (sin barra, ya no hay ningún avance que mostrar) -- convertError
+          ya viene limpio a null apenas arranca un intento nuevo (ver doConvert), así que solo
+          queda en pie acá cuando la conversión ya terminó y falló. */}
+      {!converting && convertError && (
+        <ProcessingModal error={convertError} onClose={() => setConvertError(null)} />
+      )}
+
+      {/* Mismo criterio para la RG90: barra de progreso apenas se adjunta el archivo (ver
+          handleRg90FileUpload), independiente de la comparación posterior contra el Libro. */}
+      {rg90Progress && (
+        <ProgressModal
+          message="Analizando archivo de la RG90…"
+          percent={rg90Progress.percent}
+          total={rg90Progress.total}
         />
       )}
 
-      {/* Mismo criterio para la comparación contra la RG90 (Paso 3→4). */}
+      {/* Comparación contra la RG90 (Paso 3→4, "Analizar y comparar") -- sin cambios, sigue
+          siendo el spinner genérico (no lee un Excel nuevo, cruza lo que ya se cargó). */}
       {(rg90Analyzing || rg90Error) && (
         <ProcessingModal
           message="Comparando contra la RG90…"
