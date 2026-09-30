@@ -5,6 +5,11 @@ import { Filter } from 'lucide-react';
 
 const PANEL_WIDTH = 220;
 const PANEL_MARGIN = 12;
+// Alto de todo lo que NO es la lista de valores (buscador + "Seleccionar todo" + fila de
+// botones + padding del panel) -- medido en el navegador. Se suma al alto de la lista
+// (variable según cuántos valores distintos haya, ver listHeight) para saber si el panel
+// completo entra hacia abajo del ícono sin salirse de la pantalla, ver `abrir()`.
+const PANEL_FIXED_HEIGHT = 120;
 // Altura real de una fila del desplegable (checkbox + valor, una sola línea), medida en el
 // navegador — igual criterio que las grillas virtualizadas del resto del sistema
 // (RG90View.tsx/ComprasView.tsx/LibroCompletoView.tsx): fila fija, sin measureElement.
@@ -109,12 +114,25 @@ export const ExcelFilterHeader: React.FC<ExcelFilterHeaderProps> = ({ label, all
     // render todavía es el de open=false, así que `distinct` vale [] (ver su definición
     // arriba); getDistinct() sí calcula (o reusa el caché) sin depender de en qué render
     // está parado.
-    setDraft(active ? new Set(active) : new Set(getDistinct()));
+    const distinctValues = getDistinct();
+    setDraft(active ? new Set(active) : new Set(distinctValues));
     setSearch('');
     const rect = btnRef.current?.getBoundingClientRect();
     if (rect) {
       const left = Math.min(rect.left, window.innerWidth - PANEL_WIDTH - PANEL_MARGIN);
-      setPos({ top: rect.bottom + 6, left: Math.max(PANEL_MARGIN, left) });
+      // Mismo criterio que el clamp de `left` (borde derecho), ahora para el borde inferior.
+      // Bug real reportado: en grillas que quedan más abajo en la página (ej. Paso 3 de
+      // RG90View, con la caja de "Adjuntar RG90" empujando la grilla hacia abajo), el panel
+      // se abría siempre hacia ABAJO del ícono sin chequear si entraba en la pantalla,
+      // dejando "Cancelar"/"Aplicar" recortados fuera del viewport, inalcanzables aunque
+      // existieran en el DOM. Si no entra hacia abajo, se abre hacia arriba en su lugar.
+      const listH = distinctValues.length === 0 ? 32 : Math.min(distinctValues.length * ROW_HEIGHT, 160);
+      const panelHeight = PANEL_FIXED_HEIGHT + listH;
+      let top = rect.bottom + 6;
+      if (top + panelHeight > window.innerHeight - PANEL_MARGIN) {
+        top = Math.max(PANEL_MARGIN, rect.top - panelHeight - 6);
+      }
+      setPos({ top, left: Math.max(PANEL_MARGIN, left) });
     }
     setOpen(true);
   };
