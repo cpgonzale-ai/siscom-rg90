@@ -4,6 +4,7 @@ import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { ConfirmModal } from './components/ConfirmModal';
 import { ProcessingModal } from './components/ProcessingModal';
+import { ComprobantesDuplicadosModal } from './components/ComprobantesDuplicadosModal';
 
 import { InicioView } from './views/InicioView';
 import { DashboardView } from './views/DashboardView';
@@ -24,6 +25,8 @@ import {
   LibroRow,
   CorrelatividadRow,
   RG90DiffRow,
+  ComprobantesDuplicadosError,
+  ReconcileDuplicadosError,
   CorteRow,
   UploadedFileMeta,
   Local,
@@ -256,6 +259,11 @@ export function App() {
   const [rg90Files, setRg90Files] = useState<File[]>([]);
   const [rg90Analyzing, setRg90Analyzing] = useState<boolean>(false);
   const [rg90Error, setRg90Error] = useState<string | null>(null);
+  // Caso especial de rg90Error: comprobantes duplicados detectados al adjuntar el Libro o
+  // la RG90 (misma validación de siempre, ver ReconcileDuplicadosError en services/api.ts)
+  // — se muestra en su propio modal con grilla en vez del cartel de una sola línea de
+  // ProcessingModal, por eso vive en un estado aparte.
+  const [rg90DuplicadosError, setRg90DuplicadosError] = useState<ComprobantesDuplicadosError | null>(null);
   const [rg90Summary, setRg90Summary] = useState<{ coinciden: number; no_en_rg90: number; no_en_libro: number; saltos: number; diferencia_monto: number; anuladas: number } | null>(null);
   const [loteId, setLoteId] = useState<number | undefined>(undefined);
   const [converting, setConverting] = useState<boolean>(false);
@@ -535,6 +543,7 @@ export function App() {
 
     setRg90Analyzing(true);
     setRg90Error(null);
+    setRg90DuplicadosError(null);
     try {
       const res = await reconcileApi(rg90Files, libroRows, loteId);
       setRg90DiffRows(res.diffs || []);
@@ -553,7 +562,11 @@ export function App() {
       // Se queda en el Paso 3, listando los registros de la RG90 — el usuario avanza al
       // Paso 4 con "Siguiente" cuando quiera ver el resultado, igual que Compras.
     } catch (e) {
-      setRg90Error(e instanceof Error ? e.message : 'Error al ejecutar la comparación RG90.');
+      if (e instanceof ReconcileDuplicadosError) {
+        setRg90DuplicadosError(e.payload);
+      } else {
+        setRg90Error(e instanceof Error ? e.message : 'Error al ejecutar la comparación RG90.');
+      }
     } finally {
       setRg90Analyzing(false);
     }
@@ -1385,6 +1398,13 @@ export function App() {
           error={rg90Analyzing ? null : rg90Error}
           onClose={() => setRg90Error(null)}
         />
+      )}
+
+      {/* Comprobantes duplicados detectados al adjuntar el Libro o la RG90 -- mismo error
+          de siempre (ver ReconcileDuplicadosError), mostrado en su propia grilla en vez del
+          cartel de una línea de ProcessingModal (ver el porqué en rg90DuplicadosError). */}
+      {rg90DuplicadosError && (
+        <ComprobantesDuplicadosModal error={rg90DuplicadosError} onClose={() => setRg90DuplicadosError(null)} />
       )}
     </div>
   );

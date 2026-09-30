@@ -82,6 +82,39 @@ export interface RG90DiffRow {
   diferencias_detalle?: Record<string, number>;
 }
 
+// Comprobantes duplicados (mismo doc Y mismo tipo_doc, dos o más veces) detectados al
+// adjuntar el Libro o la RG90 — misma validación de siempre (ver
+// _insertar_lote_diagnosticando_duplicados en el backend, main.py), corta la comparación
+// igual que antes; esto es solo la forma estructurada del mensaje de error, para mostrarlo
+// en una grilla en vez de un párrafo con solo 5 ejemplos.
+export interface ComprobantesDuplicadosDetalle {
+  comprobante: string;
+  tipo: string;
+  cantidad: number | string;
+  origen: 'Libro' | 'RG90';
+}
+export interface ComprobantesDuplicadosError {
+  tipo: 'comprobantes_duplicados';
+  origen: 'Libro' | 'RG90';
+  titulo: string;
+  mensaje: string;
+  resumen: { origen: string; cantidad: number }[];
+  detalle: ComprobantesDuplicadosDetalle[];
+  aclaracion?: string | null;
+}
+
+// Error tipado para poder distinguir "vinieron comprobantes duplicados" (con toda la data
+// para armar la grilla) de cualquier otro error de /api/reconcile (formato de archivo
+// inválido, sesión expirada, etc.), que sigue siendo un Error común con solo un mensaje.
+export class ReconcileDuplicadosError extends Error {
+  payload: ComprobantesDuplicadosError;
+  constructor(payload: ComprobantesDuplicadosError) {
+    super(payload.mensaje);
+    this.name = 'ReconcileDuplicadosError';
+    this.payload = payload;
+  }
+}
+
 // Libro de Compras (Minuta 5) — a diferencia de LibroRow (ventas), acá "clave" es la que se
 // usa para comparar contra la RG (documento + RUC del proveedor sin dígito verificador,
 // concatenados) porque el documento solo no alcanza: distintos proveedores repiten
@@ -328,9 +361,15 @@ export async function reconcileApi(rg90Files: File[], posRows: LibroRow[], loteI
 
   if (!res.ok) {
     if (res.status === 401) throw new Error('Tu sesión expiró o no iniciaste sesión. Volvé a loguearte e intentá de nuevo.');
-    let detail = '';
-    try { detail = (await res.json())?.detail || ''; } catch { /* respuesta sin JSON */ }
-    throw new Error(detail || `Error al ejecutar la comparación RG90 (HTTP ${res.status}).`);
+    let detail: unknown = '';
+    try { detail = (await res.json())?.detail ?? ''; } catch { /* respuesta sin JSON */ }
+    // El backend manda el detail como objeto (no string) específicamente para este caso
+    // (ver el porqué en ComprobantesDuplicadosError, arriba) -- cualquier otro error sigue
+    // llegando como string, sin cambios.
+    if (detail && typeof detail === 'object' && (detail as { tipo?: string }).tipo === 'comprobantes_duplicados') {
+      throw new ReconcileDuplicadosError(detail as ComprobantesDuplicadosError);
+    }
+    throw new Error((typeof detail === 'string' && detail) || `Error al ejecutar la comparación RG90 (HTTP ${res.status}).`);
   }
   return await res.json();
 }
