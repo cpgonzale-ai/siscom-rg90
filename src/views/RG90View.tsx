@@ -683,7 +683,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                     <div style={{ fontSize: '12.5px', color: '#9aa1ab', marginBottom: '4px' }}>Este total se compone de:</div>
                     <div style={filaStyle}><span>Coinciden</span><span>{coinciden.toLocaleString('es-PY')}</span></div>
                     <div style={filaStyle}><span>Diferencia de monto</span><span>{diferenciaMonto.toLocaleString('es-PY')}</span></div>
-                    <div style={filaStyle}><span>No en la RG90</span><span>{noEnRg90.toLocaleString('es-PY')}</span></div>
+                    <div style={filaStyle}><span>Registros que no se encuentran en la RG90</span><span>{noEnRg90.toLocaleString('es-PY')}</span></div>
                     <div style={filaStyle}><span>Anulados</span><span>{anulados.toLocaleString('es-PY')}</span></div>
                     <div style={{ ...filaStyle, borderTop: '1px solid #e2e0da', marginTop: '4px', paddingTop: '10px', fontWeight: 700, color: '#22262b' }}>
                       <span>Total</span><span>{sumaLibro.toLocaleString('es-PY')}</span>
@@ -702,7 +702,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                     <div style={{ fontSize: '12.5px', color: '#9aa1ab', marginBottom: '4px' }}>Este total se compone de:</div>
                     <div style={filaStyle}><span>Coinciden</span><span>{coinciden.toLocaleString('es-PY')}</span></div>
                     <div style={filaStyle}><span>Diferencia de monto</span><span>{diferenciaMonto.toLocaleString('es-PY')}</span></div>
-                    <div style={filaStyle}><span>No en libro de ventas</span><span>{noEnLibro.toLocaleString('es-PY')}</span></div>
+                    <div style={filaStyle}><span>Registros que no se encuentran en el libro</span><span>{noEnLibro.toLocaleString('es-PY')}</span></div>
                     <div style={{ ...filaStyle, borderTop: '1px solid #e2e0da', marginTop: '4px', paddingTop: '10px', fontWeight: 700, color: '#22262b' }}>
                       <span>Total</span><span>{sumaRg90.toLocaleString('es-PY')}</span>
                     </div>
