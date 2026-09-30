@@ -39,7 +39,6 @@ import {
   ingestFilesApi,
   reconcileApi,
   validarDuplicadosLibroApi,
-  validarDuplicadosRg90Api,
   getAuthToken,
   setAuthToken,
   getMeApi,
@@ -275,15 +274,11 @@ export function App() {
   // ProgressModal/utils/progreso.ts. null = no hay ningún análisis de archivo en curso
   // ahora mismo (se usa también como condición de render).
   const [libroProgress, setLibroProgress] = useState<{ percent: number; total: number } | null>(null);
-  // Mismo mecanismo para TODO lo que analiza/lee la RG90 -- tanto la validación inmediata al
-  // adjuntar (handleRg90FileUpload) como la comparación contra el Libro ("Analizar y
-  // comparar", ver analyzeRg90) comparten este ÚNICO estado (con su propio `message` según
-  // cuál de las dos está en curso). Bug real corregido acá: antes cada una tenía su propio
-  // indicador (esta barra + el spinner "Comparando contra la RG90…" de ProcessingModal), y
-  // si el usuario clickeaba "Analizar y comparar" mientras la validación de adjuntar todavía
-  // estaba en curso (el botón no estaba deshabilitado para eso), los dos se mostraban
-  // superpuestos. Con un solo estado compartido es imposible que haya dos a la vez: no hay
-  // ningún renglón de código donde ambos puedan ser no-null al mismo tiempo.
+  // Progreso de "Analizar y comparar" (ver analyzeRg90) -- a propósito, adjuntar el archivo
+  // (handleRg90FileUpload) NO toca este estado ni dispara ningún análisis: leer/analizar la
+  // RG90 (duplicados incluidos) y compararla contra el libro son, de cara al usuario, un
+  // solo paso con una sola pantalla de progreso, que arranca recién con el click en
+  // "Analizar y comparar" -- nunca antes, y nunca dos pantallas para esto.
   const [rg90Progress, setRg90Progress] = useState<{ percent: number; total: number; message: string } | null>(null);
 
   // Persistencia del libro de Ventas (ver src/utils/persistStore.ts): si la página se
@@ -574,7 +569,7 @@ export function App() {
     // Sin uso en producción: el input real de archivo ya llama a handleRg90FileUpload.
   };
 
-  const handleRg90FileUpload = async (files: FileList) => {
+  const handleRg90FileUpload = (files: FileList) => {
     if (files.length > 0) {
       // Convertir a array acá afuera, antes del updater — ver el mismo comentario en
       // ComprasView.handleRgFileInput. Hoy no rompe porque este input no resetea su value,
@@ -583,49 +578,15 @@ export function App() {
       setRg90Files(prev => [...prev, ...nuevos]);
       setRg90Attached(true);
       setRg90Error(null);
-      // Se limpia cualquier resultado de una carga anterior antes de validar los archivos
-      // nuevos, para no dejar mostrando duplicados de un archivo ya reemplazado/complementado.
+      // Se limpia cualquier resultado de una carga anterior -- el archivo nuevo todavía no
+      // se analizó, así que no puede quedar mostrando duplicados de un archivo reemplazado.
       setRg90DuplicadosError(null);
-
-      // Bug real corregido acá: rg90Progress (el "cerrojo" que evita que esto y
-      // analyzeRg90 corran a la vez, ver su declaración) se seteaba recién DESPUÉS de
-      // contarFilasAproximado -- para un archivo grande, ese conteo del lado del navegador
-      // (SheetJS) puede tardar varios segundos por sí solo. Durante esa ventana,
-      // rg90Progress seguía en null, así que "Analizar y comparar" quedaba habilitado y sin
-      // protección: un click ahí arrancaba analyzeRg90 EN PARALELO con esta misma función
-      // todavía en curso, y las dos pisándose el mismo estado compartido explica los
-      // síntomas reportados (ventanas que se superponen, el % que sube y vuelve a bajar,
-      // términos sin mostrar los datos). Setear el cerrojo ACÁ, antes de cualquier await,
-      // cierra la ventana por completo -- total se completa un instante después, sin
-      // reabrir la ventana de carrera.
-      setRg90Progress({ percent: 0, total: 0, message: 'Analizando archivo de la RG90…' });
-
-      // Total aproximado (SheetJS, en el navegador) para "Procesados: X de Y" -- ver
-      // contarFilasAproximado. Puramente visual, no participa en ninguna regla de negocio.
-      const totalAprox = await contarFilasAproximado(nuevos);
-      setRg90Progress(p => (p ? { ...p, total: totalAprox } : p));
-
-      // Validación de duplicados de la RG90, apenas se adjunta el archivo -- no espera a
-      // "Analizar y comparar" contra el Libro (ver validarDuplicadosRg90Api). Un error que NO
-      // sea de duplicados se ignora acá en silencio, "Analizar y comparar" lo vuelve a
-      // mostrar más adelante sin cambios (mismo criterio que en doConvert).
-      let duplicadoDetectado: ComprobantesDuplicadosError | null = null;
-      try {
-        await ejecutarConAvance(
-          (onUploadProgress) => validarDuplicadosRg90Api(nuevos, onUploadProgress),
-          (f) => setRg90Progress(p => (p ? { ...p, percent: f * 100 } : p)),
-        );
-      } catch (e) {
-        if (e instanceof ReconcileDuplicadosError) duplicadoDetectado = e.payload;
-      }
-
-      // Mismo criterio que en doConvert: completar la barra al 100%, dejarla un instante
-      // como terminada, y recién ahí (con el overlay ya oculto) mostrar el modal de
-      // duplicados si corresponde.
-      setRg90Progress(p => (p ? { ...p, percent: 100 } : p));
-      await new Promise(resolve => setTimeout(resolve, 350));
-      setRg90Progress(null);
-      if (duplicadoDetectado) setRg90DuplicadosError(duplicadoDetectado);
+      // A propósito, NO se dispara ningún análisis acá: adjuntar el archivo solo lo agrega
+      // a la lista. Antes esto arrancaba automáticamente una validación de duplicados en
+      // segundo plano (con su propia barra de progreso) apenas se elegía el archivo -- a
+      // pedido explícito, ese análisis pasa a correr ÚNICAMENTE cuando el usuario presiona
+      // "Analizar y comparar" (ver analyzeRg90), junto con la comparación, como un solo
+      // proceso con una sola pantalla de progreso.
     }
   };
 
@@ -639,20 +600,22 @@ export function App() {
 
   const analyzeRg90 = async () => {
     if (!rg90Attached || rg90Files.length === 0) return;
-    // Nunca se solapa con la validación inmediata de adjuntar (ver rg90Progress, arriba) --
-    // si por algún motivo esta función se llamara mientras esa validación todavía está en
-    // curso, no arranca una segunda barra encima.
+    // Guard defensivo contra un doble click antes de que React llegue a deshabilitar el
+    // botón (ver rg90Progress, declarado arriba): si por algún motivo esta función se
+    // llamara mientras ya hay un análisis en curso, no arranca una segunda barra encima.
     if (rg90Progress) return;
 
     setRg90Error(null);
     setRg90DuplicadosError(null);
-    // Mismo bug (y mismo fix) que en handleRg90FileUpload: el cerrojo (rg90Progress) se
-    // setea ACÁ, antes de contarFilasAproximado (que para un archivo grande puede tardar
-    // varios segundos), para no dejar una ventana donde el guard de arriba ya pasó pero el
-    // estado compartido todavía es null -- durante esa ventana, un segundo click en
-    // "Analizar y comparar" (o un archivo nuevo de RG90 adjuntado en simultáneo) podría
-    // arrancar en paralelo y pisar el mismo estado.
-    setRg90Progress({ percent: 0, total: 0, message: 'Comparando contra la RG90…' });
+    // El cerrojo (rg90Progress) se setea ACÁ, antes de contarFilasAproximado (que para un
+    // archivo grande puede tardar varios segundos), para no dejar una ventana donde el
+    // guard de arriba ya pasó pero el estado compartido todavía es null -- durante esa
+    // ventana, un segundo click en "Analizar y comparar" podría arrancar en paralelo y
+    // pisar el mismo estado. Un solo mensaje/una sola barra para TODO el proceso: leer y
+    // analizar la RG90 (duplicados incluidos) Y compararla contra el libro son, de cara al
+    // usuario, un único paso -- lo hace todo /api/reconcile en un solo pedido (ver
+    // reconcileApi), así que nunca hay dos pantallas para esto, a pedido explícito.
+    setRg90Progress({ percent: 0, total: 0, message: 'Analizando y comparando contra la RG90…' });
     const totalAprox = (await contarFilasAproximado(rg90Files)) + libroRows.length;
     setRg90Progress(p => (p ? { ...p, total: totalAprox } : p));
 
@@ -1430,7 +1393,7 @@ export function App() {
               rg90Attached={rg90Attached}
               rg90StatusText={
                 rg90Busy
-                  ? 'Comparando contra la RG90 en el servidor…'
+                  ? 'Analizando y comparando contra la RG90 en el servidor…'
                   : rg90Loaded
                   ? `Archivo cargado y comparado — ${rg90Files.map(f => f.name).join(', ')}`
                   : rg90Attached
@@ -1526,11 +1489,10 @@ export function App() {
         <ProcessingModal error={convertError} onClose={() => setConvertError(null)} />
       )}
 
-      {/* Barra de progreso ÚNICA para todo lo que analiza la RG90 -- tanto adjuntar
-          (handleRg90FileUpload) como comparar contra el Libro (analyzeRg90) comparten
-          rg90Progress (con su propio `message` según cuál esté en curso), así que nunca se
-          solapan dos indicadores de RG90 al mismo tiempo (ver el comentario en la
-          declaración del estado). */}
+      {/* Única pantalla de progreso para "Analizar y comparar" (ver analyzeRg90) -- leer/
+          analizar la RG90 y compararla contra el libro corren como un solo proceso, con un
+          solo mensaje y un solo porcentaje (ver el comentario en la declaración del estado
+          más arriba). Adjuntar el archivo no toca este estado. */}
       {rg90Progress && (
         <ProgressModal
           message={rg90Progress.message}
