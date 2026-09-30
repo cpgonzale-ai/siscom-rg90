@@ -11,7 +11,7 @@ import { exportarTablaExcelApi, exportarDiffVentasExcelApi } from '../services/a
 import type { RG90DiffRow } from '../services/api';
 import {
   RG90_DIFF_COLUMNAS, RG90_DIFF_COLUMNAS_PICKER, CAMPOS_DIFF_VENTAS,
-  valorCeldaDiffVentas, parseGs,
+  valorCeldaDiffVentas, diferenciaCampoVentas, parseGs,
 } from '../utils/diffVentasColumns';
 
 // parseGs/valorCeldaDiffVentas/diferenciaCampoVentas/RG90_DIFF_COLUMNAS/_PICKER/CAMPOS_DIFF_VENTAS
@@ -248,7 +248,16 @@ export const RG90View: React.FC<RG90ViewProps> = ({
     for (const campo of CAMPOS_DIFF_VENTAS) {
       acc.libro[campo] = filteredRg90DiffCols.reduce((s, d) => s + parseGs(valorCeldaDiffVentas(d, 'libro', campo)), 0);
       acc.rg[campo] = filteredRg90DiffCols.reduce((s, d) => s + parseGs(valorCeldaDiffVentas(d, 'rg90', campo)), 0);
-      acc.dif[campo] = acc.libro[campo] - acc.rg[campo];
+      // Bug real corregido acá: esto restaba las sumas de libro/rg90 ya calculadas arriba
+      // (acc.libro - acc.rg), que para una Nota de Crédito arrastra el mismo problema de
+      // signo que diferenciaCampoVentas ya tiene corregido por fila (el libro guarda el
+      // monto en negativo, la RG90 también para las NC del SET) -- restar dos sumas con
+      // signo daba un total con el signo invertido respecto de lo que mostraba cada fila
+      // individual (ej. una fila mostrando "500,00" pero el total de 1 sola fila dando
+      // "-500,00"). Se sujeta al mismo criterio que cada celda: sumar el mismo valor por
+      // fila que ya se ve en la grilla (diferenciaCampoVentas, que usa diferencias_detalle
+      // cuando está disponible), no volver a restar sumas agregadas.
+      acc.dif[campo] = filteredRg90DiffCols.reduce((s, d) => s + parseGs(diferenciaCampoVentas(d, campo)), 0);
     }
     return acc;
   }, [filteredRg90DiffCols]);

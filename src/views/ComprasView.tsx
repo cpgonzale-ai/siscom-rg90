@@ -95,8 +95,19 @@ const valorCeldaDiff = (d: CompraDiffRow, lado: 'libro' | 'rg', campo: keyof Com
 
 // Diferencia (Libro − RG) para un campo — con signo, mismo formato que el resto de los
 // importes. Los lados "—" (comprobante que no está de ese lado) cuentan como 0.
-const diferenciaCampo = (d: CompraDiffRow, campo: keyof CompraDiffLado): string =>
-  formatGs(parseGs(valorCeldaDiff(d, 'libro', campo)) - parseGs(valorCeldaDiff(d, 'rg', campo)));
+//
+// Bug real corregido acá (mismo fix que diferenciaCampoVentas en utils/diffVentasColumns.ts,
+// Ventas): para una Nota de Crédito, el libro guarda el monto en NEGATIVO mientras que la RG
+// siempre lo informa en positivo -- restar los valores CRUDOS (con signo) daba un número muy
+// distinto al real. Se usa directamente el valor que el backend ya calculó correctamente al
+// comparar (guardado en diferencias_detalle), en vez de recalcularlo acá con una resta que no
+// contempla el signo de las NC.
+const diferenciaCampo = (d: CompraDiffRow, campo: keyof CompraDiffLado): string => {
+  if (d.diferencia === 'Diferencia de monto' && d.diferencias_detalle && campo in d.diferencias_detalle) {
+    return formatGs(d.diferencias_detalle[campo]);
+  }
+  return formatGs(parseGs(valorCeldaDiff(d, 'libro', campo)) - parseGs(valorCeldaDiff(d, 'rg', campo)));
+};
 
 // Columnas de la grilla de resultado (paso 3), texto e importes — estos últimos con el
 // mismo valor que se ve en cada celda (post v()/valorCeldaDiff), no el crudo del backend.
@@ -688,7 +699,11 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
     for (const campo of CAMPOS_DIFF) {
       acc.libro[campo] = filteredDiffs.reduce((s, d) => s + parseGs(valorCeldaDiff(d, 'libro', campo)), 0);
       acc.rg[campo] = filteredDiffs.reduce((s, d) => s + parseGs(valorCeldaDiff(d, 'rg', campo)), 0);
-      acc.dif[campo] = acc.libro[campo] - acc.rg[campo];
+      // Mismo fix que en RG90View.tsx (Ventas): sumar el mismo valor por fila que ya se ve
+      // en la grilla (diferenciaCampo, que usa diferencias_detalle cuando está disponible)
+      // en vez de restar las sumas agregadas de libro/rg -- para una Nota de Crédito eso
+      // daba un total con el signo invertido respecto de lo que mostraba cada fila.
+      acc.dif[campo] = filteredDiffs.reduce((s, d) => s + parseGs(diferenciaCampo(d, campo)), 0);
     }
     return acc;
     // eslint-disable-next-line react-hooks/exhaustive-deps

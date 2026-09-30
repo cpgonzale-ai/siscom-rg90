@@ -24,8 +24,23 @@ export const valorCeldaDiffVentas = (d: RG90DiffRow, lado: 'libro' | 'rg90', cam
   return d.diferencias_detalle && campo in d.diferencias_detalle ? valor : '0,00';
 };
 
-export const diferenciaCampoVentas = (d: RG90DiffRow, campo: keyof RG90DiffLado): string =>
-  formatGs(parseGs(valorCeldaDiffVentas(d, 'libro', campo)) - parseGs(valorCeldaDiffVentas(d, 'rg90', campo)));
+// Bug real corregido acá: antes esto recalculaba la diferencia restando los strings ya
+// formateados de libro/rg90 (parseGs(libro) - parseGs(rg90)) -- para una Nota de Crédito, el
+// libro guarda el monto en NEGATIVO (ver _process_dataframe_vectorizado, engine.py) mientras
+// que la RG90 siempre lo informa en positivo. El backend SÍ compara por magnitud (usa
+// abs(pos_rec[...]) antes de restar, ver _comparar_par) para decidir si hay diferencia Y para
+// calcular su valor real (guardado en diferencias_detalle) -- pero esta función volvía a
+// restar los valores CRUDOS (con signo), dando un número muy distinto al real para NC: un
+// caso real de diferencia=500 se mostraba como -200.500 (signo falso, ~400x el valor real).
+// Ahora se usa DIRECTAMENTE el valor que el backend ya calculó correctamente (mismo criterio
+// que valorCeldaDiffVentas ya usa para decidir si un campo es 0 o no), en vez de recalcularlo
+// acá con una fórmula que no contempla el signo de las NC.
+export const diferenciaCampoVentas = (d: RG90DiffRow, campo: keyof RG90DiffLado): string => {
+  if (d.diferencia === 'Diferencia de monto' && d.diferencias_detalle && campo in d.diferencias_detalle) {
+    return formatGs(d.diferencias_detalle[campo]);
+  }
+  return formatGs(parseGs(valorCeldaDiffVentas(d, 'libro', campo)) - parseGs(valorCeldaDiffVentas(d, 'rg90', campo)));
+};
 
 export const RG90_DIFF_COLUMNAS: { key: string; label: string; getValue: (d: RG90DiffRow) => string }[] = [
   { key: 'doc', label: 'Documento', getValue: d => d.doc },
