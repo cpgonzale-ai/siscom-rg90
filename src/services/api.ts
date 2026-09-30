@@ -95,7 +95,10 @@ export interface ComprobantesDuplicadosDetalle {
 }
 export interface ComprobantesDuplicadosError {
   tipo: 'comprobantes_duplicados';
-  origen: 'Libro' | 'RG90';
+  // 'Ambos' cuando /api/reconcile encuentra duplicados en el Libro Y en la RG90 a la vez
+  // (ver _armar_error_duplicados, backend) -- cada item de "detalle" sigue teniendo su
+  // propio origen individual ('Libro' o 'RG90'), esto es solo el resumen a nivel del error.
+  origen: 'Libro' | 'RG90' | 'Ambos';
   titulo: string;
   mensaje: string;
   resumen: { origen: string; cantidad: number }[];
