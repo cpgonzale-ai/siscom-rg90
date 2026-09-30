@@ -44,7 +44,15 @@ const boxStyle: React.CSSProperties = {
 // quedar visible detrás mientras esto está montado) -- la diferencia es que acá el avance es
 // visible en vez de un spinner indefinido.
 export const ProgressModal: React.FC<ProgressModalProps> = ({ message, percent, total }) => {
-  const pct = Math.max(0, Math.min(100, Math.round(percent)));
+  // Bug real corregido acá: el avance simulado (ver ejecutarConAvance, utils/progreso.ts)
+  // se acerca asintóticamente a ~99,7% mientras se espera la respuesta del servidor --
+  // Math.round por sí solo redondeaba eso a "100%" mucho ANTES de que el proceso terminara
+  // de verdad (para archivos grandes, con el servidor todavía trabajando varios segundos o
+  // minutos más), dando la falsa impresión de que ya había terminado. Se muestra 100%
+  // ÚNICAMENTE cuando el caller lo pone en 100 de verdad (recién con la respuesta real ya
+  // recibida) -- cualquier valor menor, aunque redondee a 100, se topea en 99.
+  const pctRedondeado = Math.round(percent);
+  const pct = percent >= 100 ? 100 : Math.max(0, Math.min(99, pctRedondeado));
   const procesados = total ? Math.min(total, Math.round((pct / 100) * total)) : undefined;
 
   return (

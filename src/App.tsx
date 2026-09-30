@@ -587,10 +587,23 @@ export function App() {
       // nuevos, para no dejar mostrando duplicados de un archivo ya reemplazado/complementado.
       setRg90DuplicadosError(null);
 
+      // Bug real corregido acá: rg90Progress (el "cerrojo" que evita que esto y
+      // analyzeRg90 corran a la vez, ver su declaración) se seteaba recién DESPUÉS de
+      // contarFilasAproximado -- para un archivo grande, ese conteo del lado del navegador
+      // (SheetJS) puede tardar varios segundos por sí solo. Durante esa ventana,
+      // rg90Progress seguía en null, así que "Analizar y comparar" quedaba habilitado y sin
+      // protección: un click ahí arrancaba analyzeRg90 EN PARALELO con esta misma función
+      // todavía en curso, y las dos pisándose el mismo estado compartido explica los
+      // síntomas reportados (ventanas que se superponen, el % que sube y vuelve a bajar,
+      // términos sin mostrar los datos). Setear el cerrojo ACÁ, antes de cualquier await,
+      // cierra la ventana por completo -- total se completa un instante después, sin
+      // reabrir la ventana de carrera.
+      setRg90Progress({ percent: 0, total: 0, message: 'Analizando archivo de la RG90…' });
+
       // Total aproximado (SheetJS, en el navegador) para "Procesados: X de Y" -- ver
       // contarFilasAproximado. Puramente visual, no participa en ninguna regla de negocio.
       const totalAprox = await contarFilasAproximado(nuevos);
-      setRg90Progress({ percent: 0, total: totalAprox, message: 'Analizando archivo de la RG90…' });
+      setRg90Progress(p => (p ? { ...p, total: totalAprox } : p));
 
       // Validación de duplicados de la RG90, apenas se adjunta el archivo -- no espera a
       // "Analizar y comparar" contra el Libro (ver validarDuplicadosRg90Api). Un error que NO
@@ -633,8 +646,15 @@ export function App() {
 
     setRg90Error(null);
     setRg90DuplicadosError(null);
+    // Mismo bug (y mismo fix) que en handleRg90FileUpload: el cerrojo (rg90Progress) se
+    // setea ACÁ, antes de contarFilasAproximado (que para un archivo grande puede tardar
+    // varios segundos), para no dejar una ventana donde el guard de arriba ya pasó pero el
+    // estado compartido todavía es null -- durante esa ventana, un segundo click en
+    // "Analizar y comparar" (o un archivo nuevo de RG90 adjuntado en simultáneo) podría
+    // arrancar en paralelo y pisar el mismo estado.
+    setRg90Progress({ percent: 0, total: 0, message: 'Comparando contra la RG90…' });
     const totalAprox = (await contarFilasAproximado(rg90Files)) + libroRows.length;
-    setRg90Progress({ percent: 0, total: totalAprox, message: 'Comparando contra la RG90…' });
+    setRg90Progress(p => (p ? { ...p, total: totalAprox } : p));
 
     let duplicadoDetectado: ComprobantesDuplicadosError | null = null;
     let errorGenerico: string | null = null;
