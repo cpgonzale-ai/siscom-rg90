@@ -36,6 +36,8 @@ import {
   MeInfo,
   ingestFilesApi,
   reconcileApi,
+  validarDuplicadosLibroApi,
+  validarDuplicadosRg90Api,
   getAuthToken,
   setAuthToken,
   getMeApi,
@@ -505,6 +507,24 @@ export function App() {
       setConverted(true);
       setCargaUploaderOpen(false);
       setPage(1);
+
+      // Validación de duplicados del Libro, apenas se convierte -- no espera a que se
+      // adjunte la RG90 ni a "Analizar y comparar" (ver validarDuplicadosLibroApi).
+      // Try/catch propio, DENTRO del try de arriba pero sin dejar que sus errores caigan en
+      // el catch de conversión: un duplicado (o cualquier otro problema de ESTA validación
+      // en particular) no debe pisar convertError ni revertir converted=true -- la
+      // conversión en sí ya funcionó bien, esto es un chequeo aparte que se suma. Si esta
+      // validación falla por un motivo QUE NO sea duplicados (red, formato raro, etc.), se
+      // ignora en silencio acá: analyzeRg90 vuelve a correr la misma validación más
+      // adelante y ahí sí se muestra cualquier error real, sin cambios respecto de antes.
+      setRg90DuplicadosError(null);
+      if (rowsConLocal.length > 0) {
+        try {
+          await validarDuplicadosLibroApi(rowsConLocal);
+        } catch (e) {
+          if (e instanceof ReconcileDuplicadosError) setRg90DuplicadosError(e.payload);
+        }
+      }
     } catch (e) {
       setConvertError(e instanceof Error ? e.message : 'Error al procesar los archivos en el servidor.');
       // No avanzamos a "convertido": mejor mostrar el error y dejar reintentar que
@@ -518,7 +538,7 @@ export function App() {
     // Sin uso en producción: el input real de archivo ya llama a handleRg90FileUpload.
   };
 
-  const handleRg90FileUpload = (files: FileList) => {
+  const handleRg90FileUpload = async (files: FileList) => {
     if (files.length > 0) {
       // Convertir a array acá afuera, antes del updater — ver el mismo comentario en
       // ComprasView.handleRgFileInput. Hoy no rompe porque este input no resetea su value,
@@ -527,6 +547,19 @@ export function App() {
       setRg90Files(prev => [...prev, ...nuevos]);
       setRg90Attached(true);
       setRg90Error(null);
+
+      // Validación de duplicados de la RG90, apenas se adjunta el archivo -- no espera a
+      // "Analizar y comparar" contra el Libro (ver validarDuplicadosRg90Api). Se limpia
+      // cualquier resultado de una carga anterior antes de validar los archivos nuevos, para
+      // no dejar mostrando duplicados de un archivo ya reemplazado/complementado. Mismo
+      // criterio que en doConvert: un error que NO sea de duplicados se ignora acá en
+      // silencio, "Analizar y comparar" lo vuelve a mostrar más adelante sin cambios.
+      setRg90DuplicadosError(null);
+      try {
+        await validarDuplicadosRg90Api(nuevos);
+      } catch (e) {
+        if (e instanceof ReconcileDuplicadosError) setRg90DuplicadosError(e.payload);
+      }
     }
   };
 

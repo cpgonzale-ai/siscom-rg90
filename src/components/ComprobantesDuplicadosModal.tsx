@@ -1,7 +1,7 @@
-import React from 'react';
-import { AlertTriangle } from 'lucide-react';
-import { Modal, scrollableGridStyle, stickyTheadStyle } from './Modal';
-import type { ComprobantesDuplicadosError } from '../services/api';
+import React, { useState } from 'react';
+import { AlertTriangle, Download } from 'lucide-react';
+import { Modal, scrollableGridStyle, stickyTheadStyle, excelBtnStyle } from './Modal';
+import { exportarTablaExcelApi, type ComprobantesDuplicadosError } from '../services/api';
 
 // Presentación del error de comprobantes duplicados (ver ReconcileDuplicadosError,
 // services/api.ts) — misma validación de siempre del lado del backend
@@ -14,6 +14,27 @@ export const ComprobantesDuplicadosModal: React.FC<{
   onClose: () => void;
 }> = ({ error, onClose }) => {
   const totalResumen = error.resumen.reduce((s, r) => s + r.cantidad, 0);
+  const [descargando, setDescargando] = useState(false);
+
+  // Exporta TODO error.detalle (ya viene completo, sin truncar -- ver el comentario de
+  // arriba) a un Excel, usando los mismos resultados de la validación que ya se corrió: no
+  // vuelve a llamar a ningún endpoint de validación ni recalcula nada. Nombre de archivo
+  // según el origen para que quede claro de cuál de los dos archivos son los duplicados.
+  const descargarDuplicados = async () => {
+    setDescargando(true);
+    try {
+      await exportarTablaExcelApi(
+        `Duplicados_${error.origen}.xlsx`,
+        'Duplicados',
+        ['N.º', 'Comprobante', 'Tipo', 'Cantidad de apariciones', 'Origen'],
+        error.detalle.map((d, i) => [String(i + 1), d.comprobante, d.tipo, String(d.cantidad), d.origen]),
+      );
+    } catch (e) {
+      console.error('Error al exportar los comprobantes duplicados a Excel:', e);
+    } finally {
+      setDescargando(false);
+    }
+  };
 
   return (
     <Modal title={error.titulo} onClose={onClose} width="760px">
@@ -52,9 +73,21 @@ export const ComprobantesDuplicadosModal: React.FC<{
         </tbody>
       </table>
 
-      <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#22262b', marginBottom: '10px' }}>
-        Detalle de comprobantes duplicados ({error.detalle.length.toLocaleString('es-PY')})
-      </h4>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+        <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#22262b', margin: 0 }}>
+          Detalle de comprobantes duplicados ({error.detalle.length.toLocaleString('es-PY')})
+        </h4>
+        {error.detalle.length > 0 && (
+          <button
+            onClick={descargarDuplicados}
+            disabled={descargando}
+            style={{ ...excelBtnStyle, padding: '7px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', ...(descargando ? { opacity: 0.7, cursor: 'wait' } : {}) }}
+          >
+            <Download size={14} />
+            <span>{descargando ? 'Generando Excel…' : 'Excel'}</span>
+          </button>
+        )}
+      </div>
       <div style={scrollableGridStyle}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
           <thead>
