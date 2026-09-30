@@ -154,7 +154,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         </form>
 
         <p style={{ textAlign: 'center', fontSize: '11.5px', color: '#9aa1ab', marginTop: '20px' }}>
-          desarrollado por CORVISPY v1.0
+          Desarrollado por CORVISPY v.1.0
         </p>
       </div>
     </div>

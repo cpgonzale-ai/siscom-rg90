@@ -219,7 +219,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate, per
 
       {/* Footer Info */}
       <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,0.1)', fontSize: '11px', color: 'rgba(255,255,255,0.5)', textAlign: 'center' }}>
-        desarrollado por CORVISPY v1.0
+        Desarrollado por CORVISPY v.1.0
       </div>
       </aside>
     </>
