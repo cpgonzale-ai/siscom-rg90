@@ -415,7 +415,7 @@ export function App() {
   const rg90CardsState = [
     { key: 'Coincide', label: 'Registros que coinciden', value: `${rg90Summary?.coinciden ?? 0}`, color: '#128752' },
     { key: 'No llegó a la interfaz', label: 'Registros que no se encuentran en la RG90', value: `${rg90Summary?.no_en_rg90 ?? 0}`, color: '#b3402f' },
-    { key: 'No en libro propio', label: 'Registros que no se encuentran en libro de ventas', value: `${rg90Summary?.no_en_libro ?? 0}`, color: '#b3402f' },
+    { key: 'No existe en el libro', label: 'Registros que no se encuentran en libro de ventas', value: `${rg90Summary?.no_en_libro ?? 0}`, color: '#b3402f' },
     { key: 'Diferencia de monto', label: 'Registros con diferencia de monto', value: `${rg90Summary?.diferencia_monto ?? 0}`, color: '#b0740f' },
   ];
 
@@ -1095,7 +1095,7 @@ export function App() {
       let diffStyle = 'background:#f0eee8;color:#5c6470;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px';
       if (r.diferencia === 'Coincide') {
         diffStyle = 'background:#e8f3ec;color:#128752;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px';
-      } else if (r.diferencia === 'No llegó a la interfaz' || r.diferencia === 'No en libro propio') {
+      } else if (r.diferencia === 'No llegó a la interfaz' || r.diferencia === 'No existe en el libro') {
         diffStyle = 'background:#fbe9e3;color:#b3402f;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px';
       } else if (r.diferencia === 'Rechazada' || r.diferencia === 'Salto de numeración') {
         diffStyle = 'background:#fdf1de;color:#b0740f;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px';

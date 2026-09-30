@@ -177,7 +177,7 @@ const DIFF_COLUMNAS_PICKER: { key: string; label: string }[] = [
 const RESUMEN_CATEGORIAS: { key: string; label: string; color: string }[] = [
   { key: 'Coincide', label: 'Registros que coinciden', color: '#128752' },
   { key: 'No llegó a la interfaz', label: 'Registros que no se encuentran en la RG', color: '#b3402f' },
-  { key: 'No en libro propio', label: 'Registros que no se encuentran en libro de compras', color: '#b3402f' },
+  { key: 'No existe en el libro', label: 'Registros que no se encuentran en libro de compras', color: '#b3402f' },
   { key: 'Diferencia de monto', label: 'Registros con diferencia de monto', color: '#b0740f' },
 ];
 
@@ -748,7 +748,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
   const resumenValores: Record<string, number> = {
     'Coincide': summary?.coinciden ?? 0,
     'No llegó a la interfaz': summary?.no_en_rg ?? 0,
-    'No en libro propio': summary?.no_en_libro ?? 0,
+    'No existe en el libro': summary?.no_en_libro ?? 0,
     'Diferencia de monto': summary?.diferencia_monto ?? 0,
   };
 
@@ -1181,7 +1181,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
             const coinciden = resumenValores['Coincide'];
             const diferenciaMonto = resumenValores['Diferencia de monto'];
             const noEnRg = resumenValores['No llegó a la interfaz'];
-            const noEnLibro = resumenValores['No en libro propio'];
+            const noEnLibro = resumenValores['No existe en el libro'];
             const sumaLibro = coinciden + diferenciaMonto + noEnRg;
             const sumaRg = coinciden + diferenciaMonto + noEnLibro;
 
@@ -1202,7 +1202,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
                     <div style={{ fontSize: '12.5px', color: '#9aa1ab', marginBottom: '4px' }}>Este total se compone de:</div>
                     <div style={filaStyle}><span>Coinciden</span><span>{coinciden.toLocaleString('es-PY')}</span></div>
                     <div style={filaStyle}><span>Diferencia de monto</span><span>{diferenciaMonto.toLocaleString('es-PY')}</span></div>
-                    <div style={filaStyle}><span>No en RG</span><span>{noEnRg.toLocaleString('es-PY')}</span></div>
+                    <div style={filaStyle}><span>No en la RG</span><span>{noEnRg.toLocaleString('es-PY')}</span></div>
                     <div style={{ ...filaStyle, borderTop: '1px solid #e2e0da', marginTop: '4px', paddingTop: '10px', fontWeight: 700, color: '#22262b' }}>
                       <span>Total</span><span>{sumaLibro.toLocaleString('es-PY')}</span>
                     </div>
