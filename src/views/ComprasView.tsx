@@ -1235,7 +1235,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
           </div>
 
           {detalleAbierto && (
-            <Modal title="Detalle de Discrepancias" onClose={() => setDetalleAbierto(false)} width="1400px">
+            <Modal title="Detalle" onClose={() => setDetalleAbierto(false)} width="1400px">
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '14px' }}>
                 <span style={{ fontSize: '12.5px', color: '#5c6470' }}>
                   {filteredDiffs.length.toLocaleString('es-PY')} de {diffs.length.toLocaleString('es-PY')}
