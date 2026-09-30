@@ -181,6 +181,11 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
   // ver ProgressModal/utils/progreso.ts (mismo mecanismo que RG90View para Ventas). null =
   // no hay ningún análisis de archivo en curso ahora mismo.
   const [libroProgress, setLibroProgress] = useState<{ percent: number; total: number } | null>(null);
+  // Mismo mecanismo para "Analizar y comparar" (ver doComparar) -- leer/analizar la RG y
+  // compararla contra el libro corren como un solo proceso, con una sola pantalla de
+  // progreso, que arranca recién con el click (adjuntar el archivo no dispara nada, ver
+  // handleRgFileInput). Mismo criterio ya aplicado a RG90View.tsx (Ventas).
+  const [rgCompareProgress, setRgCompareProgress] = useState<{ percent: number; total: number } | null>(null);
   const [confirmEliminarTodos, setConfirmEliminarTodos] = useState(false);
 
   // ── Paso 1: libro procesado ──────────────────────────────────────────────
@@ -479,8 +484,16 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
     }
     setComparing(true);
     setCompareError(null);
+    // Total aproximado (SheetJS, en el navegador) para "Procesados: X de Y" -- ver
+    // contarFilasAproximado. Puramente visual, no participa en ninguna regla de negocio.
+    setRgCompareProgress({ percent: 0, total: 0 });
+    const totalAprox = (await contarFilasAproximado(rgFiles)) + rows.length;
+    setRgCompareProgress(p => (p ? { ...p, total: totalAprox } : p));
     try {
-      const res = await reconcileComprasApi(rgFiles, rows, loteId);
+      const res = await ejecutarConAvance(
+        (onUploadProgress) => reconcileComprasApi(rgFiles, rows, loteId, onUploadProgress),
+        (f) => setRgCompareProgress(p => (p ? { ...p, percent: f * 100 } : p)),
+      );
       setRgRows(res.rg_rows || []);
       setRgGridPage(1);
       setDiffs(res.diffs || []);
@@ -490,10 +503,13 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
       // Se queda en el paso 2, listando los datos de la RG — el usuario avanza al paso 3
       // con "Siguiente" cuando quiera ver el resultado de la comparación, igual que en el
       // paso 1 (analiza y lista ahí mismo, sin avanzar solo).
+      setRgCompareProgress(p => (p ? { ...p, percent: 100 } : p));
+      await new Promise(resolve => setTimeout(resolve, 350));
     } catch (e) {
       setCompareError(e instanceof Error ? e.message : 'Error al comparar contra la RG.');
     } finally {
       setComparing(false);
+      setRgCompareProgress(null);
     }
   };
 
@@ -1433,13 +1449,19 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
         <ProcessingModal error={convertError} onClose={() => setConvertError(null)} />
       )}
 
-      {/* Mismo criterio para la comparación contra la RG (Paso 2). */}
-      {(comparing || compareError) && (
-        <ProcessingModal
-          message="Comparando contra la RG…"
-          error={comparing ? null : compareError}
-          onClose={() => setCompareError(null)}
+      {/* Única pantalla de progreso para "Analizar y comparar" (Paso 2, ver doComparar) --
+          leer/analizar la RG y compararla contra el libro corren como un solo proceso, con
+          un solo mensaje y un solo porcentaje. Adjuntar el archivo no dispara nada (ver
+          handleRgFileInput) -- mismo criterio ya aplicado a RG90View.tsx (Ventas). */}
+      {comparing && rgCompareProgress && (
+        <ProgressModal
+          message="Analizando y comparando contra la RG…"
+          percent={rgCompareProgress.percent}
+          total={rgCompareProgress.total}
         />
+      )}
+      {!comparing && compareError && (
+        <ProcessingModal error={compareError} onClose={() => setCompareError(null)} />
       )}
     </div>
   );

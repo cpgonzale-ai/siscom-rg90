@@ -540,17 +540,20 @@ export async function ingestComprasApi(
   return await res.json();
 }
 
-export async function reconcileComprasApi(rgFiles: File[], comprasRows: CompraRow[], loteId?: number): Promise<CompraReconcileResult> {
+export async function reconcileComprasApi(
+  rgFiles: File[],
+  comprasRows: CompraRow[],
+  loteId?: number,
+  onUploadProgress?: (loaded: number, total: number) => void,
+): Promise<CompraReconcileResult> {
   const formData = new FormData();
   rgFiles.forEach(f => formData.append('rg_files', f));
   formData.append('pos_data_json', JSON.stringify(comprasRows));
   if (loteId !== undefined) formData.append('lote_id', String(loteId));
 
-  const res = await fetch(`${API_BASE}/compras/reconcile`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: formData,
-  });
+  const res = onUploadProgress
+    ? await xhrPostFormData(`${API_BASE}/compras/reconcile`, formData, onUploadProgress)
+    : await fetch(`${API_BASE}/compras/reconcile`, { method: 'POST', headers: authHeaders(), body: formData });
 
   if (!res.ok) {
     if (res.status === 401) throw new Error('Tu sesión expiró o no iniciaste sesión. Volvé a loguearte e intentá de nuevo.');
