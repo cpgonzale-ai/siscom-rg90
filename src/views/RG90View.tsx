@@ -808,7 +808,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
       </div>
 
       {detalleAbierto && (
-        <Modal title="Detalle de Discrepancias e Inconsistencias" onClose={() => setDetalleAbierto(false)} width="1400px">
+        <Modal title="Detalle" onClose={() => setDetalleAbierto(false)} width="1400px">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '12.5px', color: '#5c6470' }}>
