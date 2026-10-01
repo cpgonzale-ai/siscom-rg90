@@ -541,6 +541,13 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
   const [exportandoLibro, setExportandoLibro] = useState(false);
   const [exportandoRg, setExportandoRg] = useState(false);
 
+  // Mismo TOTAL + RESUMEN (Factura / Nota de Crédito / NETO / Check) que downloadLimpio en
+  // App.tsx para el Libro de Ventas — acá aplica igual porque compras_engine.py usa el mismo
+  // signo negativo para Nota de Crédito (signo = -1 if es_credito else 1, ver _process_rows),
+  // así que NETO = Factura + Nota de Crédito es la misma cuenta de "venta neta" pero del lado
+  // de compras. El binario Factura/Nota de Crédito (en vez de discriminar también Nota de
+  // Débito/Autofactura/etc.) es el mismo criterio que ya usa compras_engine.py en la práctica
+  // (ver su comentario: "con cambio, solo trae Factura/Nota de Crédito en la práctica").
   const descargarExcel = async () => {
     if (filteredRows.length === 0 || exportandoLibro) return;
     const headers = ['Documento', 'Local', 'Fecha', 'RUC Proveedor', 'Proveedor', 'Tipo', 'Condición', 'Timbrado', 'Gravada 10%', 'IVA 10%', 'Gravada 5%', 'IVA 5%', 'Exenta', 'Total', 'Estado'];
@@ -551,9 +558,44 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
       r.doc, r.local, r.fecha, `${r.ruc_proveedor}-${r.dv_proveedor}`, r.proveedor, r.tipo_doc, r.condicion, r.timbrado,
       r.gravadas, r.iva, r.gravadas_5, r.iva_5, r.exentas, r.total, r.estado,
     ]);
+
+    const sumFields = (pred: (r: CompraRow) => boolean) => {
+      const subset = filteredRows.filter(pred);
+      const sum = (f: (r: CompraRow) => number | undefined) => subset.reduce((acc, r) => acc + (f(r) ?? 0), 0);
+      return {
+        gravada10: sum(r => r.gravadas_num), iva10: sum(r => r.iva_num),
+        gravada5: sum(r => r.gravadas_5_num), iva5: sum(r => r.iva_5_num),
+        exentas: sum(r => r.exentas_num), total: sum(r => r.total_num),
+      };
+    };
+    const totalGeneral = sumFields(() => true);
+    const totalFactura = sumFields(r => (r.tipo_doc ?? 'Factura') === 'Factura');
+    const totalNC = sumFields(r => r.tipo_doc === 'Nota de Crédito');
+    const neto = {
+      gravada10: totalFactura.gravada10 + totalNC.gravada10,
+      iva10: totalFactura.iva10 + totalNC.iva10,
+      gravada5: totalFactura.gravada5 + totalNC.gravada5,
+      iva5: totalFactura.iva5 + totalNC.iva5,
+      exentas: totalFactura.exentas + totalNC.exentas,
+      total: totalFactura.total + totalNC.total,
+    };
+    const check = neto.total - totalGeneral.total;
+
+    const totalRow = ['', '', '', '', '', '', '', 'TOTAL', formatGs(totalGeneral.gravada10), formatGs(totalGeneral.iva10), formatGs(totalGeneral.gravada5), formatGs(totalGeneral.iva5), formatGs(totalGeneral.exentas), formatGs(totalGeneral.total), ''];
+    const blank = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
+    const resumenHeader = ['', '', '', '', '', '', '', 'RESUMEN', '', '', '', '', '', '', ''];
+    const facturaRow = ['', '', '', '', '', '', '', 'Factura', formatGs(totalFactura.gravada10), formatGs(totalFactura.iva10), formatGs(totalFactura.gravada5), formatGs(totalFactura.iva5), formatGs(totalFactura.exentas), formatGs(totalFactura.total), ''];
+    const ncRow = ['', '', '', '', '', '', '', 'Nota de Crédito', formatGs(totalNC.gravada10), formatGs(totalNC.iva10), formatGs(totalNC.gravada5), formatGs(totalNC.iva5), formatGs(totalNC.exentas), formatGs(totalNC.total), ''];
+    const netoRow = ['', '', '', '', '', '', '', 'NETO', formatGs(neto.gravada10), formatGs(neto.iva10), formatGs(neto.gravada5), formatGs(neto.iva5), formatGs(neto.exentas), formatGs(neto.total), ''];
+    const checkRow = ['', '', '', '', '', '', '', 'Check', '', '', '', '', '', formatGs(check), ''];
+
     setExportandoLibro(true);
     try {
-      await exportarTablaExcelApi('Libro_de_Compras.xlsx', 'Libro de Compras', headers, dataRows);
+      await exportarTablaExcelApi('Libro_de_Compras.xlsx', 'Libro de Compras', headers, [
+        ...dataRows, totalRow,
+        blank, blank, blank,
+        resumenHeader, blank, facturaRow, ncRow, netoRow, checkRow,
+      ]);
     } catch (e) {
       console.error('Error al exportar el Libro de Compras a Excel:', e);
     } finally {
