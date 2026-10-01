@@ -756,12 +756,6 @@ export const RG90View: React.FC<RG90ViewProps> = ({
               <span style={{ fontSize: '10.5px', fontWeight: 600, color: '#9aa1ab', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Saltos</span>
               <span style={{ fontSize: '15px', fontWeight: 700, color: '#b0740f' }}>{saltosTotales.length.toLocaleString('es-PY')}</span>
             </button>
-            {/* Solo lectura: sin onClick ni cursor de mano, a diferencia de las pestañas de
-                arriba — ver anuladasCount / summary.anuladas del backend. */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px', padding: '9px 16px', cursor: 'default', whiteSpace: 'nowrap' }}>
-              <span style={{ fontSize: '10.5px', fontWeight: 600, color: '#9aa1ab', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Anulados</span>
-              <span style={{ fontSize: '15px', fontWeight: 700, color: '#5c6470' }}>{rg90Loaded ? anuladasCount.toLocaleString('es-PY') : '—'}</span>
-            </div>
           </div>
 
           {/* Ya no se expande in-line (había demasiada información junta en la pantalla al
