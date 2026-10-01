@@ -191,7 +191,7 @@ export interface CompraReconcileResult {
   // proveedor salte numeración).
   rg_gaps: any[];
   diffs: CompraDiffRow[];
-  summary: { coinciden: number; no_en_rg: number; no_en_libro: number; diferencia_monto: number };
+  summary: { coinciden: number; no_en_rg: number; no_en_libro: number; diferencia_importe: number; diferencias_tasas: number };
 }
 
 export interface UploadedFileMeta {

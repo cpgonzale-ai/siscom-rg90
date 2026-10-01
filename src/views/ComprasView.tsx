@@ -87,9 +87,14 @@ const parseGs = (s: string): number => {
 // Mismo criterio de "en cero si no es la causa de la diferencia" que usa cada celda al
 // renderizarse — se repite acá para poder filtrar/sumar los importes REALMENTE visibles en
 // la grilla, no los crudos que trae el backend.
+// Regla 1 / Regla 2 del Paso de Resultados (ver reconcile_compras_with_rg en
+// compras_engine.py): "Diferencia de importe" (el Total difiere) y "Diferencias en tasas"
+// (el Total coincide pero alguna tasa difiere) son las dos observaciones que traen
+// diferencias_detalle.
+const DIFERENCIA_CON_DETALLE = ['Diferencia de importe', 'Diferencias en tasas'];
 const valorCeldaDiff = (d: CompraDiffRow, lado: 'libro' | 'rg', campo: keyof CompraDiffLado): string => {
   const valor = d[lado][campo];
-  if (d.diferencia !== 'Diferencia de monto' || valor === '—') return valor;
+  if (!DIFERENCIA_CON_DETALLE.includes(d.diferencia) || valor === '—') return valor;
   return d.diferencias_detalle && campo in d.diferencias_detalle ? valor : '0,00';
 };
 
@@ -103,7 +108,7 @@ const valorCeldaDiff = (d: CompraDiffRow, lado: 'libro' | 'rg', campo: keyof Com
 // comparar (guardado en diferencias_detalle), en vez de recalcularlo acá con una resta que no
 // contempla el signo de las NC.
 const diferenciaCampo = (d: CompraDiffRow, campo: keyof CompraDiffLado): string => {
-  if (d.diferencia === 'Diferencia de monto' && d.diferencias_detalle && campo in d.diferencias_detalle) {
+  if (DIFERENCIA_CON_DETALLE.includes(d.diferencia) && d.diferencias_detalle && campo in d.diferencias_detalle) {
     return formatGs(d.diferencias_detalle[campo]);
   }
   return formatGs(parseGs(valorCeldaDiff(d, 'libro', campo)) - parseGs(valorCeldaDiff(d, 'rg', campo)));
@@ -178,7 +183,8 @@ const RESUMEN_CATEGORIAS: { key: string; label: string; color: string }[] = [
   { key: 'Coincide', label: 'Registros que coinciden', color: '#128752' },
   { key: 'No llegó a la interfaz', label: 'Registros que no se encuentran en la RG', color: '#b3402f' },
   { key: 'No existe en el libro', label: 'Registros que no se encuentran en libro de compras', color: '#b3402f' },
-  { key: 'Diferencia de monto', label: 'Registros con diferencia de monto', color: '#b0740f' },
+  { key: 'Diferencia de importe', label: 'Registros con diferencia de importe', color: '#b0740f' },
+  { key: 'Diferencias en tasas', label: 'Registros con diferencias en tasas', color: '#c9920c' },
 ];
 
 export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usuarioId }) => {
@@ -231,7 +237,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
 
   // ── Paso 3: resultado de la comparación ─────────────────────────────────
   const [diffs, setDiffs] = useState<CompraDiffRow[]>([]);
-  const [summary, setSummary] = useState<{ coinciden: number; no_en_rg: number; no_en_libro: number; diferencia_monto: number } | null>(null);
+  const [summary, setSummary] = useState<{ coinciden: number; no_en_rg: number; no_en_libro: number; diferencia_importe: number; diferencias_tasas: number } | null>(null);
   const [diffSearch, setDiffSearch] = useState('');
   const [diffCategoryFilter, setDiffCategoryFilter] = useState<string>('');
   const [diffColFiltros, setDiffColFiltros] = useState<Record<string, Set<string> | null>>({});
@@ -791,7 +797,8 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
     'Coincide': summary?.coinciden ?? 0,
     'No llegó a la interfaz': summary?.no_en_rg ?? 0,
     'No existe en el libro': summary?.no_en_libro ?? 0,
-    'Diferencia de monto': summary?.diferencia_monto ?? 0,
+    'Diferencia de importe': summary?.diferencia_importe ?? 0,
+    'Diferencias en tasas': summary?.diferencias_tasas ?? 0,
   };
 
   const cardStyle: React.CSSProperties = {
@@ -1221,11 +1228,12 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
               tiene datos reales acá. */}
           {(() => {
             const coinciden = resumenValores['Coincide'];
-            const diferenciaMonto = resumenValores['Diferencia de monto'];
+            const diferenciaImporte = resumenValores['Diferencia de importe'];
+            const diferenciasTasas = resumenValores['Diferencias en tasas'];
             const noEnRg = resumenValores['No llegó a la interfaz'];
             const noEnLibro = resumenValores['No existe en el libro'];
-            const sumaLibro = coinciden + diferenciaMonto + noEnRg;
-            const sumaRg = coinciden + diferenciaMonto + noEnLibro;
+            const sumaLibro = coinciden + diferenciaImporte + diferenciasTasas + noEnRg;
+            const sumaRg = coinciden + diferenciaImporte + diferenciasTasas + noEnLibro;
 
             const filaStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '13px', color: '#5c6470' };
             const tarjetaStyle: React.CSSProperties = { backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', overflow: 'hidden' };
@@ -1243,7 +1251,8 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
                   <div style={{ padding: '16px 20px' }}>
                     <div style={{ fontSize: '12.5px', color: '#9aa1ab', marginBottom: '4px' }}>Este total se compone de:</div>
                     <div style={filaStyle}><span>Coinciden</span><span>{coinciden.toLocaleString('es-PY')}</span></div>
-                    <div style={filaStyle}><span>Diferencia de monto</span><span>{diferenciaMonto.toLocaleString('es-PY')}</span></div>
+                    <div style={filaStyle}><span>Diferencia de importe</span><span>{diferenciaImporte.toLocaleString('es-PY')}</span></div>
+                    <div style={filaStyle}><span>Diferencias en tasas</span><span>{diferenciasTasas.toLocaleString('es-PY')}</span></div>
                     <div style={filaStyle}><span>Registros que no se encuentran en la RG</span><span>{noEnRg.toLocaleString('es-PY')}</span></div>
                     <div style={{ ...filaStyle, borderTop: '1px solid #e2e0da', marginTop: '4px', paddingTop: '10px', fontWeight: 700, color: '#22262b' }}>
                       <span>Total</span><span>{sumaLibro.toLocaleString('es-PY')}</span>
@@ -1261,7 +1270,8 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
                   <div style={{ padding: '16px 20px' }}>
                     <div style={{ fontSize: '12.5px', color: '#9aa1ab', marginBottom: '4px' }}>Este total se compone de:</div>
                     <div style={filaStyle}><span>Coinciden</span><span>{coinciden.toLocaleString('es-PY')}</span></div>
-                    <div style={filaStyle}><span>Diferencia de monto</span><span>{diferenciaMonto.toLocaleString('es-PY')}</span></div>
+                    <div style={filaStyle}><span>Diferencia de importe</span><span>{diferenciaImporte.toLocaleString('es-PY')}</span></div>
+                    <div style={filaStyle}><span>Diferencias en tasas</span><span>{diferenciasTasas.toLocaleString('es-PY')}</span></div>
                     <div style={filaStyle}><span>Registros que no se encuentran en el libro</span><span>{noEnLibro.toLocaleString('es-PY')}</span></div>
                     <div style={{ ...filaStyle, borderTop: '1px solid #e2e0da', marginTop: '4px', paddingTop: '10px', fontWeight: 700, color: '#22262b' }}>
                       <span>Total</span><span>{sumaRg.toLocaleString('es-PY')}</span>
@@ -1435,8 +1445,8 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
                     {!diffColOcultas.has('diferencia') && (
                       <td style={{ padding: '10px 14px', borderLeft: '2px solid #f0eee8' }}>
                         <span style={{
-                          background: d.diferencia === 'Coincide' ? '#e8f3ec' : d.diferencia === 'Diferencia de monto' ? '#fdf1de' : '#fbe9e3',
-                          color: d.diferencia === 'Coincide' ? '#128752' : d.diferencia === 'Diferencia de monto' ? '#b0740f' : '#b3402f',
+                          background: d.diferencia === 'Coincide' ? '#e8f3ec' : DIFERENCIA_CON_DETALLE.includes(d.diferencia) ? '#fdf1de' : '#fbe9e3',
+                          color: d.diferencia === 'Coincide' ? '#128752' : DIFERENCIA_CON_DETALLE.includes(d.diferencia) ? '#b0740f' : '#b3402f',
                           fontSize: '11px', fontWeight: 600, padding: '4px 10px', borderRadius: '20px', whiteSpace: 'nowrap',
                         }}>
                           {d.diferencia}

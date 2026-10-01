@@ -15,12 +15,15 @@ export const parseGs = (s: string): number => {
   return isNaN(n) ? 0 : n;
 };
 
-// Mismo criterio que en Compras: si la fila es "Diferencia de monto", el campo que no está
-// en diferencias_detalle (no difiere) se muestra en 0 — solo quedan visibles los importes
-// que realmente causan la diferencia.
+// Regla 1 / Regla 2 del Paso de Resultados (ver _comparar_par en engine.py): "Diferencia de
+// importe" (el Total difiere) y "Diferencias en tasas" (el Total coincide pero alguna tasa
+// difiere) son las dos observaciones que traen diferencias_detalle. Mismo criterio que en
+// Compras: el campo que no está en diferencias_detalle (no difiere) se muestra en 0 — solo
+// quedan visibles los importes que realmente causan la diferencia.
+const DIFERENCIA_CON_DETALLE = ['Diferencia de importe', 'Diferencias en tasas'];
 export const valorCeldaDiffVentas = (d: RG90DiffRow, lado: 'libro' | 'rg90', campo: keyof RG90DiffLado): string => {
   const valor = d[lado][campo];
-  if (d.diferencia !== 'Diferencia de monto' || valor === '—') return valor;
+  if (!DIFERENCIA_CON_DETALLE.includes(d.diferencia) || valor === '—') return valor;
   return d.diferencias_detalle && campo in d.diferencias_detalle ? valor : '0,00';
 };
 
@@ -36,7 +39,7 @@ export const valorCeldaDiffVentas = (d: RG90DiffRow, lado: 'libro' | 'rg90', cam
 // que valorCeldaDiffVentas ya usa para decidir si un campo es 0 o no), en vez de recalcularlo
 // acá con una fórmula que no contempla el signo de las NC.
 export const diferenciaCampoVentas = (d: RG90DiffRow, campo: keyof RG90DiffLado): string => {
-  if (d.diferencia === 'Diferencia de monto' && d.diferencias_detalle && campo in d.diferencias_detalle) {
+  if (DIFERENCIA_CON_DETALLE.includes(d.diferencia) && d.diferencias_detalle && campo in d.diferencias_detalle) {
     return formatGs(d.diferencias_detalle[campo]);
   }
   return formatGs(parseGs(valorCeldaDiffVentas(d, 'libro', campo)) - parseGs(valorCeldaDiffVentas(d, 'rg90', campo)));

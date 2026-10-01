@@ -659,12 +659,13 @@ export const RG90View: React.FC<RG90ViewProps> = ({
           {(() => {
             const porClave = (clave: string) => Number(rg90Cards.find((c: any) => c.key === clave)?.value ?? 0);
             const coinciden = porClave('Coincide');
-            const diferenciaMonto = porClave('Diferencia de monto');
+            const diferenciaImporte = porClave('Diferencia de importe');
+            const diferenciasTasas = porClave('Diferencias en tasas');
             const noEnRg90 = porClave('No llegó a la interfaz');
             const noEnLibro = porClave('No existe en el libro');
             const anulados = rg90Loaded ? anuladasCount : 0;
-            const sumaLibro = coinciden + diferenciaMonto + noEnRg90 + anulados;
-            const sumaRg90 = coinciden + diferenciaMonto + noEnLibro;
+            const sumaLibro = coinciden + diferenciaImporte + diferenciasTasas + noEnRg90 + anulados;
+            const sumaRg90 = coinciden + diferenciaImporte + diferenciasTasas + noEnLibro;
 
             const filaStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '13px', color: '#5c6470' };
             const tarjetaStyle: React.CSSProperties = { backgroundColor: '#ffffff', border: '1px solid #e2e0da', borderRadius: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', overflow: 'hidden' };
@@ -682,7 +683,8 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                   <div style={{ padding: '16px 20px' }}>
                     <div style={{ fontSize: '12.5px', color: '#9aa1ab', marginBottom: '4px' }}>Este total se compone de:</div>
                     <div style={filaStyle}><span>Coinciden</span><span>{coinciden.toLocaleString('es-PY')}</span></div>
-                    <div style={filaStyle}><span>Diferencia de monto</span><span>{diferenciaMonto.toLocaleString('es-PY')}</span></div>
+                    <div style={filaStyle}><span>Diferencia de importe</span><span>{diferenciaImporte.toLocaleString('es-PY')}</span></div>
+                    <div style={filaStyle}><span>Diferencias en tasas</span><span>{diferenciasTasas.toLocaleString('es-PY')}</span></div>
                     <div style={filaStyle}><span>Registros que no se encuentran en la RG90</span><span>{noEnRg90.toLocaleString('es-PY')}</span></div>
                     <div style={filaStyle}><span>Anulados</span><span>{anulados.toLocaleString('es-PY')}</span></div>
                     <div style={{ ...filaStyle, borderTop: '1px solid #e2e0da', marginTop: '4px', paddingTop: '10px', fontWeight: 700, color: '#22262b' }}>
@@ -701,7 +703,8 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                   <div style={{ padding: '16px 20px' }}>
                     <div style={{ fontSize: '12.5px', color: '#9aa1ab', marginBottom: '4px' }}>Este total se compone de:</div>
                     <div style={filaStyle}><span>Coinciden</span><span>{coinciden.toLocaleString('es-PY')}</span></div>
-                    <div style={filaStyle}><span>Diferencia de monto</span><span>{diferenciaMonto.toLocaleString('es-PY')}</span></div>
+                    <div style={filaStyle}><span>Diferencia de importe</span><span>{diferenciaImporte.toLocaleString('es-PY')}</span></div>
+                    <div style={filaStyle}><span>Diferencias en tasas</span><span>{diferenciasTasas.toLocaleString('es-PY')}</span></div>
                     <div style={filaStyle}><span>Registros que no se encuentran en el libro</span><span>{noEnLibro.toLocaleString('es-PY')}</span></div>
                     <div style={{ ...filaStyle, borderTop: '1px solid #e2e0da', marginTop: '4px', paddingTop: '10px', fontWeight: 700, color: '#22262b' }}>
                       <span>Total</span><span>{sumaRg90.toLocaleString('es-PY')}</span>

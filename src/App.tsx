@@ -266,7 +266,7 @@ export function App() {
   // — se muestra en su propio modal con grilla en vez del cartel de una sola línea de
   // ProcessingModal, por eso vive en un estado aparte.
   const [rg90DuplicadosError, setRg90DuplicadosError] = useState<ComprobantesDuplicadosError | null>(null);
-  const [rg90Summary, setRg90Summary] = useState<{ coinciden: number; no_en_rg90: number; no_en_libro: number; saltos: number; diferencia_monto: number; anuladas: number } | null>(null);
+  const [rg90Summary, setRg90Summary] = useState<{ coinciden: number; no_en_rg90: number; no_en_libro: number; saltos: number; diferencia_importe: number; diferencias_tasas: number; anuladas: number } | null>(null);
   const [loteId, setLoteId] = useState<number | undefined>(undefined);
   const [converting, setConverting] = useState<boolean>(false);
   const [convertError, setConvertError] = useState<string | null>(null);
@@ -416,7 +416,8 @@ export function App() {
     { key: 'Coincide', label: 'Registros que coinciden', value: `${rg90Summary?.coinciden ?? 0}`, color: '#128752' },
     { key: 'No llegó a la interfaz', label: 'Registros que no se encuentran en la RG90', value: `${rg90Summary?.no_en_rg90 ?? 0}`, color: '#b3402f' },
     { key: 'No existe en el libro', label: 'Registros que no se encuentran en libro de ventas', value: `${rg90Summary?.no_en_libro ?? 0}`, color: '#b3402f' },
-    { key: 'Diferencia de monto', label: 'Registros con diferencia de monto', value: `${rg90Summary?.diferencia_monto ?? 0}`, color: '#b0740f' },
+    { key: 'Diferencia de importe', label: 'Registros con diferencia de importe', value: `${rg90Summary?.diferencia_importe ?? 0}`, color: '#b0740f' },
+    { key: 'Diferencias en tasas', label: 'Registros con diferencias en tasas', value: `${rg90Summary?.diferencias_tasas ?? 0}`, color: '#c9920c' },
   ];
 
   const hasAnyUpload = uploadedFiles.length > 0;
@@ -635,7 +636,8 @@ export function App() {
         no_en_rg90: res.summary?.no_en_rg90 ?? 0,
         no_en_libro: res.summary?.no_en_libro ?? 0,
         saltos: res.summary?.saltos ?? 0,
-        diferencia_monto: res.summary?.diferencia_monto ?? 0,
+        diferencia_importe: res.summary?.diferencia_importe ?? 0,
+        diferencias_tasas: res.summary?.diferencias_tasas ?? 0,
         anuladas: res.summary?.anuladas ?? 0,
       });
       setRg90Loaded(true);
