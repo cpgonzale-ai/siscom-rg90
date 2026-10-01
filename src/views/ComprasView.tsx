@@ -1207,18 +1207,6 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
 
           <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>3. Resultado de la comparación</h4>
 
-          {diffCategoryFilter && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{
-                backgroundColor: '#e8f3ec', color: '#128752', fontSize: '11px', fontWeight: 600,
-                padding: '4px 10px', borderRadius: '20px', display: 'inline-flex', alignItems: 'center', gap: '6px',
-              }}>
-                Filtro: {RESUMEN_CATEGORIAS.find(c => c.key === diffCategoryFilter)?.label ?? diffCategoryFilter}
-                <X size={12} style={{ cursor: 'pointer' }} onClick={() => setDiffCategoryFilter('')} />
-              </span>
-            </div>
-          )}
-
           {/* Panel de Desglose Matemático: no agrega ningún cálculo nuevo — solo reordena en
               dos columnas (Libro propio / RG) los mismos contadores que ya se ven arriba en
               resumenValores, para mostrar cómo se compone cada total. Mismo criterio que el
@@ -1321,6 +1309,24 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <ChevronDown size={16} color="#5c6470" />
                 <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#22262b' }}>Detalle de Discrepancias ({filteredDiffs.length.toLocaleString('es-PY')} de {diffs.length.toLocaleString('es-PY')})</h4>
+                {diffCategoryFilter && (
+                  <span
+                    style={{
+                      backgroundColor: '#e8f3ec',
+                      color: '#128752',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      padding: '2px 8px',
+                      borderRadius: '12px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    Filtro: {RESUMEN_CATEGORIAS.find(c => c.key === diffCategoryFilter)?.label ?? diffCategoryFilter}
+                    <X size={12} style={{ cursor: 'pointer' }} onClick={e => { e.stopPropagation(); setDiffCategoryFilter(''); }} />
+                  </span>
+                )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                 <button
