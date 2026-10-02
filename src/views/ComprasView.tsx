@@ -183,8 +183,8 @@ const RESUMEN_CATEGORIAS: { key: string; label: string; color: string }[] = [
   { key: 'Coincide', label: 'Registros que coinciden', color: '#128752' },
   { key: 'No llegó a la interfaz', label: 'Registros que no se encuentran en la RG', color: '#b3402f' },
   { key: 'No existe en el libro', label: 'Registros que no se encuentran en libro de compras', color: '#b3402f' },
-  { key: 'Diferencia de importe', label: 'Registros con diferencia de importe', color: '#b0740f' },
-  { key: 'Diferencias en tasas', label: 'Registros con diferencias en tasas', color: '#c9920c' },
+  { key: 'Diferencia de importe', label: 'Diferencia de Importe', color: '#b0740f' },
+  { key: 'Diferencias en tasas', label: 'Diferencia de tasas', color: '#c9920c' },
 ];
 
 export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usuarioId }) => {

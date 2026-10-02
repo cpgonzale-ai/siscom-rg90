@@ -416,12 +416,12 @@ export function App() {
     { key: 'Coincide', label: 'Registros que coinciden', value: `${rg90Summary?.coinciden ?? 0}`, color: '#128752' },
     { key: 'No llegó a la interfaz', label: 'Registros que no se encuentran en la RG90', value: `${rg90Summary?.no_en_rg90 ?? 0}`, color: '#b3402f' },
     { key: 'No existe en el libro', label: 'Registros que no se encuentran en libro de ventas', value: `${rg90Summary?.no_en_libro ?? 0}`, color: '#b3402f' },
-    { key: 'Diferencia de importe', label: 'Registros con diferencia de importe', value: `${rg90Summary?.diferencia_importe ?? 0}`, color: '#b0740f' },
-    { key: 'Diferencias en tasas', label: 'Registros con diferencias en tasas', value: `${rg90Summary?.diferencias_tasas ?? 0}`, color: '#c9920c' },
+    { key: 'Diferencia de importe', label: 'Diferencia de Importe', value: `${rg90Summary?.diferencia_importe ?? 0}`, color: '#b0740f' },
+    { key: 'Diferencias en tasas', label: 'Diferencia de tasas', value: `${rg90Summary?.diferencias_tasas ?? 0}`, color: '#c9920c' },
     // Homologado con el resto de las pestañas (antes "Anulados" era un contador de solo
     // lectura en RG90View.tsx, sin onClick ni filtro propio) -- mismo color que ya usa el
     // chip "Anulada" en la grilla (#5b3aa8, ver filteredRg90Diff en este mismo archivo).
-    { key: 'Anulada', label: 'Registros anulados', value: `${rg90Summary?.anuladas ?? 0}`, color: '#5b3aa8' },
+    { key: 'Anulada', label: 'Anulados', value: `${rg90Summary?.anuladas ?? 0}`, color: '#5b3aa8' },
   ];
 
   const hasAnyUpload = uploadedFiles.length > 0;
