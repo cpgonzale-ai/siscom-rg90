@@ -548,7 +548,11 @@ export async function reconcileComprasApi(
 ): Promise<CompraReconcileResult> {
   const formData = new FormData();
   rgFiles.forEach(f => formData.append('rg_files', f));
-  formData.append('pos_data_json', JSON.stringify(comprasRows));
+  // Blob, no texto plano -- mismo motivo y mismo fix que reconcileApi (Ventas, líneas
+  // 395/429 de este archivo): el backend necesita leerlo en streaming desde el spool en
+  // disco de Starlette (ver /api/compras/reconcile, refactor anti-OOM del 02/10), algo que
+  // solo puede hacer si llega como archivo, no como campo de texto plano.
+  formData.append('pos_data_json', new Blob([JSON.stringify(comprasRows)], { type: 'application/json' }), 'pos_data.json');
   if (loteId !== undefined) formData.append('lote_id', String(loteId));
 
   const res = onUploadProgress
