@@ -526,7 +526,12 @@ export function App() {
       }
 
       if (rows.length === 0) {
+        // Antes esto solo mostraba el error y seguía de largo hasta setConverted(true) más
+        // abajo, dejando avanzar al Paso 2 con un libro vacío igual (asimetría real: Compras
+        // sí bloquea este mismo caso, ver ComprasView.tsx). El "return" corta acá -- el
+        // finally de abajo sigue limpiando converting/libroProgress igual.
         setConvertError('El servidor procesó el/los archivo(s) pero no encontró ningún comprobante válido. Revisá que sea el reporte correcto (hoja "tal como se descarga del sistema", sin editar a mano).');
+        return;
       }
 
       // Validación de duplicados del Libro, apenas se convierte -- no espera a que se
