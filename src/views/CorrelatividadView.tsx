@@ -1,6 +1,7 @@
 import React from 'react';
 import { ListTree } from 'lucide-react';
 import { stickyTheadStyle, scrollableGridStyle } from '../components/Modal';
+import { parseInlineStyle } from '../utils/estilos';
 
 interface CorrelatividadViewProps {
   correlatividad: any[];
@@ -127,15 +128,3 @@ export const CorrelatividadView: React.FC<CorrelatividadViewProps> = ({
   );
 };
 
-function parseInlineStyle(styleStr: string): React.CSSProperties {
-  const styles: React.CSSProperties = {};
-  if (!styleStr) return styles;
-  styleStr.split(';').forEach(rule => {
-    const [key, val] = rule.split(':');
-    if (key && val) {
-      const camelKey = key.trim().replace(/-([a-z])/g, (_, g) => g.toUpperCase());
-      (styles as any)[camelKey] = val.trim();
-    }
-  });
-  return styles;
-}

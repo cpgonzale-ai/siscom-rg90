@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ArrowRight, ShieldCheck, FileSpreadsheet, ShoppingCart } from 'lucide-react';
 import { Modal } from '../components/Modal';
 import { TablaSaltos } from '../components/TablaSaltos';
+import { parseInlineStyle } from '../utils/estilos';
 
 interface DashboardViewProps {
   steps: any[];
@@ -327,15 +328,3 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   );
 };
 
-function parseInlineStyle(styleStr: string): React.CSSProperties {
-  const styles: React.CSSProperties = {};
-  if (!styleStr) return styles;
-  styleStr.split(';').forEach(rule => {
-    const [key, val] = rule.split(':');
-    if (key && val) {
-      const camelKey = key.trim().replace(/-([a-z])/g, (_, g) => g.toUpperCase());
-      (styles as any)[camelKey] = val.trim();
-    }
-  });
-  return styles;
-}

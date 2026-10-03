@@ -1,4 +1,5 @@
 import React from 'react';
+import { parseInlineStyle } from '../utils/estilos';
 
 interface Step {
   n: number;
@@ -75,15 +76,3 @@ export const WizardSteps: React.FC<WizardStepsProps> = ({ steps }) => {
   );
 };
 
-function parseInlineStyle(styleStr: string): React.CSSProperties {
-  const styles: React.CSSProperties = {};
-  if (!styleStr) return styles;
-  styleStr.split(';').forEach(rule => {
-    const [key, val] = rule.split(':');
-    if (key && val) {
-      const camelKey = key.trim().replace(/-([a-z])/g, (_, g) => g.toUpperCase());
-      (styles as any)[camelKey] = val.trim();
-    }
-  });
-  return styles;
-}

@@ -6,6 +6,7 @@ import { ColumnPicker } from '../components/ColumnPicker';
 import { Modal, primaryBtnStyle, secondaryBtnStyle, dangerBtnStyle, excelBtnStyle, navRowStyle, disabledBtnStyle, stickyTheadStyle, scrollableGridStyle } from '../components/Modal';
 import { TablaSaltos } from '../components/TablaSaltos';
 import { formatGs } from '../utils/format';
+import { parseInlineStyle } from '../utils/estilos';
 
 interface CargaViewProps {
   wizardSteps: any[];
@@ -614,15 +615,3 @@ export const CargaView: React.FC<CargaViewProps> = ({
   );
 };
 
-function parseInlineStyle(styleStr: string): React.CSSProperties {
-  const styles: React.CSSProperties = {};
-  if (!styleStr) return styles;
-  styleStr.split(';').forEach(rule => {
-    const [key, val] = rule.split(':');
-    if (key && val) {
-      const camelKey = key.trim().replace(/-([a-z])/g, (_, g) => g.toUpperCase());
-      (styles as any)[camelKey] = val.trim();
-    }
-  });
-  return styles;
-}

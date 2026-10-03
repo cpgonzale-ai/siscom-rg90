@@ -13,6 +13,7 @@ import {
   RG90_DIFF_COLUMNAS, RG90_DIFF_COLUMNAS_PICKER, CAMPOS_DIFF_VENTAS,
   valorCeldaDiffVentas, diferenciaCampoVentas, parseGs,
 } from '../utils/diffVentasColumns';
+import { parseInlineStyle } from '../utils/estilos';
 
 // parseGs/valorCeldaDiffVentas/diferenciaCampoVentas/RG90_DIFF_COLUMNAS/_PICKER/CAMPOS_DIFF_VENTAS
 // se movieron a utils/diffVentasColumns.ts para que diffExportWorker.ts (Web Worker del
@@ -972,18 +973,6 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   );
 };
 
-function parseInlineStyle(styleStr: string): React.CSSProperties {
-  const styles: React.CSSProperties = {};
-  if (!styleStr) return styles;
-  styleStr.split(';').forEach(rule => {
-    const [key, val] = rule.split(':');
-    if (key && val) {
-      const camelKey = key.trim().replace(/-([a-z])/g, (_, g) => g.toUpperCase());
-      (styles as any)[camelKey] = val.trim();
-    }
-  });
-  return styles;
-}
 
 // Fila de la grilla de Detalle de Discrepancias, envuelta en React.memo. Medido con CPU
 // profile + trace de Chrome real sobre 200.000 filas: el virtualizador dispara un re-render
