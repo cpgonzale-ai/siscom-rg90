@@ -17,3 +17,6 @@ jobs:
       - run: npm test
       - run: npx tsc --noEmit
       - run: npx vite build
+      # Solo dependencias de producción (las que llegan al navegador). Los avisos de
+      # herramientas de desarrollo (vite, vitest, esbuild) no se ejecutan en el usuario.
+      - run: npm audit --omit=dev --audit-level=high
