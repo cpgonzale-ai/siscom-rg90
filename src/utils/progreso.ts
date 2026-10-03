@@ -1,11 +1,32 @@
-// Antes contaba las filas de cada .xlsx parseándolo en el navegador (con la librería xlsx,
-// que tiene CVEs públicos sin parche vía npm, y procesaba archivos no confiables recién
-// elegidos por el usuario) solo para mostrar un total orientativo en el indicador de
-// progreso. Ya no se parsea nada del lado del cliente: devuelve 0, que ProgressModal ya
-// interpreta como "total desconocido" y no muestra la línea "Procesados X de Y". El total
-// real de filas lo conoce recién el backend, que es la única fuente de verdad.
-export async function contarFilasAproximado(_files: File[]): Promise<number> {
-  return 0;
+import * as XLSX from 'xlsx';
+
+// Cuenta aproximada de filas de datos de uno o más .xlsx, hecha en el navegador con la
+// librería xlsx (versión parcheada 0.20.3, distribuida por el CDN de SheetJS -- la versión
+// de npm tiene CVEs públicos sin parche). SOLO para mostrar un total orientativo en el
+// indicador de progreso (ver ProgressModal). Nunca se usa para ninguna regla de negocio ni
+// para ningún valor de los resultados, que siguen viniendo exclusivamente del backend.
+// Toma, de cada archivo, la hoja con más filas y resta 1 fila de encabezado.
+export async function contarFilasAproximado(files: File[]): Promise<number> {
+  let total = 0;
+  for (const file of files) {
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array', sheetStubs: false, cellFormula: false, cellHTML: false, cellText: false });
+      let max = 0;
+      for (const nombre of wb.SheetNames) {
+        const ref = wb.Sheets[nombre]?.['!ref'];
+        if (!ref) continue;
+        const range = XLSX.utils.decode_range(ref);
+        const filas = range.e.r - range.s.r + 1;
+        if (filas > max) max = filas;
+      }
+      total += Math.max(0, max - 1);
+    } catch {
+      // Si no se puede leer, no rompe el flujo real -- el backend valida el archivo; esto es
+      // solo para el indicador visual de avance.
+    }
+  }
+  return total;
 }
 
 // Avance simulado y ACOTADO para el tramo en que se espera la respuesta del servidor,
