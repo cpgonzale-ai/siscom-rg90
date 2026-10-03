@@ -7,6 +7,7 @@ import { ProcessingModal } from './components/ProcessingModal';
 import { ProgressModal } from './components/ProgressModal';
 import { ComprobantesDuplicadosModal } from './components/ComprobantesDuplicadosModal';
 import { cancelarOperacionEnCurso, contarFilasAproximado, ejecutarConAvance, esCancelacion } from './utils/progreso';
+import { CATEGORIA, COLOR_CATEGORIA } from './utils/categoriasDiferencia';
 
 import { InicioView } from './views/InicioView';
 import { DashboardView } from './views/DashboardView';
@@ -413,11 +414,11 @@ export function App() {
   // 12,453 decimal, no doce mil). El punto de miles se agrega solo al MOSTRARLO, en
   // RG90View.tsx.
   const rg90CardsState = [
-    { key: 'Coincide', label: 'Registros que coinciden', value: `${rg90Summary?.coinciden ?? 0}`, color: '#128752' },
-    { key: 'No llegó a la interfaz', label: 'Registros que no se encuentran en la RG90', value: `${rg90Summary?.no_en_rg90 ?? 0}`, color: '#b3402f' },
-    { key: 'No existe en el libro', label: 'Registros que no se encuentran en libro de ventas', value: `${rg90Summary?.no_en_libro ?? 0}`, color: '#b3402f' },
-    { key: 'Diferencia de importe', label: 'Diferencia de Importe', value: `${rg90Summary?.diferencia_importe ?? 0}`, color: '#b0740f' },
-    { key: 'Diferencias en tasas', label: 'Diferencia de tasas', value: `${rg90Summary?.diferencias_tasas ?? 0}`, color: '#c9920c' },
+    { key: CATEGORIA.COINCIDE, label: 'Registros que coinciden', value: `${rg90Summary?.coinciden ?? 0}`, color: COLOR_CATEGORIA[CATEGORIA.COINCIDE] },
+    { key: CATEGORIA.NO_LLEGO, label: 'Registros que no se encuentran en la RG90', value: `${rg90Summary?.no_en_rg90 ?? 0}`, color: COLOR_CATEGORIA[CATEGORIA.NO_LLEGO] },
+    { key: CATEGORIA.NO_EXISTE_EN_LIBRO, label: 'Registros que no se encuentran en libro de ventas', value: `${rg90Summary?.no_en_libro ?? 0}`, color: COLOR_CATEGORIA[CATEGORIA.NO_EXISTE_EN_LIBRO] },
+    { key: CATEGORIA.DIF_IMPORTE, label: 'Diferencia de Importe', value: `${rg90Summary?.diferencia_importe ?? 0}`, color: COLOR_CATEGORIA[CATEGORIA.DIF_IMPORTE] },
+    { key: CATEGORIA.DIF_TASAS, label: 'Diferencia de tasas', value: `${rg90Summary?.diferencias_tasas ?? 0}`, color: COLOR_CATEGORIA[CATEGORIA.DIF_TASAS] },
     // Homologado con el resto de las pestañas (antes "Anulados" era un contador de solo
     // lectura en RG90View.tsx, sin onClick ni filtro propio) -- mismo color que ya usa el
     // chip "Anulada" en la grilla (#5b3aa8, ver filteredRg90Diff en este mismo archivo).

@@ -17,6 +17,8 @@ import { ingestComprasApi, reconcileComprasApi, exportarTablaExcelApi } from '..
 import { formatGs } from '../utils/format';
 import { idbGet, idbSet, COMPRAS_PERSIST_KEY } from '../utils/persistStore';
 import { cancelarOperacionEnCurso, contarFilasAproximado, ejecutarConAvance, esCancelacion } from '../utils/progreso';
+import { useExportacion } from '../hooks/useExportacion';
+import { CATEGORIA, COLOR_CATEGORIA } from '../utils/categoriasDiferencia';
 
 interface ComprasViewProps {
   locales: Local[];
@@ -180,11 +182,11 @@ const DIFF_COLUMNAS_PICKER: { key: string; label: string }[] = [
 // que se muestra en la tarjeta y en el chip de filtro activo (antes cada uno mostraba un
 // texto distinto para la misma categoría).
 const RESUMEN_CATEGORIAS: { key: string; label: string; color: string }[] = [
-  { key: 'Coincide', label: 'Registros que coinciden', color: '#128752' },
-  { key: 'No llegó a la interfaz', label: 'Registros que no se encuentran en la RG', color: '#b3402f' },
-  { key: 'No existe en el libro', label: 'Registros que no se encuentran en libro de compras', color: '#b3402f' },
-  { key: 'Diferencia de importe', label: 'Diferencia de Importe', color: '#b0740f' },
-  { key: 'Diferencias en tasas', label: 'Diferencia de tasas', color: '#c9920c' },
+  { key: CATEGORIA.COINCIDE, label: 'Registros que coinciden', color: COLOR_CATEGORIA[CATEGORIA.COINCIDE] },
+  { key: CATEGORIA.NO_LLEGO, label: 'Registros que no se encuentran en la RG', color: COLOR_CATEGORIA[CATEGORIA.NO_LLEGO] },
+  { key: CATEGORIA.NO_EXISTE_EN_LIBRO, label: 'Registros que no se encuentran en libro de compras', color: COLOR_CATEGORIA[CATEGORIA.NO_EXISTE_EN_LIBRO] },
+  { key: CATEGORIA.DIF_IMPORTE, label: 'Diferencia de Importe', color: COLOR_CATEGORIA[CATEGORIA.DIF_IMPORTE] },
+  { key: CATEGORIA.DIF_TASAS, label: 'Diferencia de tasas', color: COLOR_CATEGORIA[CATEGORIA.DIF_TASAS] },
 ];
 
 export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usuarioId }) => {
@@ -548,8 +550,8 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
   // que el usuario sepa que está procesando y no dispare varios pedidos a la vez clickeando
   // de nuevo con archivos grandes (el backend puede tardar un rato real, ver docstring de
   // app/api/export.py).
-  const [exportandoLibro, setExportandoLibro] = useState(false);
-  const [exportandoRg, setExportandoRg] = useState(false);
+  const { exportando: exportandoLibro, exportar: exportarLibro } = useExportacion();
+  const { exportando: exportandoRg, exportar: exportarRg } = useExportacion();
 
   // Mismo TOTAL + RESUMEN (Factura / Nota de Crédito / NETO / Check) que downloadLimpio en
   // App.tsx para el Libro de Ventas — acá aplica igual porque compras_engine.py usa el mismo
@@ -599,18 +601,11 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
     const netoRow = ['', '', '', '', '', '', '', 'NETO', formatGs(neto.gravada10), formatGs(neto.iva10), formatGs(neto.gravada5), formatGs(neto.iva5), formatGs(neto.exentas), formatGs(neto.total), ''];
     const checkRow = ['', '', '', '', '', '', '', 'Check', '', '', '', '', '', formatGs(check), ''];
 
-    setExportandoLibro(true);
-    try {
-      await exportarTablaExcelApi('Libro_de_Compras.xlsx', 'Libro de Compras', headers, [
-        ...dataRows, totalRow,
-        blank, blank, blank,
-        resumenHeader, blank, facturaRow, ncRow, netoRow, checkRow,
-      ]);
-    } catch (e) {
-      console.error('Error al exportar el Libro de Compras a Excel:', e);
-    } finally {
-      setExportandoLibro(false);
-    }
+    await exportarLibro(() => exportarTablaExcelApi('Libro_de_Compras.xlsx', 'Libro de Compras', headers, [
+      ...dataRows, totalRow,
+      blank, blank, blank,
+      resumenHeader, blank, facturaRow, ncRow, netoRow, checkRow,
+    ]), 'Error al exportar el Libro de Compras a Excel:');
   };
 
   const descargarRgExcel = async () => {
@@ -620,14 +615,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
       r.doc, r.local, r.fecha, r.dv_proveedor ? `${r.ruc_proveedor}-${r.dv_proveedor}` : r.ruc_proveedor, r.proveedor, r.tipo_doc, r.condicion, r.timbrado,
       r.gravadas, r.iva, r.gravadas_5, r.iva_5, r.exentas, r.total,
     ]);
-    setExportandoRg(true);
-    try {
-      await exportarTablaExcelApi('RG_Compras.xlsx', 'RG (SET) — Compras', headers, dataRows);
-    } catch (e) {
-      console.error('Error al exportar la RG de Compras a Excel:', e);
-    } finally {
-      setExportandoRg(false);
-    }
+    await exportarRg(() => exportarTablaExcelApi('RG_Compras.xlsx', 'RG (SET) — Compras', headers, dataRows), 'Error al exportar la RG de Compras a Excel:');
   };
 
   // allValues por columna para cada uno de los 3 desplegables de filtro (Libro, RG,
@@ -730,19 +718,12 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
   // que colgaba el navegador era el paso final de armar el .xlsx en sí (downloadExcel/
   // SheetJS, síncrono). Mismo cambio que descargarExcel/descargarRgExcel: se manda el mismo
   // headers+dataRows ya armado al endpoint genérico del backend en vez de a SheetJS.
-  const [exportandoDiff, setExportandoDiff] = useState(false);
+  const { exportando: exportandoDiff, exportar: exportarDiff } = useExportacion();
   const descargarDiffExcel = async () => {
     if (filteredDiffs.length === 0 || exportandoDiff) return;
     const headers = DIFF_COLUMNAS_PICKER.map(c => c.label);
     const dataRows = filteredDiffs.map(d => DIFF_COLUMNAS.map(col => col.getValue(d)));
-    setExportandoDiff(true);
-    try {
-      await exportarTablaExcelApi('Resultado_Comparacion_Compras_RG.xlsx', 'Resultado — Compras vs RG', headers, dataRows);
-    } catch (e) {
-      console.error('Error al exportar el resultado de Compras a Excel:', e);
-    } finally {
-      setExportandoDiff(false);
-    }
+    await exportarDiff(() => exportarTablaExcelApi('Resultado_Comparacion_Compras_RG.xlsx', 'Resultado — Compras vs RG', headers, dataRows), 'Error al exportar el resultado de Compras a Excel:');
   };
 
   const CAMPOS_DIFF: (keyof CompraDiffLado)[] = ['gravada_10', 'gravada_5', 'iva_10', 'iva_5', 'exenta', 'total'];
