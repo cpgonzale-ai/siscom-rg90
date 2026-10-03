@@ -82,6 +82,8 @@ export interface RG90DiffRow {
   rg90: RG90DiffLado;
   diferencia: string;
   diferencias_detalle?: Record<string, number>;
+  // No viene del backend: App.tsx lo agrega al armar la grilla (estilo del chip de diferencia).
+  diffChipStyle?: string;
 }
 
 // Comprobantes duplicados (mismo doc Y mismo tipo_doc, dos o más veces) detectados al

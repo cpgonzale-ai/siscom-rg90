@@ -1,7 +1,7 @@
 import React from 'react';
 import { parseInlineStyle } from '../utils/estilos';
 
-interface Step {
+export interface Step {
   n: number;
   label: string;
   circleStyle: string;

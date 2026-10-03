@@ -2,13 +2,14 @@ import React, { useMemo, useRef, useState, useTransition } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { GitCompare, UploadCloud, X, Trash2, ArrowLeft, ArrowRight, FileSpreadsheet, ChevronDown } from 'lucide-react';
 import { WizardSteps } from '../components/WizardSteps';
+import type { Step } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
 import { Modal, primaryBtnStyle, secondaryBtnStyle, dangerBtnStyle, excelBtnStyle, navRowStyle, disabledBtnStyle, stickyTheadStyle, scrollableGridStyle } from '../components/Modal';
 import { ColumnPicker } from '../components/ColumnPicker';
 import { TablaSaltos } from '../components/TablaSaltos';
 import { formatGs } from '../utils/format';
 import { exportarTablaExcelApi, exportarDiffVentasExcelApi } from '../services/api';
-import type { RG90DiffRow } from '../services/api';
+import type { RG90DiffRow, LibroRow, CorrelatividadRow } from '../services/api';
 import {
   RG90_DIFF_COLUMNAS, RG90_DIFF_COLUMNAS_PICKER, CAMPOS_DIFF_VENTAS,
   valorCeldaDiffVentas, diferenciaCampoVentas, parseGs,
@@ -28,8 +29,19 @@ import { useExportacion } from '../hooks/useExportacion';
 // valor como su propio `top` sticky para quedar pegada justo debajo de la primera.
 const DIFF_THEAD_ROW1_HEIGHT = 41;
 
+// Tarjeta de categoría del totalizador (ver rg90CardsState en App.tsx, a la que se le
+// agregan isActive/onClick al pasarla acá).
+export interface TarjetaCategoriaRg90 {
+  key: string;
+  label: string;
+  value: string;
+  color: string;
+  isActive: boolean;
+  onClick: () => void;
+}
+
 interface RG90ViewProps {
-  wizardSteps: any[];
+  wizardSteps: Step[];
   // Paso 3 (Adjuntar RG90 y listar) vs Paso 4 (Resultado) — antes era un único paso; se
   // separó para que el Paso 3 se comporte como el Paso 2 de Compras (adjuntar + listar) y
   // el Paso 4 quede solo para el resultado, como el Paso 3 de Compras.
@@ -53,7 +65,7 @@ interface RG90ViewProps {
   onQuitarRg90Archivo: (index: number) => void;
   analyzeRg90: () => void;
   resetRg90: () => void;
-  rg90Cards: any[];
+  rg90Cards: TarjetaCategoriaRg90[];
   // Total de comprobantes con estado "Anulada" en la comparación (ver resumen del
   // backend, /api/reconcile) — se muestra al lado de "Saltos" como indicador de solo
   // lectura, sin card ni filtro propio en rg90Cards.
@@ -62,7 +74,7 @@ interface RG90ViewProps {
   // App.tsx, el mismo array que ya se manda como pos_data_json a /api/reconcile) — usado
   // solo para el Panel de Desglose Matemático, no participa de ningún cálculo de negocio.
   totalLibroCount: number;
-  rg90Diff: any[];
+  rg90Diff: RG90DiffRow[];
   // Ya viene calculado desde App.tsx (ver el porqué en su propio comentario, junto a donde
   // se memoiza) — antes se calculaba ACÁ ADENTRO a partir de un rg90DiffAll crudo. El
   // problema no era la memoización en sí (estaba bien hecha, dependía solo de la fuente
@@ -80,11 +92,11 @@ interface RG90ViewProps {
   rg90CategoryFilter: string;
   clearRg90Category: () => void;
   // Grilla del Paso 3 (registros de la RG90 tal como se parsearon)
-  rg90GridRows: any[];
+  rg90GridRows: LibroRow[];
   // Filtrada por columna/búsqueda igual que rg90GridRows (ver App.tsx/filteredRg90Rows),
   // sin paginar — es la base del Excel descargado: "lo que se ve en la grilla" cuando hay
   // un filtro activo, o todo cuando no lo hay.
-  rg90GridExportRows: any[];
+  rg90GridExportRows: LibroRow[];
   rg90GridTotalCount: number;
   rg90GridFilteredCount: number;
   rg90GridColumnFilters: { key: string; label: string; allValues: string[]; active: Set<string> | null; onChange: (next: Set<string> | null) => void }[];
@@ -99,8 +111,8 @@ interface RG90ViewProps {
   rg90GridNextPage: () => void;
   // Saltos de numeración: los del libro propio (Paso 2, misma fuente que el modal de ahí)
   // y los detectados dentro de la RG90 misma (Paso 3, nuevo).
-  saltosLibroRows: any[];
-  saltosRgRows: any[];
+  saltosLibroRows: CorrelatividadRow[];
+  saltosRgRows: CorrelatividadRow[];
 }
 
 export const RG90View: React.FC<RG90ViewProps> = ({
@@ -176,7 +188,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
     const headers = ['Documento', 'Tipo', 'Sistema', 'Local', 'Fecha', 'RUC', 'Nombre', 'Gravadas 10%', 'IVA 10%', 'Gravadas 5%', 'IVA 5%', 'Exentas', 'Total', 'Estado'];
     // Importes con el mismo texto ya formateado de la grilla — no un number — para que el
     // Excel descargado coincida con la pantalla tal cual.
-    const dataRows = rg90GridExportRows.map((r: any) => [
+    const dataRows = rg90GridExportRows.map(r => [
       r.doc, r.tipo_doc || 'Factura', r.sistema, r.local, r.fecha, r.ruc, r.nombre,
       r.gravadas, r.iva, r.gravadas_5 ?? '0,00', r.iva_5 ?? '0,00', r.exentas, r.total, r.estado,
     ]);
@@ -548,7 +560,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {rg90GridRows.map((r: any, i: number) => (
+                  {rg90GridRows.map((r, i) => (
                     <tr key={i} style={{ borderBottom: '1px solid #f0eee8' }}>
                       {!rg90GridColOcultas.has('doc') && <td style={{ padding: '12px 14px', fontWeight: 600, color: '#22262b' }}>{r.doc}</td>}
                       {!rg90GridColOcultas.has('tipo_doc') && (
@@ -644,7 +656,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
             de rg90Cards vienen como string ya formados (ver rg90CardsState en App.tsx). */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
           {(() => {
-            const porClave = (clave: string) => Number(rg90Cards.find((c: any) => c.key === clave)?.value ?? 0);
+            const porClave = (clave: string) => Number(rg90Cards.find(c => c.key === clave)?.value ?? 0);
             const coinciden = porClave('Coincide');
             const diferenciaImporte = porClave('Diferencia de importe');
             const diferenciasTasas = porClave('Diferencias en tasas');
@@ -711,7 +723,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
               rg90Cards (nada de lógica de filtro nueva), solo mucho más compactas y ancladas
               visualmente a lo que filtran, en vez de flotar separadas del título de arriba. */}
           <div style={{ display: 'flex', alignItems: 'stretch', backgroundColor: '#fafbfa', borderBottom: '1px solid #e2e0da', overflowX: 'auto' }}>
-            {rg90Cards.map((c: any, idx: number) => (
+            {rg90Cards.map((c, idx) => (
               <button
                 key={idx}
                 onClick={() => { c.onClick(); setDetalleAbierto(true); }}
@@ -903,7 +915,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                 <DiffRow
                   key={vi.key}
                   index={vi.index}
-                  r={filteredRg90DiffCols[vi.index] as any}
+                  r={filteredRg90DiffCols[vi.index]}
                   diffColOcultas={diffColOcultas}
                   diffLibroColsVisibles={diffLibroColsVisibles}
                   diffRgColsVisibles={diffRgColsVisibles}
@@ -997,7 +1009,7 @@ const DiffRow = React.memo(function DiffRow({ index, r, diffColOcultas, diffLibr
       )))}
       {!diffColOcultas.has('diferencia') && (
         <td style={{ padding: '10px 14px', borderLeft: '2px solid #f0eee8' }}>
-          <span style={parseInlineStyle((r as any).diffChipStyle)}>{r.diferencia}</span>
+          <span style={parseInlineStyle(r.diffChipStyle ?? '')}>{r.diferencia}</span>
         </td>
       )}
     </tr>
