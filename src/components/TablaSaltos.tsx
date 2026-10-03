@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { FileSpreadsheet } from 'lucide-react';
 import { ExcelFilterHeader } from './ExcelFilterHeader';
 import { secondaryBtnStyle, stickyTheadStyle, scrollableGridStyle } from './Modal';
-import { downloadExcel } from '../utils/exportExcel';
+import { exportarTablaExcelApi } from '../services/api';
 
 const SALTOS_COLUMNAS: { key: string; label: string; getValue: (r: any) => string }[] = [
   { key: 'local', label: 'Local / Establecimiento', getValue: r => r.local },
@@ -41,7 +41,8 @@ export const TablaSaltos: React.FC<{ rows: any[]; conOrigen?: boolean; conProvee
     if (filteredRows.length === 0) return;
     const headers = columnas.map(col => col.label);
     const dataRows = filteredRows.map(r => columnas.map(col => col.getValue(r)));
-    downloadExcel('Saltos_de_numeracion.xlsx', 'Saltos de numeración', headers, dataRows);
+    exportarTablaExcelApi('Saltos_de_numeracion.xlsx', 'Saltos de numeración', headers, dataRows)
+      .catch(e => console.error('Error al exportar los saltos a Excel:', e));
   };
 
   return (
