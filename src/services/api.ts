@@ -1,3 +1,5 @@
+import { senalOperacionEnCurso } from '../utils/progreso';
+
 export interface LibroRow {
   doc: string;
   sistema: string;
@@ -295,6 +297,20 @@ function xhrPostFormData(
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url);
     Object.entries(authHeaders()).forEach(([k, v]) => xhr.setRequestHeader(k, v as string));
+    // Timeout de 10 min: una conexión que se cuelga sin error explícito (proxy, wifi caído a
+    // mitad de camino) no dispara ni onerror ni onload -- sin esto el modal de progreso
+    // quedaba girando indefinidamente. Ver el hallazgo de Pilar 1 de la auditoría del 02/10.
+    xhr.timeout = 600_000;
+    xhr.ontimeout = () => reject(new Error('La operación tardó demasiado y se canceló. Intentá de nuevo.'));
+    const senal = senalOperacionEnCurso();
+    if (senal?.aborted) {
+      reject(new DOMException('Operación cancelada por el usuario.', 'AbortError'));
+      return;
+    }
+    senal?.addEventListener('abort', () => {
+      xhr.abort();
+      reject(new DOMException('Operación cancelada por el usuario.', 'AbortError'));
+    }, { once: true });
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) onUploadProgress(e.loaded, e.total);
     };

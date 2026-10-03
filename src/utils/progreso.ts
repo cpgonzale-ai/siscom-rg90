@@ -30,6 +30,24 @@ export function crearAvanceSimulado(onTick: (fraccion: number) => void, tope = 0
 // se reserva para la subida real, el 10% restante para la espera de la respuesta. `tarea`
 // recibe el callback de progreso de subida y debe pasarlo a la llamada de api.ts
 // correspondiente (ingestFilesApi, validarDuplicadosLibroApi, validarDuplicadosRg90Api).
+// Cancelación de la operación en curso (botón "Cancelar" del ProgressModal). Hay a lo sumo
+// una operación de carga/análisis activa a la vez -- el overlay bloqueante lo garantiza --
+// así que alcanza con un único controlador a nivel de módulo, no hace falta pasar la señal
+// por parámetro a cada llamada de api.ts.
+let controladorActual: AbortController | null = null;
+
+export function cancelarOperacionEnCurso(): void {
+  controladorActual?.abort();
+}
+
+export function senalOperacionEnCurso(): AbortSignal | undefined {
+  return controladorActual?.signal;
+}
+
+export function esCancelacion(e: unknown): boolean {
+  return (e as { name?: unknown } | null)?.name === 'AbortError';
+}
+
 export async function ejecutarConAvance<T>(
   tarea: (onUploadProgress: (loaded: number, total: number) => void) => Promise<T>,
   onFraccion: (fraccion: number) => void,
@@ -38,6 +56,7 @@ export async function ejecutarConAvance<T>(
   const detenerSimulado = crearAvanceSimulado((f) => {
     if (subidaCompleta) onFraccion(0.9 + f * 0.1);
   });
+  controladorActual = new AbortController();
   try {
     return await tarea((loaded, total) => {
       const fraccionSubida = total > 0 ? loaded / total : 1;
@@ -49,5 +68,6 @@ export async function ejecutarConAvance<T>(
     });
   } finally {
     detenerSimulado();
+    controladorActual = null;
   }
 }

@@ -16,7 +16,7 @@ import type { Local, CompraRow, CompraDiffRow, CompraDiffLado } from '../service
 import { ingestComprasApi, reconcileComprasApi, exportarTablaExcelApi } from '../services/api';
 import { formatGs } from '../utils/format';
 import { idbGet, idbSet, COMPRAS_PERSIST_KEY } from '../utils/persistStore';
-import { contarFilasAproximado, ejecutarConAvance } from '../utils/progreso';
+import { cancelarOperacionEnCurso, contarFilasAproximado, ejecutarConAvance, esCancelacion } from '../utils/progreso';
 
 interface ComprasViewProps {
   locales: Local[];
@@ -445,7 +445,9 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
       // Se queda en el paso 1 mostrando la grilla — el usuario avanza al paso 2 con el
       // botón "Siguiente" cuando ya revisó el libro, no de forma automática.
     } catch (e) {
-      setConvertError(e instanceof Error ? e.message : 'Error al procesar los archivos en el servidor.');
+      if (!esCancelacion(e)) {
+        setConvertError(e instanceof Error ? e.message : 'Error al procesar los archivos en el servidor.');
+      }
     } finally {
       setConverting(false);
       setLibroProgress(null);
@@ -523,7 +525,9 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
       setRgCompareProgress(p => (p ? { ...p, percent: 100 } : p));
       await new Promise(resolve => setTimeout(resolve, 350));
     } catch (e) {
-      setCompareError(e instanceof Error ? e.message : 'Error al comparar contra la RG.');
+      if (!esCancelacion(e)) {
+        setCompareError(e instanceof Error ? e.message : 'Error al comparar contra la RG.');
+      }
     } finally {
       setComparing(false);
       setRgCompareProgress(null);
@@ -1512,6 +1516,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
           message="Analizando archivo del Libro de Compras…"
           percent={libroProgress.percent}
           total={libroProgress.total}
+          onCancel={cancelarOperacionEnCurso}
         />
       )}
       {/* Si termina en error (ej. archivo con formato incorrecto), se muestra con el modal
@@ -1531,6 +1536,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
           message="Analizando y comparando contra la RG…"
           percent={rgCompareProgress.percent}
           total={rgCompareProgress.total}
+          onCancel={cancelarOperacionEnCurso}
         />
       )}
       {!comparing && compareError && (

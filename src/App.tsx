@@ -6,7 +6,7 @@ import { ConfirmModal } from './components/ConfirmModal';
 import { ProcessingModal } from './components/ProcessingModal';
 import { ProgressModal } from './components/ProgressModal';
 import { ComprobantesDuplicadosModal } from './components/ComprobantesDuplicadosModal';
-import { contarFilasAproximado, ejecutarConAvance } from './utils/progreso';
+import { cancelarOperacionEnCurso, contarFilasAproximado, ejecutarConAvance, esCancelacion } from './utils/progreso';
 
 import { InicioView } from './views/InicioView';
 import { DashboardView } from './views/DashboardView';
@@ -550,6 +550,7 @@ export function App() {
             (f) => setLibroProgress(p => (p ? { ...p, percent: 80 + f * 20 } : p)),
           );
         } catch (e) {
+          if (esCancelacion(e)) throw e;
           if (e instanceof ReconcileDuplicadosError) duplicadoDetectado = e.payload;
         }
       }
@@ -566,7 +567,10 @@ export function App() {
       setPage(1);
       if (duplicadoDetectado) setRg90DuplicadosError(duplicadoDetectado);
     } catch (e) {
-      setConvertError(e instanceof Error ? e.message : 'Error al procesar los archivos en el servidor.');
+      // Cancelado a propósito por el usuario: no es un error, se vuelve al estado previo.
+      if (!esCancelacion(e)) {
+        setConvertError(e instanceof Error ? e.message : 'Error al procesar los archivos en el servidor.');
+      }
       // No avanzamos a "convertido": mejor mostrar el error y dejar reintentar que
       // mostrar datos de ejemplo como si fueran el resultado real.
     } finally {
@@ -655,7 +659,7 @@ export function App() {
     } catch (e) {
       if (e instanceof ReconcileDuplicadosError) {
         duplicadoDetectado = e.payload;
-      } else {
+      } else if (!esCancelacion(e)) {
         errorGenerico = e instanceof Error ? e.message : 'Error al ejecutar la comparación RG90.';
       }
     }
@@ -1490,6 +1494,7 @@ export function App() {
           message="Analizando archivo del Libro…"
           percent={libroProgress.percent}
           total={libroProgress.total}
+          onCancel={cancelarOperacionEnCurso}
         />
       )}
       {/* Si termina en error (ej. archivo con formato incorrecto), se muestra con el modal
@@ -1509,6 +1514,7 @@ export function App() {
           message={rg90Progress.message}
           percent={rg90Progress.percent}
           total={rg90Progress.total}
+          onCancel={cancelarOperacionEnCurso}
         />
       )}
       {/* Mismo criterio que con el Libro: sin barra, ya no hay ningún avance que mostrar --

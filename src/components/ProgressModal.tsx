@@ -9,6 +9,9 @@ interface ProgressModalProps {
   // Total aproximado de registros (ver contarFilasAproximado) -- si no se pudo calcular
   // (0/undefined), se omite el texto "Procesados: X de Y" y se muestra solo el porcentaje.
   total?: number;
+  // Si se pasa, se muestra un botón "Cancelar" que aborta la operación en curso (ver
+  // cancelarOperacionEnCurso en utils/progreso.ts). Sin esto, el modal no tiene salida.
+  onCancel?: () => void;
 }
 
 const overlayStyle: React.CSSProperties = {
@@ -43,7 +46,7 @@ const boxStyle: React.CSSProperties = {
 // ProcessingModal (sin botón de cerrar, z-index alto: nada de la pantalla siguiente puede
 // quedar visible detrás mientras esto está montado) -- la diferencia es que acá el avance es
 // visible en vez de un spinner indefinido.
-export const ProgressModal: React.FC<ProgressModalProps> = ({ message, percent, total }) => {
+export const ProgressModal: React.FC<ProgressModalProps> = ({ message, percent, total, onCancel }) => {
   // Bug real corregido acá: el avance simulado (ver ejecutarConAvance, utils/progreso.ts)
   // se acerca asintóticamente a ~99,7% mientras se espera la respuesta del servidor --
   // Math.round por sí solo redondeaba eso a "100%" mucho ANTES de que el proceso terminara
@@ -89,6 +92,27 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({ message, percent, 
             </span>
             <span style={{ fontSize: '13px', fontWeight: 700, color: '#128752' }}>{pct}%</span>
           </div>
+          {onCancel && (
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '14px' }}>
+              <button
+                type="button"
+                onClick={onCancel}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid #d6d3cb',
+                  borderRadius: '8px',
+                  padding: '7px 16px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: '#5c6470',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
