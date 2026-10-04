@@ -8,6 +8,7 @@ import { ProgressModal } from './components/ProgressModal';
 import { ComprobantesDuplicadosModal } from './components/ComprobantesDuplicadosModal';
 import { cancelarOperacionEnCurso, contarFilasAproximado, ejecutarConAvance, esCancelacion } from './utils/progreso';
 import { CATEGORIA, COLOR_CATEGORIA } from './utils/categoriasDiferencia';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 import { InicioView } from './views/InicioView';
 import { DashboardView } from './views/DashboardView';
@@ -1215,6 +1216,7 @@ export function App() {
         />
 
         <div className="app-content-pad" style={{ flex: 1, minWidth: 0 }}>
+        <ErrorBoundary key={location.pathname}>
         <Routes>
           <Route path="/" element={(
             <InicioView
@@ -1469,6 +1471,7 @@ export function App() {
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </ErrorBoundary>
         </div>
       </main>
 
