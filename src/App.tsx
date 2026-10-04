@@ -3,26 +3,17 @@ import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { ConfirmModal } from './components/ConfirmModal';
-import { ProcessingModal } from './components/ProcessingModal';
-import { ProgressModal } from './components/ProgressModal';
-import { ComprobantesDuplicadosModal } from './components/ComprobantesDuplicadosModal';
-import { cancelarOperacionEnCurso } from './utils/progreso';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 import { InicioView } from './views/InicioView';
-import { DashboardView } from './views/DashboardView';
-import { CargaView } from './views/CargaView';
-import { CorrelatividadView } from './views/CorrelatividadView';
-import { RG90View } from './views/RG90View';
 import { LoginView } from './views/LoginView';
-import { LibroCompletoView } from './views/LibroCompletoView';
 import { ComprasView } from './views/ComprasView';
 import { LocalesView } from './views/LocalesView';
 import { UsuariosView } from './views/UsuariosView';
 import { RolesView } from './views/RolesView';
 import { idbDelete, VENTAS_PERSIST_KEY, COMPRAS_PERSIST_KEY } from './utils/persistStore';
 import { useAdministracion } from './hooks/useAdministracion';
-import { useVentas, SYSTEMS_META } from './hooks/useVentas';
+import { VentasProvider, VentasModales, VentasPanelRoute, VentasCargaRoute, VentasLibroRoute, VentasCorrelRoute, VentasRg90Route } from './views/VentasRutas';
 
 import {
   MeInfo,
@@ -139,25 +130,6 @@ export function App() {
   }, [authed]);
 
 
-  const {
-    analyzeRg90, cargaUploaderOpen, convertError, converted, converting, correlFiltro, correlatividadRows,
-    currentPage, dashboardSteps, deleteLibro, descargandoLimpio, diffAllValuesPorColumna, doConvert,
-    downloadLimpio, filteredCorrel, filteredLibro, filteredRg90Diff, filteredRg90Rows, filtro, guidanceText,
-    handleFileUpload, handleRg90FileUpload, hasAnyUpload, hayLibroColFiltrosActivos,
-    hayRg90GridColFiltrosActivos, importStatusComputed, isFreshStart, libroColumnFilters,
-    libroCompletoFiltrado, libroCompletoSearch, libroProgress, libroRows, libroTotales,
-    limpiarLibroColFiltros, limpiarRg90GridColFiltros, nextCtaAction, nextCtaLabel, pageSize, pagedLibro,
-    pagedRg90Rows, quitarRg90Archivo, removeAllFiles, resetRg90, rg90Attached, rg90CardsState,
-    rg90CategoryFilter, rg90DuplicadosError, rg90Error, rg90Files, rg90GapsRows, rg90GridColumnFilters,
-    rg90GridCurrentPage, rg90GridSearch, rg90GridTotalPages, rg90GridTotales, rg90Loaded, rg90Progress,
-    rg90Rows, rg90Search, rg90Summary, searchGeneral, selectedSystemKey, setCargaUploaderOpen,
-    setConvertError, setConverted, setCorrelFiltro, setCorrelatividadRows, setCortesRows, setFiltro,
-    setLibroCompletoSearch, setLibroRows, setLoteId, setPage, setRg90CategoryFilter, setRg90DiffRows,
-    setRg90DuplicadosError, setRg90Error, setRg90Files, setRg90GapsRows, setRg90GridPage, setRg90GridSearch,
-    setRg90Loaded, setRg90Rows, setRg90Search, setRg90Summary, setSearchGeneral, setSelectedSystemKey,
-    setUploadedFiles, simulateRg90Upload, simulateUpload, totalPages, uploadedFiles, ventasHydratedRef,
-    wizardSteps,
-  } = useVentas({ locales, location, meInfo, meInfoLoaded, navigate, rg90PasoMostrado, screen, setConfirmModal, setShowLockedModal });
   const [title, subtitle] = TITLES[screen];
 
   if (!authed) {
@@ -179,12 +151,11 @@ export function App() {
     // Limpieza del libro persistido (ver src/utils/persistStore.ts): por pedido explícito,
     // el libro cargado sobrevive a un refresh/cuelgue pero SOLO se borra acá, al cerrar
     // sesión — nunca por otro motivo. Se borra la clave DE ESTE usuario específicamente (no
-    // una clave global — ver el namespacing por meInfo.id en los efectos de arriba), y se
-    // resetea también el estado de Ventas en memoria (Compras no hace falta: ComprasView se
-    // desmonta solo al salir de screen==='compras', ver App.tsx más abajo, así que ya
-    // arranca vacío la próxima vez) para que si otro usuario entra después en la misma
-    // pestaña no vea ni por un instante el libro del usuario anterior antes de que la
-    // próxima carga lo pise.
+    // una clave global — ver el namespacing por meInfo.id en los efectos de arriba). El
+    // estado de Ventas en memoria no hace falta resetearlo acá: al mostrarse el login, el
+    // VentasProvider se desmonta y su estado se descarta, así que otro usuario que entre en
+    // la misma pestaña no ve el libro anterior. Compras tampoco: ComprasView se desmonta al
+    // salir de su pantalla.
     if (meInfo) {
       idbDelete(`${VENTAS_PERSIST_KEY}:${meInfo.id}`);
       idbDelete(`${COMPRAS_PERSIST_KEY}:${meInfo.id}`);
@@ -195,31 +166,11 @@ export function App() {
     }
     // meInfoLoaded/meInfo vuelven a su estado inicial: si no se resetean, un login
     // inmediato del siguiente usuario en la misma pestaña no dispara de nuevo la
-    // hidratación de arriba (que depende de que meInfoLoaded pase de false a true), y
-    // ventasHydratedRef en false evita que el efecto de guardado escriba con el estado
-    // vacío de abajo ANTES de que la hidratación del próximo usuario tenga chance de correr.
+    // hidratación de Ventas (que depende de que meInfoLoaded pase de false a true).
     setMeInfo(null);
     setMeInfoLoaded(false);
-    ventasHydratedRef.current = false;
-    setConverted(false);
-    setRg90Loaded(false);
-    setLibroRows([]);
-    setCorrelatividadRows([]);
-    setCortesRows([]);
-    setRg90Rows([]);
-    setRg90GapsRows([]);
-    setRg90DiffRows([]);
-    setRg90Summary(null);
-    setLoteId(undefined);
-    setCargaUploaderOpen(true);
-    setUploadedFiles([]);
-    setRg90Files([]);
   };
 
-  // Único indicador de "la RG90 está siendo analizada" (adjuntar o comparar, ver
-  // rg90Progress) -- reemplaza al viejo estado rg90Analyzing para que sea imposible tener
-  // dos indicadores de progreso de RG90 activos a la vez.
-  const rg90Busy = rg90Progress !== null;
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#faf9f5' }}>
@@ -258,6 +209,11 @@ export function App() {
             libro entero de IndexedDB (varios segundos) y restauraba el paso guardado, así que
             el click de "paso 2" rebotaba a "resultado". Cambiar de módulo sí reinicia el boundary. */}
         <ErrorBoundary key={location.pathname.split('/')[1] || 'inicio'}>
+        <VentasProvider
+          params={{ locales, location, meInfo, meInfoLoaded, navigate, rg90PasoMostrado, screen, setConfirmModal, setShowLockedModal }}
+          puede={puede}
+          goTo={goTo}
+        >
         <Routes>
           <Route path="/" element={(
             <InicioView
@@ -267,132 +223,13 @@ export function App() {
             />
           )} />
 
-          <Route path="/panel" element={!meInfoLoaded ? null : puede('pantalla:dashboard') ? (
-            <DashboardView
-              steps={dashboardSteps}
-              isFreshStart={isFreshStart}
-              converted={converted}
-              rg90Loaded={rg90Loaded}
-              hasAnyUpload={hasAnyUpload}
-              guidanceText={guidanceText}
-              nextCtaLabel={nextCtaLabel}
-              nextCtaAction={nextCtaAction}
-              importStatus={importStatusComputed}
-              kpiLocales={converted ? `${new Set(libroRows.map(r => r.local)).size}` : '0'}
-              kpiComprobantes={converted ? `${libroRows.length}` : '0'}
-              kpiSaltos={converted ? `${correlatividadRows.length}` : '—'}
-              onGoCargaVentas={() => goTo('carga')}
-              onGoCargaCompras={() => goTo('compras')}
-              canCargaVentas={puede('pantalla:carga')}
-              canCargaCompras={puede('pantalla:compras')}
-            />
-          ) : <Navigate to="/" replace />} />
+          <Route path="/panel" element={!meInfoLoaded ? null : puede('pantalla:dashboard') ? <VentasPanelRoute /> : <Navigate to="/" replace />} />
 
-          <Route path="/ventas/carga" element={!meInfoLoaded ? null : puede('pantalla:carga') ? (
-            <CargaView
-              wizardSteps={wizardSteps}
-              systemOptions={SYSTEMS_META}
-              selectedSystemKey={selectedSystemKey}
-              onSelectSystem={(e) => setSelectedSystemKey(e.target.value)}
-              simulateUpload={simulateUpload}
-              onFileUpload={handleFileUpload}
-              uploadedFilesList={uploadedFiles.map(f => ({
-                ...f,
-                sistemaLabel: f.sistemaLabel || 'Detectando…',
-                removeFile: () => setUploadedFiles(prev => prev.filter(x => x.id !== f.id)),
-              }))}
-              removeAllFiles={removeAllFiles}
-              canEliminarTodos={puede('boton:carga.eliminar_todos')}
-              canConvertir={puede('boton:carga.convertir')}
-              canBorrarLibro={puede('boton:carga.borrar_libro')}
-              canDescargarCsv={puede('boton:carga.descargar_csv')}
-              canConvert={hasAnyUpload}
-              convertHelpText={
-                converted
-                  ? 'Ya existe un análisis generado para estos reportes.'
-                  : hasAnyUpload
-                  ? 'Se detecta automáticamente el sistema de cada reporte adjuntado (Aloha, Hiopos o Universal) para armar el libro de ventas unificado.'
-                  : 'Adjuntá un reporte de Aloha, Hiopos o del Formato Universal para habilitar el análisis.'
-              }
-              convertBtnStyle={
-                hasAnyUpload || converted
-                  ? 'background:#f0a63d;color:#1a1a1a;border:none;border-radius:7px;padding:12px 20px;font-size:13px;font-weight:700;cursor:pointer'
-                  : 'background:#e5e2da;color:#9aa1ab;border:none;border-radius:7px;padding:12px 20px;font-size:13px;font-weight:700;cursor:not-allowed'
-              }
-              doConvert={doConvert}
-              converting={converting}
-              convertError={convertError}
-              converted={converted}
-              showCargaCard={!converted || cargaUploaderOpen}
-              showStep2Content={converted && !cargaUploaderOpen}
-              openCargaUploader={() => setCargaUploaderOpen(true)}
-              closeCargaUploader={() => setCargaUploaderOpen(false)}
-              goToRg90={() => navigate('/ventas/rg90/adjuntar')}
-              saltosRows={correlatividadRows}
-              deleteLibro={deleteLibro}
-              downloadLimpio={() => downloadLimpio(filteredLibro)}
-              descargandoLimpio={descargandoLimpio}
-              pagedLibro={pagedLibro}
-              libroColumnFilters={libroColumnFilters}
-              hayLibroColFiltrosActivos={hayLibroColFiltrosActivos}
-              limpiarLibroColFiltros={limpiarLibroColFiltros}
-              libroTotales={libroTotales}
-              filterStyleTodos={filtro === 'Todos' ? 'background:#128752;border:1px solid #128752;color:#fff;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer' : 'background:#fff;border:1px solid #e2e0da;color:#5c6470;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer'}
-              filterStyleAloha={filtro === 'Aloha' ? 'background:#128752;border:1px solid #128752;color:#fff;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer' : 'background:#fff;border:1px solid #e2e0da;color:#5c6470;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer'}
-              filterStyleHiopos={filtro === 'Hiopos' ? 'background:#128752;border:1px solid #128752;color:#fff;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer' : 'background:#fff;border:1px solid #e2e0da;color:#5c6470;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer'}
-              filterStyleUniversal={filtro === 'Universal' ? 'background:#128752;border:1px solid #128752;color:#fff;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer' : 'background:#fff;border:1px solid #e2e0da;color:#5c6470;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer'}
-              setFilterTodos={() => { setFiltro('Todos'); setPage(1); }}
-              setFilterAloha={() => { setFiltro('Aloha'); setPage(1); }}
-              setFilterHiopos={() => { setFiltro('Hiopos'); setPage(1); }}
-              setFilterUniversal={() => { setFiltro('Universal'); setPage(1); }}
-              searchGeneral={searchGeneral}
-              onSearchGeneral={(e) => { setSearchGeneral(e.target.value); setPage(1); }}
-              clearSearch={() => { setSearchGeneral(''); setPage(1); }}
-              filteredCount={filteredLibro.length}
-              currentPage={currentPage}
-              totalPages={totalPages}
-              prevPage={() => setPage(p => Math.max(1, p - 1))}
-              nextPage={() => setPage(p => Math.min(totalPages, p + 1))}
-              pageRangeLabel={
-                filteredLibro.length === 0
-                  ? '0'
-                  : `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, filteredLibro.length)}`
-              }
-              prevBtnStyle={`background:#fff;border:1px solid #e2e0da;color:${currentPage <= 1 ? '#c7c3ba' : '#128752'};border-radius:7px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:${currentPage <= 1 ? 'default' : 'pointer'}`}
-              nextBtnStyle={`background:#fff;border:1px solid #e2e0da;color:${currentPage >= totalPages ? '#c7c3ba' : '#128752'};border-radius:7px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:${currentPage >= totalPages ? 'default' : 'pointer'}`}
-              onVerTodos={() => navigate('/ventas/libro-completo')}
-              step2Cards={[
-                { label: 'Locales', value: `${new Set(libroRows.map(r => r.local)).size}` },
-                { label: 'Comprobantes', value: `${libroRows.length}` },
-                { label: 'Saltos', value: `${correlatividadRows.length}` },
-              ]}
-            />
-          ) : <Navigate to="/" replace />} />
+          <Route path="/ventas/carga" element={!meInfoLoaded ? null : puede('pantalla:carga') ? <VentasCargaRoute /> : <Navigate to="/" replace />} />
 
-          <Route path="/ventas/libro-completo" element={!meInfoLoaded ? null : puede('pantalla:carga') ? (
-            <LibroCompletoView
-              rows={libroCompletoFiltrado}
-              totalSinFiltrar={libroRows.length}
-              search={libroCompletoSearch}
-              onSearch={(e) => setLibroCompletoSearch(e.target.value)}
-              onVolver={() => { setLibroCompletoSearch(''); navigate('/ventas/carga'); }}
-              onDownload={() => downloadLimpio(libroCompletoFiltrado)}
-              descargando={descargandoLimpio}
-            />
-          ) : <Navigate to="/" replace />} />
+          <Route path="/ventas/libro-completo" element={!meInfoLoaded ? null : puede('pantalla:carga') ? <VentasLibroRoute /> : <Navigate to="/" replace />} />
 
-          <Route path="/ventas/correlatividad" element={!meInfoLoaded ? null : puede('pantalla:carga') ? (
-            <CorrelatividadView
-              correlatividad={filteredCorrel}
-              correlFiltro={correlFiltro}
-              correlFilterStyleTodos={correlFiltro === 'Todos' ? 'background:#128752;border:1px solid #128752;color:#fff;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer' : 'background:#fff;border:1px solid #e2e0da;color:#5c6470;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer'}
-              correlFilterStyleAloha={correlFiltro === 'Aloha' ? 'background:#128752;border:1px solid #128752;color:#fff;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer' : 'background:#fff;border:1px solid #e2e0da;color:#5c6470;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer'}
-              correlFilterStyleHiopos={correlFiltro === 'Hiopos' ? 'background:#128752;border:1px solid #128752;color:#fff;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer' : 'background:#fff;border:1px solid #e2e0da;color:#5c6470;border-radius:7px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer'}
-              setCorrelTodos={() => setCorrelFiltro('Todos')}
-              setCorrelAloha={() => setCorrelFiltro('Aloha')}
-              setCorrelHiopos={() => setCorrelFiltro('Hiopos')}
-            />
-          ) : <Navigate to="/" replace />} />
+          <Route path="/ventas/correlatividad" element={!meInfoLoaded ? null : puede('pantalla:carga') ? <VentasCorrelRoute /> : <Navigate to="/" replace />} />
 
           <Route path="/compras/:paso" element={!meInfoLoaded ? null : puede('pantalla:compras') ? (
             <ComprasView locales={locales} permisos={permisos} usuarioId={meInfo?.id} />
@@ -439,79 +276,12 @@ export function App() {
           ) : <Navigate to="/" replace />} />
 
           <Route path="/ventas/rg90" element={<Navigate to="/ventas/rg90/adjuntar" replace />} />
-          <Route path="/ventas/rg90/:paso" element={!meInfoLoaded ? null : puede('pantalla:carga') ? (
-            <RG90View
-              wizardSteps={wizardSteps}
-              pasoMostrado={rg90PasoMostrado}
-              onVolverCarga={() => navigate('/ventas/carga')}
-              onSiguienteResultado={() => rg90Loaded && navigate('/ventas/rg90/resultado')}
-              onVolverPaso3={() => navigate('/ventas/rg90/adjuntar')}
-              saltosLibroRows={correlatividadRows}
-              saltosRgRows={rg90GapsRows}
-              rg90Loaded={rg90Loaded}
-              rg90Attached={rg90Attached}
-              rg90StatusText={
-                rg90Busy
-                  ? 'Analizando y comparando contra la RG90 en el servidor…'
-                  : rg90Loaded
-                  ? `Archivo cargado y comparado — ${rg90Files.map(f => f.name).join(', ')}`
-                  : rg90Attached
-                  ? `Archivo adjuntado — ${rg90Files.map(f => f.name).join(', ')}. Presioná "Analizar y comparar" para generar el resultado.`
-                  : ''
-              }
-              rg90FileLabel={rg90Attached ? `${rg90Files.length} archivo(s) adjuntado(s) — click para agregar más` : 'Adjuntar archivo(s) RG90 (.xls / .xlsx)'}
-              rg90FileNames={rg90Files.map(f => f.name)}
-              rg90DropzoneStyle={
-                (rg90Attached ? 'background:#f4f2ed;color:#22262b;font-weight:600' : 'background:#fafbfa;color:#5c6470;border:1px dashed #cfd6d0') +
-                ';flex:1;min-width:220px;border-radius:7px;padding:9px 14px;font-size:12.5px;cursor:pointer'
-              }
-              rg90AnalyzeBtnStyle={
-                rg90Attached && !rg90Busy
-                  ? 'background:#f0a63d;color:#1a1a1a;border:none;border-radius:7px;padding:10px 16px;font-size:12.5px;font-weight:700;cursor:pointer'
-                  : 'background:#e5e2da;color:#9aa1ab;border:none;border-radius:7px;padding:10px 16px;font-size:12.5px;font-weight:700;cursor:not-allowed'
-              }
-              rg90Analyzing={rg90Busy}
-              rg90Error={rg90Error}
-              canComparar={puede('boton:rg90.comparar')}
-              canQuitarArchivo={puede('boton:rg90.quitar_archivo')}
-              simulateRg90={simulateRg90Upload}
-              onRg90FileUpload={handleRg90FileUpload}
-              onQuitarRg90Archivo={quitarRg90Archivo}
-              analyzeRg90={analyzeRg90}
-              resetRg90={resetRg90}
-              rg90Cards={rg90CardsState.map(c => ({
-                ...c,
-                isActive: rg90CategoryFilter === c.key,
-                onClick: () => setRg90CategoryFilter(prev => (prev === c.key ? '' : c.key)),
-              }))}
-              anuladasCount={rg90Summary?.anuladas ?? 0}
-              totalLibroCount={libroRows.length}
-              rg90Diff={filteredRg90Diff}
-              diffAllValuesPorColumna={diffAllValuesPorColumna}
-              rg90Search={rg90Search}
-              onRg90Search={(e) => setRg90Search(e.target.value)}
-              clearRg90Search={() => setRg90Search('')}
-              rg90CategoryFilter={rg90CategoryFilter}
-              clearRg90Category={() => setRg90CategoryFilter('')}
-              rg90GridRows={pagedRg90Rows}
-              rg90GridExportRows={filteredRg90Rows}
-              rg90GridTotalCount={rg90Rows.length}
-              rg90GridFilteredCount={filteredRg90Rows.length}
-              rg90GridColumnFilters={rg90GridColumnFilters}
-              hayRg90GridColFiltrosActivos={hayRg90GridColFiltrosActivos}
-              limpiarRg90GridColFiltros={limpiarRg90GridColFiltros}
-              rg90GridTotales={rg90GridTotales}
-              rg90GridSearch={rg90GridSearch}
-              onRg90GridSearch={(e) => { setRg90GridSearch(e.target.value); setRg90GridPage(1); }}
-              rg90GridCurrentPage={rg90GridCurrentPage}
-              rg90GridTotalPages={rg90GridTotalPages}
-              rg90GridPrevPage={() => setRg90GridPage(p => Math.max(1, p - 1))}
-              rg90GridNextPage={() => setRg90GridPage(p => Math.min(rg90GridTotalPages, p + 1))}
-            />
-          ) : <Navigate to="/" replace />} />
+          <Route path="/ventas/rg90/:paso" element={!meInfoLoaded ? null : puede('pantalla:carga') ? <VentasRg90Route /> : <Navigate to="/" replace />} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <VentasModales />
+        </VentasProvider>
         </ErrorBoundary>
         </div>
       </main>
@@ -529,51 +299,6 @@ export function App() {
         />
       )}
 
-      {/* Overlay bloqueante con barra de progreso mientras se lee/analiza el Excel del
-          Libro (Paso 1→2, ver doConvert) -- nada de la pantalla siguiente queda visible
-          detrás hasta que termina. Si converting sigue en pie pero libroProgress ya se
-          limpió (no debería pasar, pero por las dudas) no se muestra nada roto: ambos
-          se limpian juntos en el finally de doConvert. */}
-      {converting && libroProgress && (
-        <ProgressModal
-          message="Analizando archivo del Libro…"
-          percent={libroProgress.percent}
-          total={libroProgress.total}
-          onCancel={cancelarOperacionEnCurso}
-        />
-      )}
-      {/* Si termina en error (ej. archivo con formato incorrecto), se muestra con el modal
-          genérico de siempre (sin barra, ya no hay ningún avance que mostrar) -- convertError
-          ya viene limpio a null apenas arranca un intento nuevo (ver doConvert), así que solo
-          queda en pie acá cuando la conversión ya terminó y falló. */}
-      {!converting && convertError && (
-        <ProcessingModal error={convertError} onClose={() => setConvertError(null)} />
-      )}
-
-      {/* Única pantalla de progreso para "Analizar y comparar" (ver analyzeRg90) -- leer/
-          analizar la RG90 y compararla contra el libro corren como un solo proceso, con un
-          solo mensaje y un solo porcentaje (ver el comentario en la declaración del estado
-          más arriba). Adjuntar el archivo no toca este estado. */}
-      {rg90Progress && (
-        <ProgressModal
-          message={rg90Progress.message}
-          percent={rg90Progress.percent}
-          total={rg90Progress.total}
-          onCancel={cancelarOperacionEnCurso}
-        />
-      )}
-      {/* Mismo criterio que con el Libro: sin barra, ya no hay ningún avance que mostrar --
-          rg90Error ya viene limpio a null apenas arranca un intento nuevo. */}
-      {!rg90Progress && rg90Error && (
-        <ProcessingModal error={rg90Error} onClose={() => setRg90Error(null)} />
-      )}
-
-      {/* Comprobantes duplicados detectados al adjuntar el Libro o la RG90 -- mismo error
-          de siempre (ver ReconcileDuplicadosError), mostrado en su propia grilla en vez del
-          cartel de una línea de ProcessingModal (ver el porqué en rg90DuplicadosError). */}
-      {rg90DuplicadosError && (
-        <ComprobantesDuplicadosModal error={rg90DuplicadosError} onClose={() => setRg90DuplicadosError(null)} />
-      )}
     </div>
   );
 }
