@@ -7,8 +7,15 @@
 // Toma, de cada archivo, la hoja con más filas y resta 1 fila de encabezado.
 export async function contarFilasAproximado(files: File[]): Promise<number> {
   // Import dinámico: SheetJS (~370 KB) no entra en la carga inicial de la app; solo se baja
-  // cuando el usuario realmente sube un archivo.
-  const XLSX = await import('xlsx');
+  // cuando el usuario realmente sube un archivo. Si el chunk no se puede bajar (p. ej. una
+  // pestaña abierta de antes de un despliegue, con el hash del chunk viejo), el conteo es
+  // solo visual: se devuelve 0 en vez de lanzar, para que nunca bloquee la operación.
+  let XLSX: typeof import('xlsx');
+  try {
+    XLSX = await import('xlsx');
+  } catch {
+    return 0;
+  }
   let total = 0;
   for (const file of files) {
     try {
