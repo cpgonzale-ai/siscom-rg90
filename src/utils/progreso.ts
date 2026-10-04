@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 
 // Cuenta aproximada de filas de datos de uno o más .xlsx, hecha en el navegador con la
 // librería xlsx (versión parcheada 0.20.3, distribuida por el CDN de SheetJS -- la versión
@@ -7,6 +6,9 @@ import * as XLSX from 'xlsx';
 // para ningún valor de los resultados, que siguen viniendo exclusivamente del backend.
 // Toma, de cada archivo, la hoja con más filas y resta 1 fila de encabezado.
 export async function contarFilasAproximado(files: File[]): Promise<number> {
+  // Import dinámico: SheetJS (~370 KB) no entra en la carga inicial de la app; solo se baja
+  // cuando el usuario realmente sube un archivo.
+  const XLSX = await import('xlsx');
   let total = 0;
   for (const file of files) {
     try {
