@@ -24,6 +24,7 @@ import { RolesView } from './views/RolesView';
 import { formatGs } from './utils/format';
 import { idbGet, idbSet, idbDelete, VENTAS_PERSIST_KEY, COMPRAS_PERSIST_KEY } from './utils/persistStore';
 import { RG90_DIFF_COLUMNAS } from './utils/diffVentasColumns';
+import { useAdministracion } from './hooks/useAdministracion';
 
 import {
   LibroRow,
@@ -33,10 +34,6 @@ import {
   ReconcileDuplicadosError,
   CorteRow,
   UploadedFileMeta,
-  Local,
-  Rol,
-  Permiso,
-  Usuario,
   MeInfo,
   ingestFilesApi,
   reconcileApi,
@@ -44,10 +41,6 @@ import {
   getAuthToken,
   setAuthToken,
   getMeApi,
-  listLocalesApi,
-  listRolesApi,
-  listPermisosApi,
-  listUsuariosApi,
   exportarTablaExcelApi,
 } from './services/api';
 
@@ -186,33 +179,11 @@ export function App() {
   const permisos = new Set(meInfo?.permisos || []);
   const puede = (clave: string) => permisos.has(clave);
 
-  const [locales, setLocales] = useState<Local[]>([]);
-  const [localesLoading, setLocalesLoading] = useState(false);
-  const [localesError, setLocalesError] = useState<string | null>(null);
-  const refetchLocales = () => {
-    setLocalesLoading(true);
-    listLocalesApi().then(setLocales).catch(e => setLocalesError(e instanceof Error ? e.message : 'Error al cargar locales')).finally(() => setLocalesLoading(false));
-  };
-
-  const [rolesAdmin, setRolesAdmin] = useState<Rol[]>([]);
-  const [permisosCatalogo, setPermisosCatalogo] = useState<Permiso[]>([]);
-  const [rolesLoading, setRolesLoading] = useState(false);
-  const [rolesError, setRolesError] = useState<string | null>(null);
-  const refetchRoles = () => {
-    setRolesLoading(true);
-    Promise.all([listRolesApi(), listPermisosApi()])
-      .then(([r, p]) => { setRolesAdmin(r); setPermisosCatalogo(p); })
-      .catch(e => setRolesError(e instanceof Error ? e.message : 'Error al cargar roles'))
-      .finally(() => setRolesLoading(false));
-  };
-
-  const [usuariosAdmin, setUsuariosAdmin] = useState<Usuario[]>([]);
-  const [usuariosLoading, setUsuariosLoading] = useState(false);
-  const [usuariosError, setUsuariosError] = useState<string | null>(null);
-  const refetchUsuarios = () => {
-    setUsuariosLoading(true);
-    listUsuariosApi().then(setUsuariosAdmin).catch(e => setUsuariosError(e instanceof Error ? e.message : 'Error al cargar usuarios')).finally(() => setUsuariosLoading(false));
-  };
+  const {
+    locales, localesLoading, localesError, refetchLocales,
+    rolesAdmin, permisosCatalogo, rolesLoading, rolesError, refetchRoles,
+    usuariosAdmin, usuariosLoading, usuariosError, refetchUsuarios,
+  } = useAdministracion(screen, puede);
 
   useEffect(() => {
     if (!authed) return;
@@ -221,17 +192,6 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed]);
 
-  // Roles y usuarios son admin-only y más pesados (traen el catálogo completo de
-  // permisos) — se cargan recién al entrar a esas pantallas, no en cada login. La
-  // pantalla de Usuarios también necesita la lista de roles para el selector del form.
-  useEffect(() => {
-    if (screen === 'roles' && puede('pantalla:roles')) refetchRoles();
-    if (screen === 'usuarios' && puede('pantalla:usuarios')) {
-      refetchUsuarios();
-      if (rolesAdmin.length === 0) refetchRoles();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen]);
 
   const [filtro, setFiltro] = useState<string>('Todos');
   const [estadoFilter] = useState<string>('');
