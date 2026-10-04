@@ -1216,7 +1216,12 @@ export function App() {
         />
 
         <div className="app-content-pad" style={{ flex: 1, minWidth: 0 }}>
-        <ErrorBoundary key={location.pathname}>
+        {/* La key es la SECCIÓN (primer segmento de la URL), no la ruta completa: con
+            location.pathname cada cambio de paso dentro de Compras (/compras/carga →
+            /compras/rg → /compras/resultado) remontaba toda la vista, que vuelve a leer el
+            libro entero de IndexedDB (varios segundos) y restauraba el paso guardado, así que
+            el click de "paso 2" rebotaba a "resultado". Cambiar de módulo sí reinicia el boundary. */}
+        <ErrorBoundary key={location.pathname.split('/')[1] || 'inicio'}>
         <Routes>
           <Route path="/" element={(
             <InicioView
