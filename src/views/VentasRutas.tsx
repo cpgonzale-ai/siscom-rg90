@@ -1,3 +1,4 @@
+import { totalFaltantes } from '../utils/saltos';
 import { createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -72,7 +73,7 @@ export function VentasPanelRoute() {
         importStatus={importStatusComputed}
         kpiLocales={converted ? `${new Set(libroRows.map(r => r.local)).size}` : '0'}
         kpiComprobantes={converted ? `${libroRows.length}` : '0'}
-        kpiSaltos={converted ? `${correlatividadRows.length}` : '—'}
+        kpiSaltos={converted ? `${totalFaltantes(correlatividadRows)}` : '—'}
         onGoCargaVentas={() => goTo('carga')}
         onGoCargaCompras={() => goTo('compras')}
         canCargaVentas={puede('pantalla:carga')}
@@ -161,7 +162,7 @@ export function VentasCargaRoute() {
         step2Cards={[
           { label: 'Locales', value: `${new Set(libroRows.map(r => r.local)).size}` },
           { label: 'Comprobantes', value: `${libroRows.length}` },
-          { label: 'Saltos', value: `${correlatividadRows.length}` },
+          { label: 'Saltos', value: `${totalFaltantes(correlatividadRows)}` },
         ]}
       />
   );

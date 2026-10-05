@@ -1,3 +1,4 @@
+import { totalFaltantes } from '../utils/saltos';
 import { useEffect, useState, useMemo, useDeferredValue, useRef } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { Location, NavigateFunction } from 'react-router-dom';
@@ -904,7 +905,7 @@ export function useVentas({ locales, location, meInfo, meInfoLoaded, navigate, r
       registros: filasSistema.length.toLocaleString('es-PY'),
       estado: archivosSistema.length > 0 ? 'Cargado' : 'Pendiente',
       ultimaCarga: archivosSistema.length > 0 ? archivosSistema[archivosSistema.length - 1].uploadedAt : '—',
-      saltos: saltosSistema.length,
+      saltos: totalFaltantes(saltosSistema),
       // Filas detalladas (no solo el conteo) para el modal "Ver saltos" del Panel general
       // — mismo patrón que el modal de saltos de Libro Ventas/Compras (RG90View/ComprasView).
       saltosRows: saltosSistema,

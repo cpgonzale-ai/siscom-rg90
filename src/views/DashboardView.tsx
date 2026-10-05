@@ -1,3 +1,4 @@
+import { totalFaltantes } from '../utils/saltos';
 import React, { useState } from 'react';
 import { ArrowRight, ShieldCheck, FileSpreadsheet, ShoppingCart } from 'lucide-react';
 import { Modal } from '../components/Modal';
@@ -317,7 +318,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
     {saltosModalSistema && filaModal && (
       <Modal
-        title={`Saltos de numeración — ${filaModal.sistema} (${filaModal.saltosRows.length})`}
+        title={`Saltos de numeración — ${filaModal.sistema} (${totalFaltantes(filaModal.saltosRows)})`}
         onClose={() => setSaltosModalSistema(null)}
         width="900px"
       >

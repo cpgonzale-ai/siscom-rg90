@@ -1,3 +1,4 @@
+import { totalFaltantes } from '../utils/saltos';
 import React, { useRef, useState } from 'react';
 import { UploadCloud, FileSpreadsheet, Trash2, Search, Download, RefreshCw, CheckCircle2, ArrowLeft, ArrowRight, X } from 'lucide-react';
 import { WizardSteps } from '../components/WizardSteps';
@@ -427,7 +428,7 @@ export const CargaView: React.FC<CargaViewProps> = ({
                   borderRadius: '7px', padding: '8px 14px', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer',
                 }}
               >
-                Saltos ({saltosRows.length})
+                Saltos ({totalFaltantes(saltosRows)})
               </button>
             </div>
 
@@ -603,7 +604,7 @@ export const CargaView: React.FC<CargaViewProps> = ({
       )}
 
       {saltosModalOpen && (
-        <Modal title={`Saltos de numeración detectados (${saltosRows.length})`} onClose={() => setSaltosModalOpen(false)} width="900px">
+        <Modal title={`Saltos de numeración detectados (${totalFaltantes(saltosRows)})`} onClose={() => setSaltosModalOpen(false)} width="900px">
           {saltosRows.length === 0 ? (
             <p style={{ fontSize: '13px', color: '#5c6470' }}>No se detectaron saltos de numeración en el libro cargado.</p>
           ) : (

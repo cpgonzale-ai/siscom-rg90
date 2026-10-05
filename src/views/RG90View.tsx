@@ -1,3 +1,4 @@
+import { totalFaltantes } from '../utils/saltos';
 import React, { useMemo, useRef, useState, useTransition } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { GitCompare, UploadCloud, X, Trash2, ArrowLeft, ArrowRight, FileSpreadsheet, ChevronDown } from 'lucide-react';
@@ -509,7 +510,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
                 borderRadius: '7px', padding: '8px 14px', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer',
               }}
             >
-              Saltos ({saltosRgRows.length})
+              Saltos ({totalFaltantes(saltosRgRows)})
             </button>
           </div>
         )}
@@ -753,7 +754,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
               }}
             >
               <span style={{ fontSize: '10.5px', fontWeight: 600, color: '#9aa1ab', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Saltos</span>
-              <span style={{ fontSize: '15px', fontWeight: 700, color: '#b0740f' }}>{saltosTotales.length.toLocaleString('es-PY')}</span>
+              <span style={{ fontSize: '15px', fontWeight: 700, color: '#b0740f' }}>{totalFaltantes(saltosTotales).toLocaleString('es-PY')}</span>
             </button>
           </div>
 
@@ -953,13 +954,13 @@ export const RG90View: React.FC<RG90ViewProps> = ({
       )}
 
       {saltosRgModalOpen && (
-        <Modal title={`Saltos de numeración dentro de la RG90 (${saltosRgRows.length})`} onClose={() => setSaltosRgModalOpen(false)} width="900px">
+        <Modal title={`Saltos de numeración dentro de la RG90 (${totalFaltantes(saltosRgRows)})`} onClose={() => setSaltosRgModalOpen(false)} width="900px">
           <TablaSaltos rows={saltosRgRows} />
         </Modal>
       )}
 
       {saltosTotalModalOpen && (
-        <Modal title={`Saltos de numeración — total (${saltosTotales.length})`} onClose={() => setSaltosTotalModalOpen(false)} width="960px">
+        <Modal title={`Saltos de numeración — total (${totalFaltantes(saltosTotales)})`} onClose={() => setSaltosTotalModalOpen(false)} width="960px">
           {saltosTotales.length === 0 ? (
             <p style={{ fontSize: '13px', color: '#5c6470' }}>No se detectaron saltos de numeración, ni en el libro venta ni en la RG90.</p>
           ) : (
