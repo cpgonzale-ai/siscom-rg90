@@ -31,7 +31,7 @@ export const AmbienteBanner: React.FC = () => {
       <span style={{ fontWeight: 500, letterSpacing: 0, marginLeft: '10px', opacity: 0.85 }}>
         {esProduccion
           ? window.location.host
-          : `${window.location.host} — los datos pueden ser compartidos con producción`}
+          : `${window.location.host} — no cargar ni modificar datos reales`}
       </span>
     </div>
   );
