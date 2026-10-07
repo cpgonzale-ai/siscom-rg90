@@ -366,8 +366,19 @@ export async function loginApi(nroDocumento: string, password: string): Promise<
     body,
   });
 
-  if (!res.ok) throw new Error('Usuario o contraseña incorrectos.');
-  return await res.json();
+  if (res.ok) return await res.json();
+
+  // Antes se mostraba "Usuario o contraseña incorrectos." para CUALQUIER respuesta no-2xx
+  // (401 real, 429 por límite de intentos —del backend o de nginx, que ni siquiera devuelve
+  // JSON—, o un error del servidor), así que alguien bloqueado por intentos veía el mismo
+  // mensaje que alguien que realmente escribió mal la contraseña, sin forma de distinguirlos.
+  if (res.status === 429) {
+    throw new Error('Demasiados intentos de inicio de sesión. Esperá unos minutos e intentá de nuevo.');
+  }
+  if (res.status === 401) {
+    throw new Error('Usuario o contraseña incorrectos.');
+  }
+  throw new Error('No se pudo conectar con el servidor. Intentá de nuevo en unos instantes.');
 }
 
 export async function ingestFilesApi(
