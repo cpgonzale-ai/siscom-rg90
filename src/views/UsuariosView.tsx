@@ -105,7 +105,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
       if (modalOpen === 'crear') {
         await createUsuarioApi({ nombre: form.nombre.trim(), nro_documento: form.nro_documento.trim(), email: form.email.trim(), password: form.password, rol_id: Number(form.rol_id), activo });
       } else if (editingId !== null) {
-        const datos: { nombre?: string; nro_documento?: string; rol_id?: number; password?: string; activo?: boolean } = { nombre: form.nombre.trim(), nro_documento: form.nro_documento.trim(), rol_id: Number(form.rol_id), activo };
+        const datos: { nombre?: string; nro_documento?: string; email?: string; rol_id?: number; password?: string; activo?: boolean } = { nombre: form.nombre.trim(), nro_documento: form.nro_documento.trim(), email: form.email.trim(), rol_id: Number(form.rol_id), activo };
         if (form.password) datos.password = form.password;
         await updateUsuarioApi(editingId, datos);
       }
@@ -267,10 +267,9 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ usuarios, roles, loa
 
           <label style={fieldLabelStyle}>Email</label>
           <input
-            style={{ ...fieldInputStyle, ...(modalOpen === 'editar' ? { background: '#f4f2ed', color: '#9aa1ab' } : {}) }}
+            style={fieldInputStyle}
             value={form.email}
             onChange={e => setForm({ ...form, email: e.target.value })}
-            disabled={modalOpen === 'editar'}
           />
 
           <label style={fieldLabelStyle}>{modalOpen === 'editar' ? 'Nueva contraseña (opcional)' : 'Contraseña'}</label>
