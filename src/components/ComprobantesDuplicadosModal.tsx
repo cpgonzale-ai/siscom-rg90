@@ -15,6 +15,8 @@ export const ComprobantesDuplicadosModal: React.FC<{
 }> = ({ error, onClose }) => {
   const totalResumen = error.resumen.reduce((s, r) => s + r.cantidad, 0);
   const [descargando, setDescargando] = useState(false);
+  // Compras manda el RUC del proveedor aparte del número de comprobante; Ventas no.
+  const conRuc = error.detalle.some(d => d.ruc !== undefined);
 
   // Exporta TODO error.detalle (ya viene completo, sin truncar -- ver el comentario de
   // arriba) a un Excel, usando los mismos resultados de la validación que ya se corrió: no
@@ -26,8 +28,12 @@ export const ComprobantesDuplicadosModal: React.FC<{
       await exportarTablaExcelApi(
         `Duplicados_${error.origen}.xlsx`,
         'Duplicados',
-        ['N.º', 'Comprobante', 'Tipo', 'Cantidad de apariciones', 'Origen'],
-        error.detalle.map((d, i) => [String(i + 1), d.comprobante, d.tipo, String(d.cantidad), d.origen]),
+        conRuc
+          ? ['N.º', 'Comprobante', 'RUC', 'Tipo', 'Cantidad de apariciones', 'Origen']
+          : ['N.º', 'Comprobante', 'Tipo', 'Cantidad de apariciones', 'Origen'],
+        error.detalle.map((d, i) => (conRuc
+          ? [String(i + 1), d.comprobante, d.ruc ?? '', d.tipo, String(d.cantidad), d.origen]
+          : [String(i + 1), d.comprobante, d.tipo, String(d.cantidad), d.origen])),
       );
     } catch (e) {
       console.error('Error al exportar los comprobantes duplicados a Excel:', e);
@@ -94,6 +100,7 @@ export const ComprobantesDuplicadosModal: React.FC<{
             <tr style={{ backgroundColor: '#fafbfa', borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
               <th style={{ ...stickyTheadStyle, padding: '8px 10px', fontWeight: 600 }}>N.º</th>
               <th style={{ ...stickyTheadStyle, padding: '8px 10px', fontWeight: 600 }}>Comprobante</th>
+              {conRuc && <th style={{ ...stickyTheadStyle, padding: '8px 10px', fontWeight: 600 }}>RUC</th>}
               <th style={{ ...stickyTheadStyle, padding: '8px 10px', fontWeight: 600 }}>Tipo</th>
               <th style={{ ...stickyTheadStyle, padding: '8px 10px', fontWeight: 600, textAlign: 'center' }}>Cantidad de apariciones</th>
               <th style={{ ...stickyTheadStyle, padding: '8px 10px', fontWeight: 600 }}>Origen</th>
@@ -104,6 +111,7 @@ export const ComprobantesDuplicadosModal: React.FC<{
               <tr key={i} style={{ borderBottom: '1px solid #f0eee8' }}>
                 <td style={{ padding: '8px 10px', color: '#9aa1ab' }}>{i + 1}</td>
                 <td style={{ padding: '8px 10px', fontWeight: 600, color: '#22262b', fontFamily: 'monospace' }}>{d.comprobante}</td>
+                {conRuc && <td style={{ padding: '8px 10px', color: '#22262b', fontFamily: 'monospace' }}>{d.ruc}</td>}
                 <td style={{ padding: '8px 10px', color: '#5c6470' }}>{d.tipo}</td>
                 <td style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 700, color: '#b3402f' }}>{d.cantidad}</td>
                 <td style={{ padding: '8px 10px' }}>

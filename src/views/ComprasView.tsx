@@ -427,6 +427,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
     }
     setConverting(true);
     setConvertError(null);
+    setDuplicadosError(null);
     // Total aproximado (SheetJS, en el navegador) para el indicador "Procesados: X de Y" --
     // ver contarFilasAproximado. Puramente visual, no participa en ninguna regla de negocio.
     const totalAprox = await contarFilasAproximado(archivos.map(a => a.rawFile));
@@ -451,7 +452,9 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
       // Se queda en el paso 1 mostrando la grilla — el usuario avanza al paso 2 con el
       // botón "Siguiente" cuando ya revisó el libro, no de forma automática.
     } catch (e) {
-      if (!esCancelacion(e)) {
+      if (e instanceof ReconcileDuplicadosError) {
+        setDuplicadosError(e.payload);
+      } else if (!esCancelacion(e)) {
         setConvertError(e instanceof Error ? e.message : 'Error al procesar los archivos en el servidor.');
       }
     } finally {
@@ -1530,7 +1533,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
       {!comparing && compareError && (
         <ProcessingModal error={compareError} onClose={() => setCompareError(null)} />
       )}
-      {!comparing && duplicadosError && (
+      {!comparing && !converting && duplicadosError && (
         <ComprobantesDuplicadosModal error={duplicadosError} onClose={() => setDuplicadosError(null)} />
       )}
     </div>

@@ -93,6 +93,8 @@ export interface RG90DiffRow {
 // en una grilla en vez de un párrafo con solo 5 ejemplos.
 export interface ComprobantesDuplicadosDetalle {
   comprobante: string;
+  // Solo Compras: RUC del proveedor, separado del número de comprobante (Ventas no lo manda).
+  ruc?: string;
   tipo: string;
   cantidad: number | string;
   origen: 'Libro' | 'RG90';
@@ -589,7 +591,11 @@ export async function ingestComprasApi(
 
   if (!res.ok) {
     if (res.status === 401) throw new Error('Tu sesión expiró o no iniciaste sesión. Volvé a loguearte e intentá de nuevo.');
-    throw new Error(detalleATexto(await leerDetalle(res)) || `Error al procesar los archivos en el servidor (HTTP ${res.status}).`);
+    const detail = await leerDetalle(res);
+    // Duplicados dentro del Libro: el backend los informa ya en el Paso 1 (mismo error
+    // estructurado que /reconcile en el Paso 2).
+    if (esErrorDuplicados(detail)) throw new ReconcileDuplicadosError(detail);
+    throw new Error(detalleATexto(detail) || `Error al procesar los archivos en el servidor (HTTP ${res.status}).`);
   }
   return await res.json();
 }
