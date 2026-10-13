@@ -859,7 +859,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #e2e0da', color: '#5c6470' }}>
-                {RG90_DIFF_COLUMNAS.filter(c => ['doc', 'tipo_doc', 'sistema', 'local'].includes(c.key) && !diffColOcultas.has(c.key)).map(col => (
+                {RG90_DIFF_COLUMNAS.filter(c => ['doc', 'fecha', 'tipo_doc', 'sistema', 'local'].includes(c.key) && !diffColOcultas.has(c.key)).map(col => (
                   <th key={col.key} rowSpan={2} style={{ ...stickyTheadStyle, padding: '10px 14px', fontWeight: 600, verticalAlign: 'bottom' }}>
                     <ExcelFilterHeader
                       label={col.label}
@@ -929,7 +929,7 @@ export const RG90View: React.FC<RG90ViewProps> = ({
             </tbody>
             <tfoot>
               <tr style={{ borderTop: '2px solid #e2e0da', backgroundColor: '#fafbfa', fontWeight: 700, color: '#22262b' }}>
-                <td colSpan={['doc', 'tipo_doc', 'sistema', 'local'].filter(k => !diffColOcultas.has(k)).length} style={{ padding: '10px 14px' }}>Total ({filteredRg90DiffCols.length.toLocaleString('es-PY')} filas)</td>
+                <td colSpan={['doc', 'fecha', 'tipo_doc', 'sistema', 'local'].filter(k => !diffColOcultas.has(k)).length} style={{ padding: '10px 14px' }}>Total ({filteredRg90DiffCols.length.toLocaleString('es-PY')} filas)</td>
                 {diffLibroColsVisibles.map((col, i) => (
                   <td key={col.key} style={{ padding: '10px 14px', textAlign: 'right', ...(i === 0 ? { borderLeft: '2px solid #e2e0da' } : {}) }}>
                     {formatGs(diffTotalesVentas.libro[col.key.replace('libro_', '')])}
@@ -993,6 +993,7 @@ const DiffRow = React.memo(function DiffRow({ index, r, diffColOcultas, diffLibr
   return (
     <tr data-index={index} style={{ borderBottom: '1px solid #f0eee8' }}>
       {!diffColOcultas.has('doc') && <td style={{ padding: '10px 14px', fontWeight: 600, color: '#22262b' }}>{r.doc}</td>}
+      {!diffColOcultas.has('fecha') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.fecha}</td>}
       {!diffColOcultas.has('tipo_doc') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.tipo_doc}</td>}
       {!diffColOcultas.has('sistema') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.sistema}</td>}
       {!diffColOcultas.has('local') && <td style={{ padding: '10px 14px', color: '#5c6470' }}>{r.local}</td>}

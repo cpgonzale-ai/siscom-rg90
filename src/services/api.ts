@@ -75,6 +75,7 @@ export interface RG90DiffLado {
 
 export interface RG90DiffRow {
   doc: string;
+  fecha?: string;
   tipo_doc: string;
   sistema: string;
   local: string;
@@ -176,6 +177,7 @@ export interface CompraDiffLado {
 
 export interface CompraDiffRow {
   doc: string;
+  fecha?: string;
   tipo_doc: string;
   proveedor: string;
   sistema: string;

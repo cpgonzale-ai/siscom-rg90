@@ -47,6 +47,7 @@ export const diferenciaCampoVentas = (d: RG90DiffRow, campo: keyof RG90DiffLado)
 
 export const RG90_DIFF_COLUMNAS: { key: string; label: string; getValue: (d: RG90DiffRow) => string }[] = [
   { key: 'doc', label: 'Documento', getValue: d => d.doc },
+  { key: 'fecha', label: 'Fecha', getValue: d => d.fecha ?? '' },
   { key: 'tipo_doc', label: 'Tipo', getValue: d => d.tipo_doc },
   { key: 'sistema', label: 'Sistema', getValue: d => d.sistema },
   { key: 'local', label: 'Local', getValue: d => d.local },
@@ -73,6 +74,7 @@ export const RG90_DIFF_COLUMNAS: { key: string; label: string; getValue: (d: RG9
 
 export const RG90_DIFF_COLUMNAS_PICKER: { key: string; label: string }[] = [
   { key: 'doc', label: 'Documento' },
+  { key: 'fecha', label: 'Fecha' },
   { key: 'tipo_doc', label: 'Tipo' },
   { key: 'sistema', label: 'Sistema' },
   { key: 'local', label: 'Local' },
