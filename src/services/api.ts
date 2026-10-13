@@ -328,12 +328,41 @@ function xhrPostFormData(
   });
 }
 
+// FastAPI manda `detail` como string (HTTPException), como lista de {loc, msg} (validación
+// 422) o, para los duplicados, como objeto estructurado. Pasarlo directo a new Error() con
+// un no-string da "[object Object]" en pantalla: esto lo convierte siempre en texto legible.
+export function detalleATexto(detail: unknown): string {
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map(d => {
+        if (typeof d !== 'object' || d === null) return String(d);
+        const { msg, loc } = d as { msg?: unknown; loc?: unknown };
+        const texto = msg !== undefined ? String(msg) : JSON.stringify(d);
+        const campo = Array.isArray(loc) ? loc.filter(x => x !== 'body').join('.') : '';
+        return campo ? `${campo}: ${texto}` : texto;
+      })
+      .join(' | ');
+  }
+  if (detail && typeof detail === 'object') {
+    const { titulo, mensaje } = detail as { titulo?: unknown; mensaje?: unknown };
+    return [titulo, mensaje].filter((x): x is string => typeof x === 'string' && x !== '').join('. ');
+  }
+  return '';
+}
+
+async function leerDetalle(res: Pick<Response, 'json'>): Promise<unknown> {
+  try { return (await res.json())?.detail ?? ''; } catch { return ''; /* respuesta sin JSON */ }
+}
+
+function esErrorDuplicados(detail: unknown): detail is ComprobantesDuplicadosError {
+  return !!detail && typeof detail === 'object' && (detail as { tipo?: string }).tipo === 'comprobantes_duplicados';
+}
+
 async function throwApiError(res: Response, fallback: string): Promise<never> {
   if (res.status === 401) throw new Error('Tu sesión expiró o no iniciaste sesión. Volvé a loguearte e intentá de nuevo.');
   if (res.status === 403) throw new Error('No tenés permiso para hacer esto.');
-  let detail = '';
-  try { detail = (await res.json())?.detail || ''; } catch { /* respuesta sin JSON */ }
-  throw new Error(detail || `${fallback} (HTTP ${res.status}).`);
+  throw new Error(detalleATexto(await leerDetalle(res)) || `${fallback} (HTTP ${res.status}).`);
 }
 
 async function authedJson<T>(path: string, options: RequestInit = {}, fallback: string): Promise<T> {
@@ -398,9 +427,7 @@ export async function ingestFilesApi(
 
   if (!res.ok) {
     if (res.status === 401) throw new Error('Tu sesión expiró o no iniciaste sesión. Volvé a loguearte e intentá de nuevo.');
-    let detail = '';
-    try { detail = (await res.json())?.detail || ''; } catch { /* respuesta sin JSON */ }
-    throw new Error(detail || `Error al procesar los archivos en el servidor (HTTP ${res.status}).`);
+    throw new Error(detalleATexto(await leerDetalle(res)) || `Error al procesar los archivos en el servidor (HTTP ${res.status}).`);
   }
   return await res.json();
 }
@@ -438,7 +465,7 @@ export async function reconcileApi(
     if (detail && typeof detail === 'object' && (detail as { tipo?: string }).tipo === 'comprobantes_duplicados') {
       throw new ReconcileDuplicadosError(detail as ComprobantesDuplicadosError);
     }
-    throw new Error((typeof detail === 'string' && detail) || `Error al ejecutar la comparación RG90 (HTTP ${res.status}).`);
+    throw new Error(detalleATexto(detail) || `Error al ejecutar la comparación RG90 (HTTP ${res.status}).`);
   }
   return await res.json();
 }
@@ -468,7 +495,7 @@ export async function validarDuplicadosLibroApi(
     if (detail && typeof detail === 'object' && (detail as { tipo?: string }).tipo === 'comprobantes_duplicados') {
       throw new ReconcileDuplicadosError(detail as ComprobantesDuplicadosError);
     }
-    throw new Error((typeof detail === 'string' && detail) || `Error al validar el libro (HTTP ${res.status}).`);
+    throw new Error(detalleATexto(detail) || `Error al validar el libro (HTTP ${res.status}).`);
   }
 }
 
@@ -492,7 +519,7 @@ export async function validarDuplicadosRg90Api(
     if (detail && typeof detail === 'object' && (detail as { tipo?: string }).tipo === 'comprobantes_duplicados') {
       throw new ReconcileDuplicadosError(detail as ComprobantesDuplicadosError);
     }
-    throw new Error((typeof detail === 'string' && detail) || `Error al validar la RG90 (HTTP ${res.status}).`);
+    throw new Error(detalleATexto(detail) || `Error al validar la RG90 (HTTP ${res.status}).`);
   }
 }
 
@@ -562,9 +589,7 @@ export async function ingestComprasApi(
 
   if (!res.ok) {
     if (res.status === 401) throw new Error('Tu sesión expiró o no iniciaste sesión. Volvé a loguearte e intentá de nuevo.');
-    let detail = '';
-    try { detail = (await res.json())?.detail || ''; } catch { /* respuesta sin JSON */ }
-    throw new Error(detail || `Error al procesar los archivos en el servidor (HTTP ${res.status}).`);
+    throw new Error(detalleATexto(await leerDetalle(res)) || `Error al procesar los archivos en el servidor (HTTP ${res.status}).`);
   }
   return await res.json();
 }
@@ -590,9 +615,11 @@ export async function reconcileComprasApi(
 
   if (!res.ok) {
     if (res.status === 401) throw new Error('Tu sesión expiró o no iniciaste sesión. Volvé a loguearte e intentá de nuevo.');
-    let detail = '';
-    try { detail = (await res.json())?.detail || ''; } catch { /* respuesta sin JSON */ }
-    throw new Error(detail || `Error al comparar contra la RG (HTTP ${res.status}).`);
+    const detail = await leerDetalle(res);
+    // Mismo error estructurado que Ventas (ver ReconcileDuplicadosError): el backend de
+    // compras también corta la comparación si el Libro o la RG traen comprobantes duplicados.
+    if (esErrorDuplicados(detail)) throw new ReconcileDuplicadosError(detail);
+    throw new Error(detalleATexto(detail) || `Error al comparar contra la RG (HTTP ${res.status}).`);
   }
   return await res.json();
 }

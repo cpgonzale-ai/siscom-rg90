@@ -7,13 +7,14 @@ import {
 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { ProcessingModal } from '../components/ProcessingModal';
+import { ComprobantesDuplicadosModal } from '../components/ComprobantesDuplicadosModal';
 import { ProgressModal } from '../components/ProgressModal';
 import { WizardSteps } from '../components/WizardSteps';
 import { ExcelFilterHeader } from '../components/ExcelFilterHeader';
 import { ColumnPicker } from '../components/ColumnPicker';
 import { Modal, secondaryBtnStyle, primaryBtnStyle, dangerBtnStyle, excelBtnStyle, navRowStyle, disabledBtnStyle, stickyTheadStyle, scrollableGridStyle } from '../components/Modal';
-import type { Local, CompraRow, CompraDiffRow, CompraDiffLado } from '../services/api';
-import { ingestComprasApi, reconcileComprasApi, exportarTablaExcelApi } from '../services/api';
+import type { Local, CompraRow, CompraDiffRow, CompraDiffLado, ComprobantesDuplicadosError } from '../services/api';
+import { ingestComprasApi, reconcileComprasApi, exportarTablaExcelApi, ReconcileDuplicadosError } from '../services/api';
 import { formatGs } from '../utils/format';
 import { idbGet, idbSet, COMPRAS_PERSIST_KEY } from '../utils/persistStore';
 import { cancelarOperacionEnCurso, contarFilasAproximado, ejecutarConAvance, esCancelacion } from '../utils/progreso';
@@ -225,6 +226,9 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
   const [rgFiles, setRgFiles] = useState<File[]>([]);
   const [comparing, setComparing] = useState(false);
   const [compareError, setCompareError] = useState<string | null>(null);
+  // Comprobantes duplicados en el Libro o la RG (ver ReconcileDuplicadosError): se muestran
+  // en su propia grilla, no en el cartel de una línea de ProcessingModal.
+  const [duplicadosError, setDuplicadosError] = useState<ComprobantesDuplicadosError | null>(null);
   const [rgRows, setRgRows] = useState<CompraRow[]>([]);
   const [rgGridSearch, setRgGridSearch] = useState('');
   const [rgGridPage, setRgGridPage] = useState(1);
@@ -505,6 +509,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
     }
     setComparing(true);
     setCompareError(null);
+    setDuplicadosError(null);
     // Total aproximado (SheetJS, en el navegador) para "Procesados: X de Y" -- ver
     // contarFilasAproximado. Puramente visual, no participa en ninguna regla de negocio.
     setRgCompareProgress({ percent: 0, total: 0 });
@@ -527,7 +532,9 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
       setRgCompareProgress(p => (p ? { ...p, percent: 100 } : p));
       await new Promise(resolve => setTimeout(resolve, 350));
     } catch (e) {
-      if (!esCancelacion(e)) {
+      if (e instanceof ReconcileDuplicadosError) {
+        setDuplicadosError(e.payload);
+      } else if (!esCancelacion(e)) {
         setCompareError(e instanceof Error ? e.message : 'Error al comparar contra la RG.');
       }
     } finally {
@@ -1522,6 +1529,9 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
       )}
       {!comparing && compareError && (
         <ProcessingModal error={compareError} onClose={() => setCompareError(null)} />
+      )}
+      {!comparing && duplicadosError && (
+        <ComprobantesDuplicadosModal error={duplicadosError} onClose={() => setDuplicadosError(null)} />
       )}
     </div>
   );
