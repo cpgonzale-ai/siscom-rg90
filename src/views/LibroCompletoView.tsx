@@ -142,12 +142,13 @@ export const LibroCompletoView: React.FC<LibroCompletoViewProps> = ({
                 <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right', backgroundColor: '#fafbfa' }}>Exentas</th>
                 <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right', backgroundColor: '#fafbfa' }}>Total</th>
                 <th style={{ padding: '12px 14px', fontWeight: 600, backgroundColor: '#fafbfa' }}>Estado</th>
+                <th style={{ padding: '12px 14px', fontWeight: 600, backgroundColor: '#fafbfa' }}>Empleado</th>
               </tr>
             </thead>
             <tbody>
               {paddingTop > 0 && (
                 <tr>
-                  <td colSpan={14} style={{ padding: 0, height: `${paddingTop}px`, border: 'none' }} />
+                  <td colSpan={15} style={{ padding: 0, height: `${paddingTop}px`, border: 'none' }} />
                 </tr>
               )}
               {virtualItems.map((vi) => {
@@ -194,17 +195,18 @@ export const LibroCompletoView: React.FC<LibroCompletoViewProps> = ({
                       {r.estado}
                     </span>
                   </td>
+                  <td style={{ padding: '10px 14px', color: '#5c6470', whiteSpace: 'nowrap' }}>{r.empleado}</td>
                 </tr>
                 );
               })}
               {paddingBottom > 0 && (
                 <tr>
-                  <td colSpan={14} style={{ padding: 0, height: `${paddingBottom}px`, border: 'none' }} />
+                  <td colSpan={15} style={{ padding: 0, height: `${paddingBottom}px`, border: 'none' }} />
                 </tr>
               )}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={14} style={{ padding: '32px', textAlign: 'center', color: '#9aa1ab' }}>
+                  <td colSpan={15} style={{ padding: '32px', textAlign: 'center', color: '#9aa1ab' }}>
                     No hay comprobantes que coincidan con la búsqueda.
                   </td>
                 </tr>

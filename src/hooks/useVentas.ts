@@ -48,6 +48,13 @@ export const LIBRO_COLUMNAS: { key: string; label: string; getValue: (r: LibroRo
   { key: 'estado', label: 'Estado', getValue: r => r.estado },
 ];
 
+// Columnas del Paso 2 (libro de ventas): las de LIBRO_COLUMNAS más Empleado como última.
+// Empleado solo lo trae el reporte de Hiopos, por eso no va en LIBRO_COLUMNAS, que también
+// usa la grilla de la RG90 (Paso 3).
+export const LIBRO_COLUMNAS_PASO2: typeof LIBRO_COLUMNAS = [
+  ...LIBRO_COLUMNAS,
+  { key: 'empleado', label: 'Empleado', getValue: r => r.empleado ?? '' },
+];
 
 // Estado y lógica de Ventas (libro, RG90, persistencia y pasos del asistente), extraídos de
 // App.tsx sin cambiar comportamiento: mismo código, mismos efectos.
@@ -580,13 +587,13 @@ export function useVentas({ locales, location, meInfo, meInfoLoaded, navigate, r
   const downloadLimpio = async (rows: LibroRow[]) => {
     if (descargandoLimpio) return;
     setDescargandoLimpio(true);
-    const headers = ['Proyecto', 'Factura', 'Tipo Doc.', 'Fecha', 'Ruc', 'Nombre', 'Gravadas 10%', 'IVA 10%', 'Gravadas 5%', 'IVA 5%', 'Exentas', 'Total Neto', 'Estado'];
+    const headers = ['Proyecto', 'Factura', 'Tipo Doc.', 'Fecha', 'Ruc', 'Nombre', 'Gravadas 10%', 'IVA 10%', 'Gravadas 5%', 'IVA 5%', 'Exentas', 'Total Neto', 'Estado', 'Empleado'];
     // Los importes van con el mismo texto ya formateado que se ve en la grilla (r.gravadas,
     // no r.gravadas_num) — así el Excel descargado coincide con la pantalla tal cual, sin
     // arriesgar que se invierta coma y punto al re-formatear un number.
     const dataRows = rows.map(r => [
       r.local, r.doc, r.tipo_doc ?? 'Factura', r.fecha, r.ruc, r.nombre,
-      r.gravadas, r.iva, r.gravadas_5 ?? '0,00', r.iva_5 ?? '0,00', r.exentas, r.total, r.estado,
+      r.gravadas, r.iva, r.gravadas_5 ?? '0,00', r.iva_5 ?? '0,00', r.exentas, r.total, r.estado, r.empleado ?? '',
     ]);
 
     const sumFields = (pred: (r: LibroRow) => boolean) => {
@@ -623,13 +630,13 @@ export function useVentas({ locales, location, meInfo, meInfoLoaded, navigate, r
     // Los totales/resumen s\u00ED se calculan ac\u00E1 (son agregados que no vienen del backend), pero
     // se formatean con el mismo criterio ("18.891.429,00") antes de escribirlos \u2014 nunca se
     // dejan como number en la celda.
-    const totalRow = ['', '', '', '', '', 'TOTAL', formatGs(totalGeneral.gravada10), formatGs(totalGeneral.iva10), formatGs(totalGeneral.gravada5), formatGs(totalGeneral.iva5), formatGs(totalGeneral.exentas), formatGs(totalGeneral.total), ''];
-    const blank = ['', '', '', '', '', '', '', '', '', '', '', '', ''];
-    const resumenHeader = ['', '', '', '', '', 'RESUMEN', '', '', '', '', '', '', ''];
-    const facturaRow = ['', '', '', '', '', 'Factura', formatGs(totalFactura.gravada10), formatGs(totalFactura.iva10), formatGs(totalFactura.gravada5), formatGs(totalFactura.iva5), formatGs(totalFactura.exentas), formatGs(totalFactura.total), ''];
-    const ncRow = ['', '', '', '', '', 'Nota de Cr\u00E9dito', formatGs(totalNC.gravada10), formatGs(totalNC.iva10), formatGs(totalNC.gravada5), formatGs(totalNC.iva5), formatGs(totalNC.exentas), formatGs(totalNC.total), ''];
-    const netoRow = ['', '', '', '', '', 'NETO', formatGs(neto.gravada10), formatGs(neto.iva10), formatGs(neto.gravada5), formatGs(neto.iva5), formatGs(neto.exentas), formatGs(neto.total), ''];
-    const checkRow = ['', '', '', '', '', 'Check', '', '', '', '', '', formatGs(check), ''];
+    const totalRow = ['', '', '', '', '', 'TOTAL', formatGs(totalGeneral.gravada10), formatGs(totalGeneral.iva10), formatGs(totalGeneral.gravada5), formatGs(totalGeneral.iva5), formatGs(totalGeneral.exentas), formatGs(totalGeneral.total), '', ''];
+    const blank = ['', '', '', '', '', '', '', '', '', '', '', '', '', ''];
+    const resumenHeader = ['', '', '', '', '', 'RESUMEN', '', '', '', '', '', '', '', ''];
+    const facturaRow = ['', '', '', '', '', 'Factura', formatGs(totalFactura.gravada10), formatGs(totalFactura.iva10), formatGs(totalFactura.gravada5), formatGs(totalFactura.iva5), formatGs(totalFactura.exentas), formatGs(totalFactura.total), '', ''];
+    const ncRow = ['', '', '', '', '', 'Nota de Cr\u00E9dito', formatGs(totalNC.gravada10), formatGs(totalNC.iva10), formatGs(totalNC.gravada5), formatGs(totalNC.iva5), formatGs(totalNC.exentas), formatGs(totalNC.total), '', ''];
+    const netoRow = ['', '', '', '', '', 'NETO', formatGs(neto.gravada10), formatGs(neto.iva10), formatGs(neto.gravada5), formatGs(neto.iva5), formatGs(neto.exentas), formatGs(neto.total), '', ''];
+    const checkRow = ['', '', '', '', '', 'Check', '', '', '', '', '', formatGs(check), '', ''];
 
     try {
       await exportarTablaExcelApi('Libro_Ventas_Global_formato_limpio.xlsx', 'Libro de Ventas', headers, [
@@ -748,7 +755,7 @@ export function useVentas({ locales, location, meInfo, meInfoLoaded, navigate, r
   const filteredLibro = useMemo(() => {
     let lista = libroRows.filter(r => matchesSistema(r.sistema, filtro));
     if (estadoFilter) lista = lista.filter(r => r.estado === estadoFilter);
-    for (const col of LIBRO_COLUMNAS) {
+    for (const col of LIBRO_COLUMNAS_PASO2) {
       const activo = libroColFiltros[col.key];
       if (activo) lista = lista.filter(r => activo.has(col.getValue(r)));
     }
@@ -778,11 +785,11 @@ export function useVentas({ locales, location, meInfo, meInfoLoaded, navigate, r
   // funcione de verdad. Este es el Paso 1/2 (Libro de Ventas) — mismo volumen que la
   // grilla de RG90 ya corregida, y es el primer paso del flujo, así que se usa siempre.
   const libroAllValuesPorColumna = useMemo(
-    () => Object.fromEntries(LIBRO_COLUMNAS.map(col => [col.key, libroRows.map(col.getValue)])),
+    () => Object.fromEntries(LIBRO_COLUMNAS_PASO2.map(col => [col.key, libroRows.map(col.getValue)])),
     [libroRows]
   );
 
-  const libroColumnFilters = LIBRO_COLUMNAS.map(col => ({
+  const libroColumnFilters = LIBRO_COLUMNAS_PASO2.map(col => ({
     key: col.key,
     label: col.label,
     allValues: libroAllValuesPorColumna[col.key],

@@ -536,6 +536,7 @@ export const CargaView: React.FC<CargaViewProps> = ({
                         <span style={parseInlineStyle(r.estadoStyle)}>{r.estado}</span>
                       </td>
                     )}
+                    {!libroColOcultas.has('empleado') && <td style={{ padding: '12px 14px', color: '#5c6470' }}>{r.empleado}</td>}
                   </tr>
                 ))}
               </tbody>
@@ -549,6 +550,7 @@ export const CargaView: React.FC<CargaViewProps> = ({
                   {!libroColOcultas.has('exentas') && <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(libroTotales.exentas)}</td>}
                   {!libroColOcultas.has('total') && <td style={{ padding: '12px 14px', textAlign: 'right' }}>{formatGs(libroTotales.total)}</td>}
                   {!libroColOcultas.has('estado') && <td />}
+                  {!libroColOcultas.has('empleado') && <td />}
                 </tr>
               </tfoot>
             </table>

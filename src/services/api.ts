@@ -8,6 +8,8 @@ export interface LibroRow {
   fecha_iso?: string;
   ruc: string;
   nombre: string;
+  // Solo el reporte de Hiopos trae el empleado; en Aloha/Universal queda sin valor.
+  empleado?: string;
   gravadas: string;
   iva: string;
   gravadas_5?: string;
