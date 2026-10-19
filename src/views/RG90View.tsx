@@ -355,7 +355,8 @@ export const RG90View: React.FC<RG90ViewProps> = ({
   // sin problemas de memoria. Se manda filteredRg90DiffCols CRUDO (sin mapear) + las keys de
   // columnas visibles; el cálculo por celda (mismo criterio que RG90_DIFF_COLUMNAS acá
   // arriba) se repite del lado del servidor (ver app/api/export.py).
-  const columnasVisiblesKeys = RG90_DIFF_COLUMNAS_PICKER.filter(c => !diffColOcultas.has(c.key)).map(c => c.key);
+  // 'ruc' y 'nombre' (cliente) solo existen en el Excel, no en la grilla: van siempre.
+  const columnasVisiblesKeys = [...RG90_DIFF_COLUMNAS_PICKER.filter(c => !diffColOcultas.has(c.key)).map(c => c.key), 'ruc', 'nombre'];
   const descargarDiffVentasExcel = async () => {
     if (filteredRg90DiffCols.length === 0 || exportandoDiff) return;
     await exportarDiff(() => exportarDiffVentasExcelApi(filteredRg90DiffCols as RG90DiffRow[], columnasVisiblesKeys), 'Error al exportar el detalle de discrepancias a Excel:');

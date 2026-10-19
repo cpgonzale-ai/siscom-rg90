@@ -78,6 +78,9 @@ export interface RG90DiffLado {
 export interface RG90DiffRow {
   doc: string;
   fecha?: string;
+  // RUC y nombre del cliente: solo se usan en el Excel del resultado.
+  ruc?: string;
+  nombre?: string;
   tipo_doc: string;
   sistema: string;
   local: string;
@@ -180,6 +183,8 @@ export interface CompraDiffLado {
 export interface CompraDiffRow {
   doc: string;
   fecha?: string;
+  // RUC del proveedor (con DV si lo trae): solo se usa en el Excel del resultado.
+  ruc?: string;
   tipo_doc: string;
   proveedor: string;
   sistema: string;

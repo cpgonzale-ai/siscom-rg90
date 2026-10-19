@@ -180,6 +180,22 @@ const DIFF_COLUMNAS_PICKER: { key: string; label: string }[] = [
   { key: 'diferencia', label: 'Motivo de la diferencia' },
 ];
 
+// Columnas del Excel del resultado: las de la grilla más el RUC del proveedor, que solo va en
+// el Excel. El nombre del proveedor es la columna Proveedor de la grilla, que acá pasa a
+// ir junto al RUC y se rotula como nombre.
+const EXCEL_DIFF_COLUMNAS: { key: string; label: string; getValue: (d: CompraDiffRow) => string }[] = (() => {
+  const label = (key: string) => DIFF_COLUMNAS_PICKER.find(c => c.key === key)?.label ?? key;
+  const col = (key: string) => DIFF_COLUMNAS.find(c => c.key === key)!;
+  const resto = DIFF_COLUMNAS.filter(c => !['doc', 'fecha', 'proveedor'].includes(c.key));
+  return [
+    { ...col('doc'), label: label('doc') },
+    { ...col('fecha'), label: label('fecha') },
+    { key: 'ruc', label: 'RUC Proveedor', getValue: (d: CompraDiffRow) => d.ruc ?? '' },
+    { ...col('proveedor'), label: 'Nombre Proveedor' },
+    ...resto.map(c => ({ ...c, label: label(c.key) })),
+  ];
+})();
+
 // Las 4 categorías del resumen del Paso 3 — la key coincide con el "diferencia" que devuelve
 // el backend ("Coincide", "No llegó a la interfaz", etc.), el label es el texto entendible
 // que se muestra en la tarjeta y en el chip de filtro activo (antes cada uno mostraba un
@@ -733,8 +749,8 @@ export const ComprasView: React.FC<ComprasViewProps> = ({ locales, permisos, usu
   const { exportando: exportandoDiff, exportar: exportarDiff } = useExportacion();
   const descargarDiffExcel = async () => {
     if (filteredDiffs.length === 0 || exportandoDiff) return;
-    const headers = DIFF_COLUMNAS_PICKER.map(c => c.label);
-    const dataRows = filteredDiffs.map(d => DIFF_COLUMNAS.map(col => col.getValue(d)));
+    const headers = EXCEL_DIFF_COLUMNAS.map(c => c.label);
+    const dataRows = filteredDiffs.map(d => EXCEL_DIFF_COLUMNAS.map(col => col.getValue(d)));
     await exportarDiff(() => exportarTablaExcelApi('Resultado_Comparacion_Compras_RG.xlsx', 'Resultado — Compras vs RG', headers, dataRows), 'Error al exportar el resultado de Compras a Excel:');
   };
 
